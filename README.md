@@ -1,210 +1,131 @@
-# BetterDriver — Next.js 15 Frontend Package
+# BetterDriver (BD)
 
-**Stack:** Next.js 15 (App Router) · TypeScript · Tailwind CSS · shadcn/ui  
-**Role in ecosystem:** Driver development portal — the human resource asset layer. Where the investment in people lands. Training, certification, CPD, professional profile, and career record for professional truck drivers.
+**Website:** [betterdriver.co.za](https://betterdriver.co.za)
 
----
-
-## Component Inventory
-
-### Layout Components (`/components/layout/`)
-
-| Component | Purpose | Props |
-|---|---|---|
-| `Navigation.tsx` | Public site top navigation — amber/charcoal, mobile-first | None — reads from `lib/constants.ts` |
-| `Footer.tsx` | Site footer with programme links, ecosystem links, legal | None — reads from `lib/constants.ts` |
-| `PortalLayout.tsx` | Authenticated portal sidebar layout | `children: React.ReactNode` |
-
-### Page Components — Public (`/app/`)
-
-| Route | File | Dynamic Data Required |
-|---|---|---|
-| `/` | `app/page.tsx` | Registry sample via `/api/registry?limit=3` |
-| `/start` | `app/start/page.tsx` | Payment via Paystack (Asif to implement) |
-| `/login` | `app/login/page.tsx` | Supabase Auth (Asif to implement) |
-| `/help` | `app/help/page.tsx` | None — static FAQ content |
-| `/registry` | `app/registry/page.tsx` | Driver registry search via `/api/registry` |
-| `/certificate` | `app/certificate/page.tsx` | Certificate lookup via `/api/certificate?id=` |
-
-### Page Components — Authenticated Portal (`/app/portal/`)
-
-| Route | File | Dynamic Data Required |
-|---|---|---|
-| `/portal/tasks` | `app/portal/tasks/page.tsx` | Driver tasks via `/api/driver/tasks` |
-| `/portal/course` | `app/portal/course/page.tsx` | Course progress via `/api/driver/course` |
-| `/portal/progress` | `app/portal/progress/page.tsx` | Progress summary via `/api/driver/progress` |
-| `/portal/certificate` | `app/portal/certificate/page.tsx` | Certificate data via `/api/driver/certificate` |
-| `/portal/cpd` | `app/portal/cpd/page.tsx` | CPD history via `/api/driver/cpd` |
-| `/portal/profile` | `app/portal/profile/page.tsx` | Driver profile via `/api/driver/profile` |
-| `/portal/support` | `app/portal/support/page.tsx` | None — static support content |
+BetterDriver is the driver-facing LMS portal for professional truck driver training and certification. Drivers access their assigned courses, track progress, download certificates, and maintain their profile. Companies activate cohorts through the Green Freight Academy. This repository contains the full source code for the BetterDriver platform.
 
 ---
 
-## Data Flow
+## Technology Stack
 
-### Driver Authentication
-```
-Login page → Supabase Auth → session cookie → PortalLayout checks session
-                                             → Redirect to /login if unauthenticated
-```
-All portal routes (`/portal/*`) require authentication. `PortalLayout.tsx` handles the auth check.
+| Layer | Technology |
+| :--- | :--- |
+| Framework | Next.js 14 (App Router, standalone output) |
+| Language | TypeScript |
+| Styling | Tailwind CSS |
+| Database | Supabase (PostgreSQL) |
+| LMS | Moodle (via REST API) |
+| Auth | JWT (custom driver and admin auth) |
+| Deployment | Node.js standalone + Nginx + PM2 |
 
-### Enrolment Flow (`/start`)
-```
-Driver selects programme → fills personal details → Paystack payment
-                                                  → POST /api/enrol
-                                                  → Supabase: driver_enrolments table
-                                                  → Moodle: create user + enrol in course
-                                                  → Email confirmation to driver
-```
-The `?programme=` query parameter pre-selects the programme from the pricing section.
+---
 
-### Driver Tasks (`/portal/tasks`)
-```
-Component mounts → GET /api/driver/tasks → TaskItem[] sorted by priority
-                                         → Overdue tasks shown first (red)
-                                         → Urgent CPD shown second (orange)
-                                         → Current module shown third (primary)
-                                         → Next CPD shown last (standard)
-```
+## User Roles
 
-### Certificate Download (`/portal/certificate`)
-```
-Component mounts → GET /api/driver/certificate → CertificateData
-                                               → PDF generation via /api/certificate/download
-                                               → Public registry entry at /registry?id=
-```
+| Role | Access | Description |
+| :--- | :--- | :--- |
+| Driver | Portal pages | Accesses courses, tracks progress, downloads certificate |
+| Company | Activation flow | Activates cohort and registers drivers |
+| Admin | Admin dashboard | Manages drivers, cohorts, and platform settings |
 
-### Public Registry (`/registry`)
-```
-Search input → GET /api/registry?q={query}&programme={filter}
-             → RegistryEntry[] with verified status
-             → Publicly accessible — no authentication required
-```
+---
 
-### CPD Submission (GFA side — referenced from portal)
+## Project Structure
+
 ```
-Company submits incident → POST /api/cpd-submissions (on GFA)
-                         → visibility: "anonymous" | "private"
-                         → dispatch: "urgent" | "standard"
-                         → urgent triggers push to driver tasks within the month
-                         → standard queued for next quarterly CPD cycle
+app/
+  api/                        # Backend API routes
+    auth/                     # Driver login, logout, activate
+    admin/                    # Admin-only routes (JWT protected)
+    driver/                   # Driver profile, progress, certificate
+    moodle/                   # Moodle LMS integration routes
+  portal/                     # Driver portal pages (JWT protected)
+    tasks/                    # Assigned training tasks
+    course/                   # Active course viewer
+    progress/                 # Progress tracking
+    certificate/              # Certificate download
+    profile/                  # Driver profile management
+  admin/                      # Admin dashboard (JWT protected)
+  activate/                   # Company cohort activation flow
+  start/                      # Driver onboarding / getting started
+  login/                      # Driver login
+  registry/                   # Public certified driver registry
+  help/                       # Help and support
+  about/ contact/ privacy/ terms/
+components/                   # Shared React components
+lib/                          # Utilities, constants, Supabase client, Moodle client
+public/                       # Static assets
 ```
 
 ---
 
-## Static Strings
+## Local Development
 
-All static strings, labels, and copy live in `lib/constants.ts`. Key exports:
-
-- `PROGRAMMES` — all six programme definitions with pricing, duration, and features
-- `MOCK_TASKS` — demo task data (remove before go-live)
-- `MOCK_DRIVER` — demo driver profile (remove before go-live)
-- `MOCK_REGISTRY` — demo registry entries (remove before go-live)
-- `FAQS` — static FAQ content for the help page
-- `EXTERNAL_LINKS` — ecosystem URLs from `process.env`
+```bash
+git clone https://github.com/Abdool11/betterdriver.git
+cd betterdriver
+npm install
+cp .env.local.example .env.local
+# Fill in .env.local values
+npm run dev
+```
 
 ---
 
 ## Environment Variables
 
-Key variables required (see `.env.example`):
-
-| Variable | Purpose |
-|---|---|
-| `NEXT_PUBLIC_GFA_URL` | GreenFreightAcademy site URL |
-| `NEXT_PUBLIC_TAG_URL` | Transport Action Group site URL |
-| `NEXT_PUBLIC_ZERO_AFRICA_URL` | ZeroAfrica site URL |
-| `NEXT_PUBLIC_BD_API_URL` | BetterDriver API base URL |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key |
-| `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` | Paystack public key (Asif to provide) |
-
----
-
-## TypeScript Types
-
-All data shapes are defined in `types/index.ts`. Key interfaces:
-
-- `Driver` — authenticated driver profile
-- `TaskItem` — portal task with status, priority, and progress
-- `Programme` — training programme definition
-- `RegistryEntry` — public driver registry entry
-- `CertificateData` — driver certificate data
-- `CPDItem` — CPD history item
-- `EnrolmentFormData` — enrolment form submission payload
+| Variable | Required | Description |
+| :--- | :--- | :--- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Supabase anonymous key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Supabase service role key |
+| `BD_JWT_SECRET` | Yes | Secret for signing driver JWT tokens |
+| `ADMIN_JWT_SECRET` | Yes | Secret for signing admin JWT tokens |
+| `MOODLE_URL` | Yes | Base URL of the Moodle instance |
+| `MOODLE_TOKEN` | Yes | Moodle REST API token |
+| `MOODLE_DRIVER_PROGRAMME_COURSE_ID` | Yes | Moodle course ID for Professional Driver programme |
+| `MOODLE_ECO_DRIVER_COURSE_ID` | Yes | Moodle course ID for Eco-Driver programme |
+| `GFA_BASE_URL` | Yes | Green Freight Academy site URL |
+| `NEXT_PUBLIC_SITE_URL` | Yes | Full URL of this site in production |
 
 ---
 
-## Mock Data Removal Checklist
+## Branching and Version Control Workflow
 
-Before going live, remove or replace the following:
+All changes go through a branch and Pull Request — nothing is pushed directly to `main`.
 
-- [ ] `MOCK_TASKS` in `lib/constants.ts` — replace with live `/api/driver/tasks` fetch
-- [ ] `MOCK_DRIVER` in `lib/constants.ts` — replace with live `/api/driver/profile` fetch
-- [ ] `MOCK_REGISTRY` in `lib/constants.ts` — replace with live `/api/registry` fetch
-- [ ] Yellow `[DEMO DATA]` banners in portal screens — remove once live data is connected
-- [ ] `MOCK_CPD_ITEMS` in `lib/constants.ts` — replace with live `/api/driver/cpd` fetch
-- [ ] `MOCK_PROGRESS` in `lib/constants.ts` — replace with live `/api/driver/progress` fetch
+### Branch Naming Convention
 
----
+| Type | Pattern | Example |
+| :--- | :--- | :--- |
+| New feature | `feature/short-description` | `feature/certificate-pdf-download` |
+| Bug fix | `fix/short-description` | `fix/moodle-progress-sync` |
+| Content update | `content/short-description` | `content/update-help-page` |
+| Hotfix (urgent) | `hotfix/short-description` | `hotfix/driver-login-broken` |
 
-## Supabase Schema (Asif to implement)
+### Step-by-Step Workflow
 
-### `drivers` table
-```sql
-id uuid primary key default gen_random_uuid()
-email text unique not null
-full_name text not null
-id_number text
-licence_number text
-pdp_number text
-phone text
-employer text
-created_at timestamptz default now()
-updated_at timestamptz default now()
-```
-
-### `driver_enrolments` table
-```sql
-id uuid primary key default gen_random_uuid()
-driver_id uuid references drivers(id)
-programme_id text not null
-enrolment_type text not null  -- 'individual' | 'corporate'
-company_id uuid references companies(id) nullable
-paystack_reference text
-payment_status text  -- 'pending' | 'paid' | 'failed'
-moodle_enrolment_id text
-enrolled_at timestamptz default now()
-```
-
-### `driver_certificates` table
-```sql
-id uuid primary key default gen_random_uuid()
-driver_id uuid references drivers(id)
-programme_id text not null
-certificate_number text unique not null  -- format: BD-YYYY-NNNNN
-issued_at timestamptz not null
-is_public boolean default true
-moodle_completion_id text
-```
-
-### `driver_cpd` table
-```sql
-id uuid primary key default gen_random_uuid()
-driver_id uuid references drivers(id)
-cpd_module_id text not null
-status text  -- 'pending' | 'in_progress' | 'completed' | 'overdue'
-dispatch_type text  -- 'urgent' | 'standard'
-due_date timestamptz
-completed_at timestamptz
-```
+1. Create a branch from `main`: `git checkout -b feature/your-feature-name`
+2. Make changes and commit: `git commit -m "feat: describe what changed and why"`
+3. Push the branch: `git push origin feature/your-feature-name`
+4. Open a Pull Request on GitHub against `main`
+5. Review the diff — GitHub flags any conflicts before merge
+6. Approve and merge to `main`
+7. Delete the feature branch after merging
 
 ---
 
-## Deployment Notes
+## Deployment
 
-- Deploy to Vercel. Set all `NEXT_PUBLIC_*` environment variables in the Vercel dashboard.
-- The portal routes (`/portal/*`) require Supabase Auth to be configured before they are functional.
-- The public routes (`/`, `/start`, `/registry`, `/help`, `/certificate`) are fully functional without auth.
-- Paystack integration: Asif to implement using the Paystack public key in the enrolment flow.
+Packaged as a standalone tar.gz including `server.js`, `pm2.config.js`, `nginx.conf`, `deploy.sh`, `QUICK-START-CARD.md`, and `.env.local.example`.
+
+> **Important:** The Nginx config must include a `location /_next/static/` block. Without this the site loads without any styling. This is already included in the provided `nginx.conf`.
+
+---
+
+## Related Repositories
+
+| Site | Repository |
+| :--- | :--- |
+| Transport Action Group | [Abdool11/transportactiongroup](https://github.com/Abdool11/transportactiongroup) |
+| Green Freight Academy | [Abdool11/greenfreightacademy](https://github.com/Abdool11/greenfreightacademy) |
