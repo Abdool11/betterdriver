@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,8 @@ import {
   Award,
   Smartphone,
 } from "lucide-react";
+
+import StartErrorBanner from "./StartErrorBanner";
 
 export default function HowToJoinPage() {
   return (
@@ -76,6 +79,7 @@ export default function HowToJoinPage() {
       </header>
 
       <main style={{ flex: 1, padding: "2rem 1.25rem", maxWidth: 600, margin: "0 auto", width: "100%" }}>
+        <Suspense fallback={null}><StartErrorBanner /></Suspense>
         {/* Hero */}
         <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
           <div
@@ -149,7 +153,7 @@ export default function HowToJoinPage() {
               {
                 icon: Smartphone,
                 title: "Tap your activation link",
-                desc: "Open the link on your phone. You will set a password and complete a short profile — takes about 5 minutes.",
+                desc: "Open the link on your phone. You will land directly in your training portal — no password needed. It takes seconds.",
               },
               {
                 icon: Award,
@@ -234,18 +238,11 @@ export default function HowToJoinPage() {
           }}
         >
           <h3 style={{ fontWeight: 700, fontSize: "1rem", color: "#F9FAFB", marginBottom: "0.5rem" }}>
-            Already activated your account?
+            Already have your link?
           </h3>
           <p style={{ color: "#9CA3AF", fontSize: "0.875rem", marginBottom: "1.25rem" }}>
-            Log in to continue your training.
+            Tap your personal activation link from WhatsApp or SMS to go straight to your portal — no password required.
           </p>
-          <Link
-            href="/login"
-            className="btn-primary"
-            style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", justifyContent: "center" }}
-          >
-            Log in to BetterDriver <ArrowRight size={16} />
-          </Link>
         </div>
 
         {/* Didn't receive link */}

@@ -4,6 +4,15 @@
 
 BetterDriver is the driver-facing LMS portal for professional truck driver training and certification. Drivers access their assigned courses, track progress, download certificates, and maintain their profile. Companies activate cohorts through the Green Freight Academy. This repository contains the full source code for the BetterDriver platform.
 
+**Design principle:** Zero friction between link tap and learning. Drivers never create passwords. A magic link tap silently authenticates the driver and lands them directly in their portal, pre-enrolled and ready to learn.
+
+Key platform capabilities include:
+- **Persistent Magic Link Authentication** — drivers authenticate via a persistent opaque token (no passwords, no registration screens); the token resolves to a 30-day rolling JWT session; links expire only at campaign end date or when revoked by the operator
+- **Welcome Video on First Access** — on first magic link tap, drivers are shown a personalised welcome screen with an invite video (uploaded by GFA admin) before entering the portal
+- **Personalised Portal** — every screen addresses the driver by first name; language preference (English or Zulu) is set at invitation time
+- **Offline Download** — drivers can download course content over WiFi for offline viewing
+- **Driver Bulletins** — urgent and standard safety bulletins delivered to drivers with WhatsApp notification; drivers acknowledge and complete comprehension checks in-portal
+
 ---
 
 ## Technology Stack
@@ -35,26 +44,31 @@ BetterDriver is the driver-facing LMS portal for professional truck driver train
 ```
 app/
   api/                        # Backend API routes
-    auth/                     # Driver login, logout, activate
+    auth/                     # Driver login, logout
     admin/                    # Admin-only routes (JWT protected)
     driver/                   # Driver profile, progress, certificate
+    join/[token]/             # Magic link resolution — resolves opaque token, issues JWT, redirects to portal
     moodle/                   # Moodle LMS integration routes
   portal/                     # Driver portal pages (JWT protected)
+    welcome/                  # First-access welcome screen with invite video
     tasks/                    # Assigned training tasks
     course/                   # Active course viewer
     progress/                 # Progress tracking
     certificate/              # Certificate download
     profile/                  # Driver profile management
+    bulletins/                # Driver bulletin list and detail
   admin/                      # Admin dashboard (JWT protected)
-  activate/                   # Company cohort activation flow
-  start/                      # Driver onboarding / getting started
-  login/                      # Driver login
+  activate/                   # Legacy redirect — forwards old activation URLs to /join/[token]
+  start/                      # Shown when no session exists; handles invalid/revoked/expired link errors
+  login/                      # Driver login (fallback)
   registry/                   # Public certified driver registry
   help/                       # Help and support
   about/ contact/ privacy/ terms/
 components/                   # Shared React components
 lib/                          # Utilities, constants, Supabase client, Moodle client
+  auth.ts                     # Hybrid token auth: resolveInvitationToken, issueDriverSession, requireDriverSession
 public/                       # Static assets
+supabase/migrations/          # SQL migration files (apply via Supabase SQL editor)
 ```
 
 ---
@@ -67,8 +81,21 @@ cd betterdriver
 npm install
 cp .env.local.example .env.local
 # Fill in .env.local values
+# Apply all incremental migrations in order:
+#   supabase/migrations/20260502_phase1_auth_rebuild.sql
 npm run dev
 ```
+
+> **Database migrations:** Each file in `supabase/migrations/` is a standalone SQL script. Apply them in filename order via the Supabase dashboard SQL editor or the Supabase CLI (`supabase db push`).
+
+### Authentication Flow
+
+1. GFA deploys training → creates a `driver_invitations` row with a UUID opaque token and sets `expires_at` to the campaign end date
+2. GFA sends WhatsApp with link: `https://betterdriver.co.za/join/{token}`
+3. Driver taps link → `GET /api/join/[token]` resolves the token, marks `first_accessed_at` if first visit, issues a 30-day JWT session cookie, and redirects to `/portal/welcome` (first access) or `/portal` (returning)
+4. All portal pages call `requireDriverSession()` which reads the JWT cookie — no password ever required
+5. Sessions roll automatically on each visit; the driver is re-authenticated silently when the JWT nears expiry
+6. Operators can revoke a link at any time via GFA admin → the `revoked_at` field is checked on every token resolution
 
 ---
 
