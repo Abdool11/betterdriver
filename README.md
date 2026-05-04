@@ -8,8 +8,12 @@ BetterDriver is the driver-facing LMS portal for professional truck driver train
 
 Key platform capabilities include:
 - **Persistent Magic Link Authentication** — drivers authenticate via a persistent opaque token (no passwords, no registration screens); the token resolves to a 30-day rolling JWT session; links expire only at campaign end date or when revoked by the operator
-- **Welcome Video on First Access** — on first magic link tap, drivers are shown a personalised welcome screen with an invite video (uploaded by GFA admin) before entering the portal
-- **Personalised Portal** — every screen addresses the driver by first name; language preference (English or Zulu) is set at invitation time
+- **Language Selection on First Access** — drivers choose English or IsiZulu on their first visit; preference is stored and applied throughout the portal
+- **Welcome Video on First Access** — after language selection, drivers see a personalised welcome screen with the programme invite video before entering the portal
+- **Moodle Integration (Webhook + Polling)** — Moodle handles all video delivery, quizzes, and completion logic; BD syncs progress via real-time webhooks (primary) and a polling cron job (fallback); see `MOODLE_SETUP.md` for full configuration instructions
+- **WhatsApp Notifications** — automated messages sent via Meta Graph API at key milestones: welcome on first access, module completion, programme completion, and inactivity nudges at 7 and 14 days
+- **Module Landing Pages** — each module has a dedicated landing page showing video status, quiz status, and a Moodle deep-link launch button; the button is locked until all 5 videos are complete
+- **Personalised Portal** — every screen addresses the driver by first name; language preference (English or Zulu) is applied throughout
 - **Offline Download** — drivers can download course content over WiFi for offline viewing
 - **Driver Bulletins** — urgent and standard safety bulletins delivered to drivers with WhatsApp notification; drivers acknowledge and complete comprehension checks in-portal
 
@@ -48,11 +52,16 @@ app/
     admin/                    # Admin-only routes (JWT protected)
     driver/                   # Driver profile, progress, certificate
     join/[token]/             # Magic link resolution — resolves opaque token, issues JWT, redirects to portal
-    moodle/                   # Moodle LMS integration routes
+    moodle/
+      webhook/                # POST — receives real-time completion events from Moodle
+      poll/                   # POST — cron fallback; polls Moodle for all active enrolments
+      inactivity-check/       # POST — cron; sends 7-day and 14-day WhatsApp nudges
   portal/                     # Driver portal pages (JWT protected)
+    language/                 # Language selection screen (shown once on first access)
     welcome/                  # First-access welcome screen with invite video
     tasks/                    # Assigned training tasks
-    course/                   # Active course viewer
+    course/                   # Programme overview — module list with lock/progress state
+    module/[id]/              # Module landing page — video list, quiz status, Moodle launch
     progress/                 # Progress tracking
     certificate/              # Certificate download
     profile/                  # Driver profile management
@@ -67,8 +76,11 @@ app/
 components/                   # Shared React components
 lib/                          # Utilities, constants, Supabase client, Moodle client
   auth.ts                     # Hybrid token auth: resolveInvitationToken, issueDriverSession, requireDriverSession
+  moodle.ts                   # Moodle REST API client: moodleGetProgress, moodleCreateUser, moodleCourseUrl
+  whatsapp.ts                 # Meta Graph API WhatsApp client: all 5 BD message templates
 public/                       # Static assets
 supabase/migrations/          # SQL migration files (apply via Supabase SQL editor)
+MOODLE_SETUP.md               # Full Moodle + WhatsApp setup guide for Asif
 ```
 
 ---
@@ -83,6 +95,7 @@ cp .env.local.example .env.local
 # Fill in .env.local values
 # Apply all incremental migrations in order:
 #   supabase/migrations/20260502_phase1_auth_rebuild.sql
+#   supabase/migrations/20260504_moodle_integration.sql
 npm run dev
 ```
 
@@ -92,7 +105,10 @@ npm run dev
 
 1. GFA deploys training → creates a `driver_invitations` row with a UUID opaque token and sets `expires_at` to the campaign end date
 2. GFA sends WhatsApp with link: `https://betterdriver.co.za/join/{token}`
-3. Driver taps link → `GET /api/join/[token]` resolves the token, marks `first_accessed_at` if first visit, issues a 30-day JWT session cookie, and redirects to `/portal/welcome` (first access) or `/portal` (returning)
+3. Driver taps link → `GET /api/join/[token]` resolves the token, marks `first_accessed_at` if first visit, issues a 30-day JWT session cookie, and redirects to:
+   - `/portal/language` — if first access and no language preference set
+   - `/portal/welcome` — if first access and language already set
+   - `/portal` — returning driver
 4. All portal pages call `requireDriverSession()` which reads the JWT cookie — no password ever required
 5. Sessions roll automatically on each visit; the driver is re-authenticated silently when the JWT nears expiry
 6. Operators can revoke a link at any time via GFA admin → the `revoked_at` field is checked on every token resolution
@@ -112,8 +128,16 @@ npm run dev
 | `MOODLE_TOKEN` | Yes | Moodle REST API token |
 | `MOODLE_DRIVER_PROGRAMME_COURSE_ID` | Yes | Moodle course ID for Professional Driver programme |
 | `MOODLE_ECO_DRIVER_COURSE_ID` | Yes | Moodle course ID for Eco-Driver programme |
+| `MOODLE_WEBHOOK_SECRET` | Yes | Shared secret for validating Moodle webhook requests |
+| `MOODLE_POLL_SECRET` | Yes | Bearer token for authorising cron poll requests |
+| `META_WA_TOKEN` | Yes | Meta Graph API permanent system user token |
+| `META_WA_PHONE_NUMBER_ID` | Yes | Meta WhatsApp Business phone number ID |
+| `META_WA_API_VERSION` | No | Meta Graph API version (default: v19.0) |
+| `NEXT_PUBLIC_BD_URL` | Yes | Full public URL of this site (used in WhatsApp message links) |
 | `GFA_BASE_URL` | Yes | Green Freight Academy site URL |
 | `NEXT_PUBLIC_SITE_URL` | Yes | Full URL of this site in production |
+
+> See `MOODLE_SETUP.md` for full Moodle configuration instructions and WhatsApp template copy.
 
 ---
 

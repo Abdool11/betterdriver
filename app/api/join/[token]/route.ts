@@ -5,6 +5,11 @@ import { resolveInvitationToken, createSession } from "@/lib/auth";
 // The magic link handler. Driver taps /join/a7x92kp4 → this route resolves
 // the opaque token, issues a 30-day JWT session cookie, and redirects to portal.
 // No password. No OTP. No friction.
+//
+// First-access flow:
+//   1. No language set → /portal/language (choose EN or ZU)
+//   2. Language set    → /portal/welcome  (invite video + name)
+//   3. Returning       → /portal          (straight to dashboard)
 
 export async function GET(
   req: NextRequest,
@@ -31,13 +36,19 @@ export async function GET(
   // Issue the 30-day rolling JWT session cookie
   await createSession(result.session);
 
-  // On first access, redirect to welcome page with invite video if available
   if (result.isFirstAccess) {
-    const welcomeUrl = new URL("/portal/welcome", req.url);
-    if (result.inviteVideoUrl) {
-      welcomeUrl.searchParams.set("video", encodeURIComponent(result.inviteVideoUrl));
+    // Build the video param once (used by both language and welcome pages)
+    const videoParam = result.inviteVideoUrl
+      ? `?video=${encodeURIComponent(result.inviteVideoUrl)}`
+      : "";
+
+    if (!result.languagePreference) {
+      // Driver has not chosen a language yet — show language selection first
+      return NextResponse.redirect(new URL(`/portal/language${videoParam}`, req.url));
     }
-    return NextResponse.redirect(welcomeUrl);
+
+    // Language already set — go straight to welcome with invite video
+    return NextResponse.redirect(new URL(`/portal/welcome${videoParam}`, req.url));
   }
 
   // Returning driver — go straight to portal home

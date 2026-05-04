@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import Link from "next/link";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import { MOCK_ENROLMENT, MOCK_MODULES } from "@/lib/constants";
-import { CheckCircle2, Clock, PlayCircle, ArrowRight } from "lucide-react";
+import { CheckCircle2, Clock, PlayCircle, ArrowRight, Lock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -10,15 +10,20 @@ export const dynamic = "force-dynamic";
 // DATA REQUIREMENTS:
 // - enrolment: Enrolment — Supabase: SELECT * FROM enrolments WHERE driver_id = ? AND status = 'active' LIMIT 1
 // - modules: Module[] — Supabase: SELECT * FROM modules WHERE programme_id = ? ORDER BY order_index ASC
-// TODO: Asif — replace mock data with live Supabase queries
-// TODO: Asif — "Resume" button should deep-link to Moodle via SSO token
+// TODO: Asif — replace MOCK_ENROLMENT and MOCK_MODULES with live Supabase + Moodle data
+// moodleGetCourseModules() returns completion state per module
 
-export const metadata: Metadata = { title: "My Course" };
+export const metadata: Metadata = {
+  title: "My Programme | BetterDriver",
+  description: "Track your progress through the Professional Truck Driver programme.",
+};
 
 export default function CoursePage() {
   const enrolment = MOCK_ENROLMENT;
   const modules = MOCK_MODULES;
   const completed = modules.filter((m) => m.status === "completed").length;
+  const inProgress = modules.find((m) => m.status === "in-progress");
+  const nextModule = inProgress ?? modules.find((m) => m.status === "upcoming");
 
   return (
     <PortalLayout>
@@ -27,9 +32,11 @@ export default function CoursePage() {
       </div>
       <div style={{ marginBottom: "2rem" }}>
         <h1 style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 800, fontSize: "1.75rem", color: "#F9FAFB", margin: "0 0 0.375rem" }}>
-          My Course
+          {enrolment.programmeTitle}
         </h1>
-        <p style={{ color: "#9CA3AF", margin: 0 }}>{enrolment.programmeTitle}</p>
+        <p style={{ color: "#9CA3AF", margin: 0, fontSize: "0.9375rem" }}>
+          {completed} of {modules.length} modules complete
+        </p>
       </div>
 
       {/* Progress summary card */}
@@ -48,7 +55,7 @@ export default function CoursePage() {
         }}
       >
         <div>
-          <p style={{ fontSize: "0.8125rem", color: "#6B7280", margin: "0 0 0.25rem" }}>Overall progress</p>
+          <p style={{ fontSize: "0.8125rem", color: "#6B7280", margin: "0 0 0.25rem" }}>Your progress</p>
           <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 800, fontSize: "2rem", color: "#F59E0B", margin: "0 0 0.5rem" }}>
             {enrolment.progressPercent}%
           </p>
@@ -61,7 +68,7 @@ export default function CoursePage() {
             <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 700, fontSize: "1.5rem", color: "#F9FAFB", margin: "0 0 0.25rem" }}>
               {completed}
             </p>
-            <p style={{ fontSize: "0.75rem", color: "#6B7280", margin: 0 }}>Completed</p>
+            <p style={{ fontSize: "0.75rem", color: "#6B7280", margin: 0 }}>Done</p>
           </div>
           <div style={{ textAlign: "center" }}>
             <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 700, fontSize: "1.5rem", color: "#F9FAFB", margin: "0 0 0.25rem" }}>
@@ -70,44 +77,52 @@ export default function CoursePage() {
             <p style={{ fontSize: "0.75rem", color: "#6B7280", margin: 0 }}>Remaining</p>
           </div>
         </div>
-        {/* TODO: Asif — deep-link to Moodle with SSO token */}
-        <Link
-          href="/portal/learning"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            background: "#F59E0B",
-            color: "#111827",
-            fontFamily: "var(--font-dm-sans), sans-serif",
-            fontWeight: 700,
-            fontSize: "0.9375rem",
-            padding: "0.75rem 1.5rem",
-            borderRadius: "0.75rem",
-            textDecoration: "none",
-          }}
-        >
-          Resume training <ArrowRight size={16} />
-        </Link>
+        {/* Continue / Start CTA — links to the next module landing page */}
+        {nextModule && (
+          <Link
+            href={`/portal/module/${nextModule.id}`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              background: "#F59E0B",
+              color: "#111827",
+              fontFamily: "var(--font-dm-sans), sans-serif",
+              fontWeight: 700,
+              fontSize: "0.9375rem",
+              padding: "0.75rem 1.5rem",
+              borderRadius: "0.75rem",
+              textDecoration: "none",
+            }}
+          >
+            {inProgress ? "Continue" : "Start"} <ArrowRight size={16} />
+          </Link>
+        )}
       </div>
 
       {/* Module list */}
       <h2 style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 700, fontSize: "1.125rem", color: "#F9FAFB", marginBottom: "1rem" }}>
-        Programme modules
+        All modules
       </h2>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
-        {modules.map((mod, i) => (
-          <div
+        {modules.map((mod, i) => {
+          const isLocked = mod.status === "upcoming" && i > 0 && modules[i - 1].status !== "completed";
+          return (
+          <Link
             key={mod.id}
+            href={isLocked ? "#" : `/portal/module/${mod.id}`}
             style={{
               background: "#1C2333",
-              border: "1px solid #2d3a4f",
+              border: `1px solid ${mod.status === "in-progress" ? "rgba(245,158,11,0.35)" : "#2d3a4f"}`,
               borderRadius: "0.875rem",
               padding: "1rem 1.25rem",
               display: "flex",
               alignItems: "center",
               gap: "1rem",
-              opacity: mod.status === "upcoming" ? 0.6 : 1,
+              opacity: isLocked ? 0.5 : 1,
+              cursor: isLocked ? "default" : "pointer",
+              textDecoration: "none",
+              pointerEvents: isLocked ? "none" : "auto",
             }}
           >
             <div
@@ -132,6 +147,8 @@ export default function CoursePage() {
                 <CheckCircle2 size={16} style={{ color: "#10B981" }} />
               ) : mod.status === "in-progress" ? (
                 <PlayCircle size={16} style={{ color: "#F59E0B" }} />
+              ) : isLocked ? (
+                <Lock size={14} style={{ color: "#6B7280" }} />
               ) : (
                 <span style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 700, fontSize: "0.75rem", color: "#6B7280" }}>
                   {i + 1}
@@ -143,7 +160,11 @@ export default function CoursePage() {
                 {mod.title}
               </p>
               <p style={{ fontSize: "0.75rem", color: "#6B7280", margin: 0, display: "flex", alignItems: "center", gap: "0.375rem" }}>
-                <Clock size={12} /> {mod.durationMinutes} min
+                {isLocked ? (
+                  "Complete the previous module to unlock this one."
+                ) : (
+                  <><Clock size={12} /> {mod.durationMinutes} min</>
+                )}
               </p>
             </div>
             {mod.status === "in-progress" && (
@@ -156,8 +177,12 @@ export default function CoursePage() {
                 Done
               </span>
             )}
-          </div>
-        ))}
+            {!isLocked && mod.status !== "completed" && (
+              <ArrowRight size={16} style={{ color: "#6B7280", flexShrink: 0 }} />
+            )}
+          </Link>
+          );
+        })}
       </div>
     </PortalLayout>
   );
