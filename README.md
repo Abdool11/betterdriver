@@ -58,7 +58,7 @@ app/
     profile/                  # Driver profile management
     bulletins/                # Driver bulletin list and detail
   admin/                      # Admin dashboard (JWT protected)
-  activate/                   # Legacy redirect — forwards old activation URLs to /join/[token]
+  activate/                   # Redirect — forwards any /activate?token=xxx URLs to /join/[token]
   start/                      # Shown when no session exists; handles invalid/revoked/expired link errors
   login/                      # Driver login (fallback)
   registry/                   # Public certified driver registry
