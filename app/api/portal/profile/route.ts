@@ -47,6 +47,7 @@ export async function PATCH(req: NextRequest) {
     "years_experience",
     "vehicle_types",
     "profile_photo_url",
+    "language_preference", // Required by the /portal/language selection screen
   ];
 
   const updates: Record<string, unknown> = {};
