@@ -1,14 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-
-
 import {
   PlayCircle,
   RefreshCw,
   Award,
   HelpCircle,
-  BookOpen,
   TrendingUp,
   CheckCircle2,
   Clock,
@@ -17,6 +14,7 @@ import {
   Download,
   Bell,
 } from "lucide-react";
+import { useLanguage, type Lang } from "@/hooks/useLanguage";
 
 interface DriverStats {
   firstName: string;
@@ -42,9 +40,103 @@ const DEMO_STATS: DriverStats = {
   unreadBulletins: 2,
 };
 
+const COPY: Record<Lang, {
+  greetingMorning: string;
+  greetingAfternoon: string;
+  greetingEvening: string;
+  loading: string;
+  modulesOf: (done: number, total: number) => string;
+  quickActions: string;
+  continueTrain: string;
+  continueTrainSub: string;
+  cpdRefresh: string;
+  cpdDue: string;
+  cpdOk: string;
+  viewCert: string;
+  certReady: string;
+  certPending: string;
+  getHelp: string;
+  getHelpSub: string;
+  wifiTitle: string;
+  wifiSub: string;
+  wifiCta: string;
+  bulletinSingle: (n: number) => string;
+  bulletinSub: string;
+  myProfile: string;
+  myCv: string;
+  myCvSub: string;
+  myRecord: string;
+  myRecordSub: string;
+  profileSettings: string;
+  profileSettingsSub: string;
+}> = {
+  en: {
+    greetingMorning: "Good morning",
+    greetingAfternoon: "Good afternoon",
+    greetingEvening: "Good evening",
+    loading: "Loading…",
+    modulesOf: (done, total) => `${done} of ${total} modules completed`,
+    quickActions: "Quick actions",
+    continueTrain: "Continue Training",
+    continueTrainSub: "Pick up where you left off",
+    cpdRefresh: "CPD Refresh",
+    cpdDue: "New module available",
+    cpdOk: "Up to date",
+    viewCert: "View Certificate",
+    certReady: "Ready to download",
+    certPending: "Complete training first",
+    getHelp: "Get Help",
+    getHelpSub: "Support & FAQs",
+    wifiTitle: "Save data — download on WiFi",
+    wifiSub: "Download your course material while on WiFi so you can study anywhere without using mobile data.",
+    wifiCta: "Download course material",
+    bulletinSingle: (n) => `${n} unread bulletin${n > 1 ? "s" : ""}`,
+    bulletinSub: "Important updates from your company",
+    myProfile: "My profile",
+    myCv: "My CV",
+    myCvSub: "View and download your professional CV",
+    myRecord: "My Record",
+    myRecordSub: "Full training and CPD history",
+    profileSettings: "Profile Settings",
+    profileSettingsSub: "Update your details and preferences",
+  },
+  zu: {
+    greetingMorning: "Sawubona ekuseni",
+    greetingAfternoon: "Sawubona emini",
+    greetingEvening: "Sawubona kusihlwa",
+    loading: "Iyalayisha…",
+    modulesOf: (done, total) => `Izifundo ${done} kwezi ${total} ziqediwe`,
+    quickActions: "Izenzo ezisheshayo",
+    continueTrain: "Qhubeka Ukuqeqesha",
+    continueTrainSub: "Qhubeka lapho ushiye khona",
+    cpdRefresh: "Ukuqeqesha Okuqhubekayo",
+    cpdDue: "Isifundo esisha sitholakala",
+    cpdOk: "Kuhleli kahle",
+    viewCert: "Buka Isitifiketi",
+    certReady: "Ilungele ukulanda",
+    certPending: "Qeda ukuqeqesha kuqala",
+    getHelp: "Thola Usizo",
+    getHelpSub: "Usizo nezimpendulo",
+    wifiTitle: "Londoloza idatha —landa nge-WiFi",
+    wifiSub: "Landa izinto zakho zokufunda usebenzisa i-WiFi ukuze ufunde noma kuphi ngaphandle kokusebenzisa idatha yeselula.",
+    wifiCta: "Landa izinto zokufunda",
+    bulletinSingle: (n) => `${n} isaziso esingafundwanga${n > 1 ? "" : ""}`,
+    bulletinSub: "Izibuyekezo ezibalulekile evela enkampanini yakho",
+    myProfile: "Iphrofayeli yami",
+    myCv: "I-CV Yami",
+    myCvSub: "Buka futhi ulande i-CV yakho yobuchwepheshe",
+    myRecord: "Irekhodi Lami",
+    myRecordSub: "Umlando ophelele wokuqeqesha ne-CPD",
+    profileSettings: "Izilungiselelo Zephrofayeli",
+    profileSettingsSub: "Buyekeza imininingwane yakho nezifiso",
+  },
+};
+
 export default function PortalHomePage() {
   const [stats, setStats] = useState<DriverStats>(DEMO_STATS);
   const [loading, setLoading] = useState(true);
+  const lang = useLanguage();
+  const copy = COPY[lang];
 
   useEffect(() => {
     fetch("/api/portal/dashboard")
@@ -57,7 +149,12 @@ export default function PortalHomePage() {
   }, []);
 
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const greeting =
+    hour < 12
+      ? copy.greetingMorning
+      : hour < 17
+      ? copy.greetingAfternoon
+      : copy.greetingEvening;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
@@ -70,7 +167,9 @@ export default function PortalHomePage() {
           padding: "1.5rem",
         }}
       >
-        <p style={{ color: "#9CA3AF", fontSize: "0.8125rem", margin: "0 0 0.25rem" }}>{greeting}</p>
+        <p style={{ color: "#9CA3AF", fontSize: "0.8125rem", margin: "0 0 0.25rem" }}>
+          {greeting}
+        </p>
         <h2
           style={{
             fontFamily: "'DM Sans', sans-serif",
@@ -80,16 +179,23 @@ export default function PortalHomePage() {
             margin: "0 0 1rem",
           }}
         >
-          {loading ? "Loading…" : `${stats.firstName} ${stats.lastName}`}
+          {loading ? copy.loading : `${stats.firstName} ${stats.lastName}`}
         </h2>
 
         {/* Progress bar */}
         <div style={{ marginBottom: "0.5rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "0.5rem",
+            }}
+          >
             <span style={{ fontSize: "0.8125rem", color: "#9CA3AF" }}>
               {stats.programmeTitle}
             </span>
-            <span style={{ fontSize: "0.8125rem", fontWeight: 700, color: "#F59E0B" }}>
+            <span style={{ fontSize: "0.8125rem", fontWeight: 700, color: "#14b8a6" }}>
               {stats.progressPercent}%
             </span>
           </div>
@@ -105,14 +211,14 @@ export default function PortalHomePage() {
               style={{
                 height: "100%",
                 width: `${stats.progressPercent}%`,
-                background: "linear-gradient(90deg, #F59E0B, #FCD34D)",
+                background: "linear-gradient(90deg, #14b8a6, #34d399)",
                 borderRadius: 9999,
                 transition: "width 0.6s ease",
               }}
             />
           </div>
           <p style={{ fontSize: "0.75rem", color: "#6B7280", marginTop: "0.375rem" }}>
-            {stats.completedModules} of {stats.totalModules} modules completed
+            {copy.modulesOf(stats.completedModules, stats.totalModules)}
           </p>
         </div>
       </div>
@@ -130,7 +236,7 @@ export default function PortalHomePage() {
             marginBottom: "0.875rem",
           }}
         >
-          Quick actions
+          {copy.quickActions}
         </h3>
         <div
           style={{
@@ -143,48 +249,57 @@ export default function PortalHomePage() {
           <Link
             href="/portal/learning"
             style={{
-              background: "linear-gradient(135deg, rgba(245,158,11,0.15), rgba(245,158,11,0.05))",
-              border: "1px solid rgba(245,158,11,0.3)",
+              background: "linear-gradient(135deg, rgba(20,184,166,0.15), rgba(20,184,166,0.05))",
+              border: "1px solid rgba(20,184,166,0.3)",
               borderRadius: "1rem",
               padding: "1.25rem",
               textDecoration: "none",
               display: "flex",
               flexDirection: "column",
               gap: "0.75rem",
-              transition: "border-color 0.15s",
             }}
           >
             <div
               style={{
                 width: 40,
                 height: 40,
-                background: "rgba(245,158,11,0.2)",
+                background: "rgba(20,184,166,0.2)",
                 borderRadius: "0.75rem",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <PlayCircle size={20} color="#F59E0B" />
+              <PlayCircle size={20} color="#14b8a6" />
             </div>
             <div>
-              <p style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: "0.9375rem", color: "#F9FAFB", margin: "0 0 0.25rem" }}>
-                Continue Training
+              <p
+                style={{
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontWeight: 700,
+                  fontSize: "0.9375rem",
+                  color: "#F9FAFB",
+                  margin: "0 0 0.25rem",
+                }}
+              >
+                {copy.continueTrain}
               </p>
               <p style={{ fontSize: "0.75rem", color: "#9CA3AF", margin: 0 }}>
-                Pick up where you left off
+                {copy.continueTrainSub}
               </p>
             </div>
           </Link>
 
-          {/* Complete CPD Refresh */}
+          {/* CPD Refresh */}
           <Link
             href="/portal/cpd"
             style={{
               background: stats.cpdDue
                 ? "linear-gradient(135deg, rgba(59,130,246,0.15), rgba(59,130,246,0.05))"
                 : "#1C2333",
-              border: stats.cpdDue ? "1px solid rgba(59,130,246,0.3)" : "1px solid #2d3a4f",
+              border: stats.cpdDue
+                ? "1px solid rgba(59,130,246,0.3)"
+                : "1px solid #2d3a4f",
               borderRadius: "1rem",
               padding: "1.25rem",
               textDecoration: "none",
@@ -211,7 +326,9 @@ export default function PortalHomePage() {
               style={{
                 width: 40,
                 height: 40,
-                background: stats.cpdDue ? "rgba(59,130,246,0.2)" : "rgba(255,255,255,0.05)",
+                background: stats.cpdDue
+                  ? "rgba(59,130,246,0.2)"
+                  : "rgba(255,255,255,0.05)",
                 borderRadius: "0.75rem",
                 display: "flex",
                 alignItems: "center",
@@ -221,11 +338,25 @@ export default function PortalHomePage() {
               <RefreshCw size={20} color={stats.cpdDue ? "#3B82F6" : "#6B7280"} />
             </div>
             <div>
-              <p style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: "0.9375rem", color: "#F9FAFB", margin: "0 0 0.25rem" }}>
-                CPD Refresh
+              <p
+                style={{
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontWeight: 700,
+                  fontSize: "0.9375rem",
+                  color: "#F9FAFB",
+                  margin: "0 0 0.25rem",
+                }}
+              >
+                {copy.cpdRefresh}
               </p>
-              <p style={{ fontSize: "0.75rem", color: stats.cpdDue ? "#3B82F6" : "#9CA3AF", margin: 0 }}>
-                {stats.cpdDue ? "New module available" : "Up to date"}
+              <p
+                style={{
+                  fontSize: "0.75rem",
+                  color: stats.cpdDue ? "#3B82F6" : "#9CA3AF",
+                  margin: 0,
+                }}
+              >
+                {stats.cpdDue ? copy.cpdDue : copy.cpdOk}
               </p>
             </div>
           </Link>
@@ -237,7 +368,9 @@ export default function PortalHomePage() {
               background: stats.certificateReady
                 ? "linear-gradient(135deg, rgba(16,185,129,0.15), rgba(16,185,129,0.05))"
                 : "#1C2333",
-              border: stats.certificateReady ? "1px solid rgba(16,185,129,0.3)" : "1px solid #2d3a4f",
+              border: stats.certificateReady
+                ? "1px solid rgba(16,185,129,0.3)"
+                : "1px solid #2d3a4f",
               borderRadius: "1rem",
               padding: "1.25rem",
               textDecoration: "none",
@@ -250,7 +383,9 @@ export default function PortalHomePage() {
               style={{
                 width: 40,
                 height: 40,
-                background: stats.certificateReady ? "rgba(16,185,129,0.2)" : "rgba(255,255,255,0.05)",
+                background: stats.certificateReady
+                  ? "rgba(16,185,129,0.2)"
+                  : "rgba(255,255,255,0.05)",
                 borderRadius: "0.75rem",
                 display: "flex",
                 alignItems: "center",
@@ -260,11 +395,25 @@ export default function PortalHomePage() {
               <Award size={20} color={stats.certificateReady ? "#10B981" : "#6B7280"} />
             </div>
             <div>
-              <p style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: "0.9375rem", color: "#F9FAFB", margin: "0 0 0.25rem" }}>
-                View Certificate
+              <p
+                style={{
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontWeight: 700,
+                  fontSize: "0.9375rem",
+                  color: "#F9FAFB",
+                  margin: "0 0 0.25rem",
+                }}
+              >
+                {copy.viewCert}
               </p>
-              <p style={{ fontSize: "0.75rem", color: stats.certificateReady ? "#10B981" : "#9CA3AF", margin: 0 }}>
-                {stats.certificateReady ? "Ready to download" : "Complete training first"}
+              <p
+                style={{
+                  fontSize: "0.75rem",
+                  color: stats.certificateReady ? "#10B981" : "#9CA3AF",
+                  margin: 0,
+                }}
+              >
+                {stats.certificateReady ? copy.certReady : copy.certPending}
               </p>
             </div>
           </Link>
@@ -297,11 +446,19 @@ export default function PortalHomePage() {
               <HelpCircle size={20} color="#9CA3AF" />
             </div>
             <div>
-              <p style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: "0.9375rem", color: "#F9FAFB", margin: "0 0 0.25rem" }}>
-                Get Help
+              <p
+                style={{
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontWeight: 700,
+                  fontSize: "0.9375rem",
+                  color: "#F9FAFB",
+                  margin: "0 0 0.25rem",
+                }}
+              >
+                {copy.getHelp}
               </p>
               <p style={{ fontSize: "0.75rem", color: "#9CA3AF", margin: 0 }}>
-                Support &amp; FAQs
+                {copy.getHelpSub}
               </p>
             </div>
           </Link>
@@ -335,11 +492,25 @@ export default function PortalHomePage() {
           <Wifi size={16} color="#3B82F6" />
         </div>
         <div style={{ flex: 1 }}>
-          <p style={{ fontWeight: 700, fontSize: "0.875rem", color: "#F9FAFB", margin: "0 0 0.25rem" }}>
-            Save data — download on WiFi
+          <p
+            style={{
+              fontWeight: 700,
+              fontSize: "0.875rem",
+              color: "#F9FAFB",
+              margin: "0 0 0.25rem",
+            }}
+          >
+            {copy.wifiTitle}
           </p>
-          <p style={{ fontSize: "0.8125rem", color: "#9CA3AF", margin: "0 0 0.625rem", lineHeight: 1.5 }}>
-            Download your course material while on WiFi so you can study anywhere without using mobile data.
+          <p
+            style={{
+              fontSize: "0.8125rem",
+              color: "#9CA3AF",
+              margin: "0 0 0.625rem",
+              lineHeight: 1.5,
+            }}
+          >
+            {copy.wifiSub}
           </p>
           <Link
             href="/portal/learning"
@@ -353,7 +524,7 @@ export default function PortalHomePage() {
               textDecoration: "none",
             }}
           >
-            <Download size={13} /> Download course material
+            <Download size={13} /> {copy.wifiCta}
           </Link>
         </div>
       </div>
@@ -408,11 +579,18 @@ export default function PortalHomePage() {
             </div>
           </div>
           <div style={{ flex: 1 }}>
-            <p style={{ fontWeight: 700, fontSize: "0.875rem", color: "#F9FAFB", margin: "0 0 0.125rem" }}>
-              {stats.unreadBulletins} unread bulletin{stats.unreadBulletins > 1 ? "s" : ""}
+            <p
+              style={{
+                fontWeight: 700,
+                fontSize: "0.875rem",
+                color: "#F9FAFB",
+                margin: "0 0 0.125rem",
+              }}
+            >
+              {copy.bulletinSingle(stats.unreadBulletins)}
             </p>
             <p style={{ fontSize: "0.8125rem", color: "#9CA3AF", margin: 0 }}>
-              Important updates from your company
+              {copy.bulletinSub}
             </p>
           </div>
           <ChevronRight size={16} color="#6B7280" />
@@ -432,13 +610,28 @@ export default function PortalHomePage() {
             marginBottom: "0.875rem",
           }}
         >
-          My profile
+          {copy.myProfile}
         </h3>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           {[
-            { href: "/portal/cv", icon: TrendingUp, label: "My CV", desc: "View and download your professional CV" },
-            { href: "/portal/progress", icon: CheckCircle2, label: "My Record", desc: "Full training and CPD history" },
-            { href: "/portal/profile", icon: Clock, label: "Profile Settings", desc: "Update your details and preferences" },
+            {
+              href: "/portal/cv",
+              icon: TrendingUp,
+              label: copy.myCv,
+              desc: copy.myCvSub,
+            },
+            {
+              href: "/portal/progress",
+              icon: CheckCircle2,
+              label: copy.myRecord,
+              desc: copy.myRecordSub,
+            },
+            {
+              href: "/portal/profile",
+              icon: Clock,
+              label: copy.profileSettings,
+              desc: copy.profileSettingsSub,
+            },
           ].map((item) => (
             <Link
               key={item.href}
@@ -469,10 +662,19 @@ export default function PortalHomePage() {
                 <item.icon size={16} color="#9CA3AF" />
               </div>
               <div style={{ flex: 1 }}>
-                <p style={{ fontWeight: 600, fontSize: "0.875rem", color: "#F9FAFB", margin: "0 0 0.125rem" }}>
+                <p
+                  style={{
+                    fontWeight: 600,
+                    fontSize: "0.875rem",
+                    color: "#F9FAFB",
+                    margin: "0 0 0.125rem",
+                  }}
+                >
                   {item.label}
                 </p>
-                <p style={{ fontSize: "0.75rem", color: "#6B7280", margin: 0 }}>{item.desc}</p>
+                <p style={{ fontSize: "0.75rem", color: "#6B7280", margin: 0 }}>
+                  {item.desc}
+                </p>
               </div>
               <ChevronRight size={14} color="#4B5563" />
             </Link>

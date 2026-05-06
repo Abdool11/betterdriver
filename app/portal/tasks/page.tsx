@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import { MOCK_TASKS, MOCK_DRIVER } from "@/lib/constants";
 import { AlertTriangle, Clock, BookOpen, RefreshCw, ArrowRight, CheckCircle2 } from "lucide-react";
+import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -36,15 +37,8 @@ export default function TasksPage() {
         ⚠ MOCK DATA — Asif to connect live Supabase tasks query
       </div>
 
-      {/* Header */}
-      <div style={{ marginBottom: "2rem" }}>
-        <h1 style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 800, fontSize: "1.75rem", color: "#F9FAFB", margin: "0 0 0.375rem" }}>
-          My Tasks
-        </h1>
-        <p style={{ color: "#9CA3AF", margin: 0 }}>
-          Good morning, {driver.name.split(" ")[0]}. Here is what needs your attention today.
-        </p>
-      </div>
+      {/* Header — translated */}
+      <TranslatedPageHeader pageKey="tasks" driverFirstName={driver.name.split(" ")[0]} />
 
       {/* Overdue — highest priority */}
       {overdueTasks.length > 0 && (

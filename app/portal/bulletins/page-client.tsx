@@ -2,6 +2,12 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Bell, AlertTriangle, ChevronRight, CheckCircle2, Clock } from "lucide-react";
+import { useLanguage } from "@/hooks/useLanguage";
+
+const BULLETINS_COPY = {
+  en: { title: "Bulletins", sub: "Safety and operational updates from your company", loading: "Loading bulletins\u2026", empty: "No bulletins yet." },
+  zu: { title: "Izaziso", sub: "Izibuyekezo zokuphepha nezokusebenza evela enkampanini yakho", loading: "Iyalayisha izaziso\u2026", empty: "Azikho izaziso okwamanje." },
+};
 
 interface BulletinSummary {
   id: string;
@@ -35,7 +41,20 @@ const MOCK_BULLETINS: BulletinSummary[] = [
   },
 ];
 
+function BulletinsTitle() {
+  const lang = useLanguage();
+  const copy = BULLETINS_COPY[lang];
+  return (
+    <>
+      <h1 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#F9FAFB", margin: 0 }}>{copy.title}</h1>
+      <p style={{ fontSize: "0.8125rem", color: "#9CA3AF", margin: 0 }}>{copy.sub}</p>
+    </>
+  );
+}
+
 export default function BulletinsListPage() {
+  const lang = useLanguage();
+  const copy = BULLETINS_COPY[lang];
   const [bulletins, setBulletins] = useState<BulletinSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -70,19 +89,14 @@ export default function BulletinsListPage() {
           <Bell size={20} color="#F59E0B" />
         </div>
         <div>
-          <h1 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#F9FAFB", margin: 0 }}>
-            Bulletins
-          </h1>
-          <p style={{ fontSize: "0.8125rem", color: "#9CA3AF", margin: 0 }}>
-            Safety and operational updates from your company
-          </p>
+          <BulletinsTitle />
         </div>
       </div>
 
       {/* List */}
       {loading ? (
         <div style={{ textAlign: "center", padding: "3rem 0", color: "#6B7280" }}>
-          Loading bulletins…
+          {copy.loading}
         </div>
       ) : bulletins.length === 0 ? (
         <div
@@ -95,7 +109,7 @@ export default function BulletinsListPage() {
           }}
         >
           <Bell size={32} color="#374151" style={{ marginBottom: "0.75rem" }} />
-          <p style={{ color: "#6B7280", margin: 0 }}>No bulletins yet.</p>
+          <p style={{ color: "#6B7280", margin: 0 }}>{copy.empty}</p>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>

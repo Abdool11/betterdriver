@@ -48,8 +48,17 @@ export async function createSession(driver: DriverSession): Promise<string> {
     .setExpirationTime("30d")
     .sign(SECRET);
   const cookieStore = await cookies();
+  // httpOnly JWT — not readable by client-side JS
   cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 60 * 60 * 24 * 30,
+    path: "/",
+  });
+  // Thin readable cookie for client-side language switching (not sensitive)
+  cookieStore.set("bd_lang", driver.languagePreference ?? "en", {
+    httpOnly: false,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     maxAge: 60 * 60 * 24 * 30,

@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import { MOCK_ENROLMENT, MOCK_MODULES, MOCK_CPD_RECORDS } from "@/lib/constants";
 import { CheckCircle2, TrendingUp, Calendar } from "lucide-react";
+import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -26,12 +27,7 @@ export default function ProgressPage() {
       <div className="mock-banner" style={{ marginBottom: "1.5rem" }}>
         MOCK DATA — Asif to connect live Supabase progress data
       </div>
-      <div style={{ marginBottom: "2rem" }}>
-        <h1 style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 800, fontSize: "1.75rem", color: "#F9FAFB", margin: "0 0 0.375rem" }}>
-          My Progress
-        </h1>
-        <p style={{ color: "#9CA3AF", margin: 0 }}>Your training journey so far.</p>
-      </div>
+      <TranslatedPageHeader pageKey="progress" />
 
       {/* Stats row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>

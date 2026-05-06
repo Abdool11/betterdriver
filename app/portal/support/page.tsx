@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import { MessageCircle, Phone, Mail, HelpCircle } from "lucide-react";
+import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
 import { getConfigs } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -44,12 +45,7 @@ export default async function SupportPage() {
 
   return (
     <PortalLayout>
-      <div style={{ marginBottom: "2rem" }}>
-        <h1 style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 800, fontSize: "1.75rem", color: "#F9FAFB", margin: "0 0 0.375rem" }}>
-          Support
-        </h1>
-        <p style={{ color: "#9CA3AF", margin: 0 }}>We are here to help.</p>
-      </div>
+      <TranslatedPageHeader pageKey="support" />
 
       {/* Contact options */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>

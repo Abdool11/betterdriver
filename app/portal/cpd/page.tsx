@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import { MOCK_CPD_RECORDS } from "@/lib/constants";
 import { AlertTriangle, Clock, CheckCircle2, ArrowRight } from "lucide-react";
+import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
 
 export const dynamic = "force-dynamic";
 
@@ -25,12 +26,7 @@ export default function CpdPage() {
       <div className="mock-banner" style={{ marginBottom: "1.5rem" }}>
         MOCK DATA — Asif to connect live Supabase CPD records
       </div>
-      <div style={{ marginBottom: "2rem" }}>
-        <h1 style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 800, fontSize: "1.75rem", color: "#F9FAFB", margin: "0 0 0.375rem" }}>
-          CPD & Refresh
-        </h1>
-        <p style={{ color: "#9CA3AF", margin: 0 }}>Your continuing professional development record.</p>
-      </div>
+      <TranslatedPageHeader pageKey="cpd" />
 
       {/* Urgent / action required */}
       {urgent.length > 0 && (

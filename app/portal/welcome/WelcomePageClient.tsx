@@ -8,12 +8,50 @@ interface Props {
   session: DriverSession;
 }
 
+type Lang = "en" | "zu";
+
+const COPY: Record<Lang, {
+  welcome: (name: string) => string;
+  sub: string;
+  watchMessage: string;
+  startLearning: string;
+  skipVideo: string;
+  skip: string;
+  langNote: string;
+}> = {
+  en: {
+    welcome: (name) => `Welcome, ${name}.`,
+    sub: "Your training programme is ready. Watch this short message from your team, then we will get you started.",
+    watchMessage: "Watch this short message from your team.",
+    startLearning: "Start learning →",
+    skipVideo: "Skip video & start learning →",
+    skip: "Skip",
+    langNote: "Available in English and Zulu",
+  },
+  zu: {
+    welcome: (name) => `Sawubona, ${name}.`,
+    sub: "Uhlelo lwakho lokuqeqesha selulungile. Buka lo mzwilili omfushane othunyelwe yithimba lakho, bese siqala.",
+    watchMessage: "Buka lo mzwilili omfushane othunyelwe yithimba lakho.",
+    startLearning: "Qala ukufunda →",
+    skipVideo: "Yeqa ividiyo uqale ukufunda →",
+    skip: "Yeqa",
+    langNote: "Iyatholakala ngesiNgisi nangesiZulu",
+  },
+};
+
 export default function WelcomePageClient({ session }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const videoUrl = searchParams.get("video") ? decodeURIComponent(searchParams.get("video")!) : null;
+  const videoUrl = searchParams.get("video")
+    ? decodeURIComponent(searchParams.get("video")!)
+    : null;
+
   const [videoEnded, setVideoEnded] = useState(false);
   const [skipped, setSkipped] = useState(false);
+
+  const lang: Lang =
+    session.languagePreference === "zu" ? "zu" : "en";
+  const copy = COPY[lang];
 
   const proceed = () => router.replace("/portal");
 
@@ -42,18 +80,18 @@ export default function WelcomePageClient({ session }: Props) {
         style={{
           width: "3rem",
           height: "3rem",
-          background: "linear-gradient(135deg, #f59e0b, #d97706)",
+          background: "linear-gradient(135deg, #14b8a6, #0d9488)",
           borderRadius: "0.75rem",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           fontWeight: 900,
-          color: "#0d1526",
+          color: "#fff",
           fontSize: "1.125rem",
           letterSpacing: "-0.5px",
         }}
       >
-        BD
+        B
       </div>
 
       {/* Welcome heading */}
@@ -65,9 +103,10 @@ export default function WelcomePageClient({ session }: Props) {
             color: "#ffffff",
             margin: 0,
             lineHeight: 1.2,
+            fontFamily: "var(--font-dm-sans), sans-serif",
           }}
         >
-          Welcome, {session.firstName}.
+          {copy.welcome(session.firstName)}
         </h1>
         <p
           style={{
@@ -77,8 +116,7 @@ export default function WelcomePageClient({ session }: Props) {
             lineHeight: 1.5,
           }}
         >
-          Your training programme is ready. Watch this short message from your team, then
-          we&apos;ll get you started.
+          {videoUrl ? copy.sub : copy.startLearning.replace(" →", ".")}
         </p>
       </div>
 
@@ -106,23 +144,32 @@ export default function WelcomePageClient({ session }: Props) {
       ) : null}
 
       {/* CTA */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", width: "100%", maxWidth: "22rem" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "0.75rem",
+          width: "100%",
+          maxWidth: "22rem",
+        }}
+      >
         <button
           onClick={proceed}
           style={{
             width: "100%",
             padding: "0.875rem 1.5rem",
-            background: "linear-gradient(135deg, #f59e0b, #d97706)",
-            color: "#0d1526",
+            background: "linear-gradient(135deg, #14b8a6, #0d9488)",
+            color: "#fff",
             border: "none",
             borderRadius: "0.625rem",
             fontSize: "1rem",
             fontWeight: 700,
             cursor: "pointer",
             letterSpacing: "0.01em",
+            fontFamily: "var(--font-dm-sans), sans-serif",
           }}
         >
-          {videoUrl && !videoEnded ? "Skip video & start learning →" : "Start learning →"}
+          {videoUrl && !videoEnded ? copy.skipVideo : copy.startLearning}
         </button>
 
         {videoUrl && !videoEnded && (
@@ -137,7 +184,7 @@ export default function WelcomePageClient({ session }: Props) {
               padding: "0.25rem",
             }}
           >
-            Skip
+            {copy.skip}
           </button>
         )}
       </div>
@@ -146,12 +193,12 @@ export default function WelcomePageClient({ session }: Props) {
       <p
         style={{
           fontSize: "0.75rem",
-          color: "rgba(255,255,255,0.25)",
+          color: "rgba(255,255,255,0.2)",
           textAlign: "center",
           margin: 0,
         }}
       >
-        Available in English and Zulu
+        {copy.langNote}
       </p>
     </div>
   );
