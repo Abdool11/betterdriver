@@ -1,6 +1,5 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { PortalLayout } from "@/components/layout/PortalLayout";
 import { MOCK_MODULES } from "@/lib/constants";
 import { moodleCourseUrl } from "@/lib/moodle";
 import { CheckCircle2, PlayCircle, Lock, ArrowRight, ExternalLink, Clock } from "lucide-react";
@@ -49,7 +48,7 @@ export default async function ModuleLandingPage({
   const moodleUrl = moodleCourseUrl("professional-truck-driver");
 
   return (
-    <PortalLayout>
+    <div className="page-content">
       {/* Back link */}
       <Link
         href="/portal/course"
@@ -324,6 +323,6 @@ export default async function ModuleLandingPage({
           </Link>
         </div>
       )}
-    </PortalLayout>
+    </div>
   );
 }

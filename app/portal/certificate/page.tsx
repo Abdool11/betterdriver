@@ -1,5 +1,4 @@
 import { Metadata } from "next";
-import { PortalLayout } from "@/components/layout/PortalLayout";
 import { MOCK_DRIVER, MOCK_CERTIFICATE } from "@/lib/constants";
 import { Award, Download, Share2, CheckCircle2 } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
@@ -20,7 +19,7 @@ export default function PortalCertificatePage() {
   const cert = MOCK_CERTIFICATE;
 
   return (
-    <PortalLayout>
+    <div className="page-content">
       <div className="mock-banner" style={{ marginBottom: "1.5rem" }}>
         MOCK DATA — Asif to connect live Supabase certifications query
       </div>
@@ -119,7 +118,7 @@ export default function PortalCertificatePage() {
         >
           <Share2 size={16} /> Share certificate
         </button>
-      </div>
-    </PortalLayout>
+    </div>
+    </div>
   );
 }

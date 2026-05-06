@@ -1,7 +1,6 @@
 "use client";
 
 import { Metadata } from "next";
-import { PortalLayout } from "@/components/layout/PortalLayout";
 import { MOCK_DRIVER } from "@/lib/constants";
 import { User, Truck, Briefcase, ChevronDown } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
@@ -61,7 +60,7 @@ export default function ProfilePage() {
   );
 
   return (
-    <PortalLayout>
+    <div className="page-content">
       <div className="mock-banner" style={{ marginBottom: "1.5rem" }}>
         MOCK DATA — Asif to connect live Supabase driver profile query and Server Action for updates
       </div>
@@ -189,6 +188,6 @@ export default function ProfilePage() {
           Generate my CV (coming soon)
         </button>
       </div>
-    </PortalLayout>
+    </div>
   );
 }

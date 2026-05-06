@@ -1,5 +1,4 @@
 import { Metadata } from "next";
-import { PortalLayout } from "@/components/layout/PortalLayout";
 import { MOCK_ENROLMENT, MOCK_MODULES, MOCK_CPD_RECORDS } from "@/lib/constants";
 import { CheckCircle2, TrendingUp, Calendar } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
@@ -23,7 +22,7 @@ export default function ProgressPage() {
   const completedCpd = cpdRecords.filter((c) => c.status === "completed");
 
   return (
-    <PortalLayout>
+    <div className="page-content">
       <div className="mock-banner" style={{ marginBottom: "1.5rem" }}>
         MOCK DATA — Asif to connect live Supabase progress data
       </div>
@@ -149,6 +148,6 @@ export default function ProgressPage() {
           ))}
         </div>
       </div>
-    </PortalLayout>
+    </div>
   );
 }

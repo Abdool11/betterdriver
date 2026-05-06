@@ -4,39 +4,73 @@ import { useEffect, useState, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Home,
+  CheckSquare,
   BookOpen,
-  RefreshCw,
-  Bell,
+  TrendingUp,
   Award,
+  RefreshCw,
   User,
-  LogOut,
-  ClipboardList,
   HelpCircle,
-  History,
-  FileText,
+  LogOut,
+  Bell,
+  ChevronRight,
 } from "lucide-react";
 
-const NAV = [
-  { href: "/portal", label: "Home", icon: Home, exact: true },
-  { href: "/portal/learning", label: "University", icon: BookOpen },
-  { href: "/portal/cpd", label: "CPD", icon: RefreshCw },
-  { href: "/portal/bulletins", label: "Bulletins", icon: Bell, badge: true },
-  { href: "/portal/certificate", label: "Certs", icon: Award },
-  { href: "/portal/profile", label: "Profile", icon: User },
-];
+type Lang = "en" | "zu";
 
-const SIDEBAR_EXTRA = [
-  { href: "/portal/cv", label: "My CV", icon: FileText },
-  { href: "/portal/history", label: "My Record", icon: History },
-  { href: "/portal/support", label: "Support", icon: HelpCircle },
-];
+const NAV_LABELS: Record<Lang, {
+  tasks: string;
+  course: string;
+  progress: string;
+  certificate: string;
+  cpd: string;
+  profile: string;
+  support: string;
+  bulletins: string;
+  profileComplete: string;
+  logOut: string;
+  driverUniversity: string;
+}> = {
+  en: {
+    tasks: "My Tasks",
+    course: "My Course",
+    progress: "My Progress",
+    certificate: "My Certificate",
+    cpd: "CPD & Refresh",
+    profile: "My Profile",
+    support: "Support",
+    bulletins: "Bulletins",
+    profileComplete: "Profile complete",
+    logOut: "Log out",
+    driverUniversity: "Driver University",
+  },
+  zu: {
+    tasks: "Imisebenzi Yami",
+    course: "Ikhosi Yami",
+    progress: "Inqubekela Phambili",
+    certificate: "Isitifiketi Sami",
+    cpd: "Ukuqeqesha Okuqhubekayo",
+    profile: "Iphrofayeli Yami",
+    support: "Usizo",
+    bulletins: "Izaziso",
+    profileComplete: "Iphrofayeli igcwele",
+    logOut: "Phuma",
+    driverUniversity: "Yunivesithi Yabashayeli",
+  },
+};
+
+function getCookie(name: string): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
+  return match ? decodeURIComponent(match[2]) : null;
+}
 
 export default function PortalLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const [driver, setDriver] = useState<{ firstName: string; lastName: string } | null>(null);
   const [checking, setChecking] = useState(true);
   const [urgentCount, setUrgentCount] = useState(0);
+  const [lang, setLang] = useState<Lang>("en");
 
   // Register service worker
   useEffect(() => {
@@ -45,13 +79,17 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Read language from cookie
+  useEffect(() => {
+    const cookieLang = getCookie("bd_lang");
+    if (cookieLang === "zu") setLang("zu");
+  }, []);
+
   // Auth check — falls back to demo mode when Supabase is not yet connected
   useEffect(() => {
     fetch("/api/driver/me")
       .then((r) => {
         if (r.status === 401) {
-          // Production: redirect to login
-          // Preview/demo: show demo driver so the portal is reviewable
           setDriver({ firstName: "Demo", lastName: "Driver" });
           return null;
         }
@@ -60,6 +98,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
       .then((d) => {
         if (d?.driver) {
           setDriver({ firstName: d.driver.first_name, lastName: d.driver.last_name });
+          if (d.driver.language_preference === "zu") setLang("zu");
         }
       })
       .finally(() => setChecking(false));
@@ -70,7 +109,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
     fetch("/api/portal/bulletins/unread-count")
       .then((r) => r.json())
       .then((d) => setUrgentCount(d.count ?? 0))
-      .catch(() => setUrgentCount(2)); // fallback mock
+      .catch(() => setUrgentCount(2));
   }, []);
 
   const handleLogout = async () => {
@@ -78,10 +117,28 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
     window.location.href = "/";
   };
 
+  const labels = NAV_LABELS[lang];
+
+  const NAV = [
+    { href: "/portal", label: labels.tasks, icon: CheckSquare, exact: true },
+    { href: "/portal/course", label: labels.course, icon: BookOpen },
+    { href: "/portal/progress", label: labels.progress, icon: TrendingUp },
+    { href: "/portal/certificate", label: labels.certificate, icon: Award },
+    { href: "/portal/cpd", label: labels.cpd, icon: RefreshCw },
+    { href: "/portal/bulletins", label: labels.bulletins, icon: Bell, badge: true },
+    { href: "/portal/profile", label: labels.profile, icon: User },
+    { href: "/portal/support", label: labels.support, icon: HelpCircle },
+  ];
+
   const isActive = (href: string, exact?: boolean) => {
+    if (pathname === null) return false;
     if (exact) return pathname === href;
     return pathname.startsWith(href);
   };
+
+  const initials = driver
+    ? `${driver.firstName[0] ?? ""}${driver.lastName[0] ?? ""}`.toUpperCase()
+    : "BD";
 
   if (checking) {
     return (
@@ -117,13 +174,8 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  const initials = driver
-    ? `${driver.firstName[0] ?? ""}${driver.lastName[0] ?? ""}`.toUpperCase()
-    : "BD";
-
   return (
     <>
-      {/* ── Mobile: top app bar ── */}
       <style>{`
         .pwa-sidebar { display: none; }
         @media (min-width: 768px) {
@@ -171,7 +223,9 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
                   <div style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--text-primary)" }}>
                     {driver.firstName} {driver.lastName}
                   </div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Driver University</div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                    {labels.driverUniversity}
+                  </div>
                 </div>
               </div>
             </div>
@@ -213,22 +267,12 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
                     )}
                   </div>
                   {label}
+                  {active && (
+                    <ChevronRight size={13} style={{ marginLeft: "auto", opacity: 0.5 }} />
+                  )}
                 </Link>
               );
             })}
-
-            <div style={{ height: "1px", background: "var(--border)", margin: "0.5rem 0" }} />
-
-            {SIDEBAR_EXTRA.map(({ href, label, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                className={`portal-nav-item${isActive(href) ? " active" : ""}`}
-              >
-                <Icon size={17} strokeWidth={1.75} />
-                {label}
-              </Link>
-            ))}
           </nav>
 
           {/* Logout */}
@@ -239,7 +283,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
               style={{ width: "100%", background: "none", border: "none", cursor: "pointer" }}
             >
               <LogOut size={17} strokeWidth={1.75} />
-              Sign out
+              {labels.logOut}
             </button>
           </div>
         </aside>
@@ -279,7 +323,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
 
         {/* ── Mobile bottom nav ── */}
         <nav className="bottom-nav" aria-label="Main navigation">
-          {NAV.map(({ href, label, icon: Icon, badge, exact }) => {
+          {NAV.slice(0, 5).map(({ href, label, icon: Icon, badge, exact }) => {
             const active = isActive(href, exact);
             return (
               <Link

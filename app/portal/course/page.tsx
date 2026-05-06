@@ -1,6 +1,5 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { PortalLayout } from "@/components/layout/PortalLayout";
 import { MOCK_ENROLMENT, MOCK_MODULES } from "@/lib/constants";
 import { CheckCircle2, Clock, PlayCircle, ArrowRight, Lock } from "lucide-react";
 
@@ -26,7 +25,7 @@ export default function CoursePage() {
   const nextModule = inProgress ?? modules.find((m) => m.status === "upcoming");
 
   return (
-    <PortalLayout>
+    <div className="page-content">
       <div className="mock-banner" style={{ marginBottom: "1.5rem" }}>
         MOCK DATA — Asif to connect live Supabase enrolment + Moodle module data
       </div>
@@ -184,6 +183,6 @@ export default function CoursePage() {
           );
         })}
       </div>
-    </PortalLayout>
+    </div>
   );
 }

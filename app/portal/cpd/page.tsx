@@ -1,6 +1,5 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { PortalLayout } from "@/components/layout/PortalLayout";
 import { MOCK_CPD_RECORDS } from "@/lib/constants";
 import { AlertTriangle, Clock, CheckCircle2, ArrowRight } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
@@ -22,7 +21,7 @@ export default function CpdPage() {
   const completed = records.filter((r) => r.status === "completed");
 
   return (
-    <PortalLayout>
+    <div className="page-content">
       <div className="mock-banner" style={{ marginBottom: "1.5rem" }}>
         MOCK DATA — Asif to connect live Supabase CPD records
       </div>
@@ -146,6 +145,6 @@ export default function CpdPage() {
           ))}
         </div>
       )}
-    </PortalLayout>
+    </div>
   );
 }

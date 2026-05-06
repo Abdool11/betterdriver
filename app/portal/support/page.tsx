@@ -1,5 +1,4 @@
 import { Metadata } from "next";
-import { PortalLayout } from "@/components/layout/PortalLayout";
 import { MessageCircle, Phone, Mail, HelpCircle } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
 import { getConfigs } from "@/lib/supabase";
@@ -44,7 +43,7 @@ export default async function SupportPage() {
   const whatsappNumber = config["bd_whatsapp_number"] || "27000000000";
 
   return (
-    <PortalLayout>
+    <div className="page-content">
       <TranslatedPageHeader pageKey="support" />
 
       {/* Contact options */}
@@ -196,7 +195,7 @@ export default async function SupportPage() {
             Send message
           </button>
         </form>
-      </div>
-    </PortalLayout>
+    </div>
+    </div>
   );
 }

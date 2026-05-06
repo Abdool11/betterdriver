@@ -1,6 +1,5 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { PortalLayout } from "@/components/layout/PortalLayout";
 import { MOCK_TASKS, MOCK_DRIVER } from "@/lib/constants";
 import { AlertTriangle, Clock, BookOpen, RefreshCw, ArrowRight, CheckCircle2 } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
@@ -31,7 +30,7 @@ export default function TasksPage() {
   const upcomingTasks = tasks.filter((t) => t.status === "upcoming");
 
   return (
-    <PortalLayout>
+    <div className="page-content">
       {/* Mock data banner */}
       <div className="mock-banner" style={{ marginBottom: "1.5rem" }}>
         ⚠ MOCK DATA — Asif to connect live Supabase tasks query
@@ -221,6 +220,6 @@ export default function TasksPage() {
           </div>
         </div>
       )}
-    </PortalLayout>
+    </div>
   );
 }
