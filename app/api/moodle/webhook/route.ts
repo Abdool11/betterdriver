@@ -126,10 +126,13 @@ export async function POST(req: NextRequest) {
     // ── 6. Fire WhatsApp notifications ─────────────────────────────────────
     if (driver.mobile) {
       const lang = (driver.language_preference ?? "en") as "en" | "zu";
-      const portalUrl = `${process.env.NEXT_PUBLIC_BD_URL ?? "https://betterdriver.co.za"}/portal`;
 
       if (isNowComplete) {
         // TRIGGER 6 — Programme complete
+        // Template: bd_programme_complete
+        //   {{1}} = driver first name
+        //   {{2}} = programme name
+        //   (portal URL is hardcoded in the Meta template body)
         await sendWhatsAppMessage({
           to: driver.mobile,
           templateName: "bd_programme_complete",
@@ -138,12 +141,15 @@ export async function POST(req: NextRequest) {
             { type: "body", parameters: [
               { type: "text", text: driver.first_name },
               { type: "text", text: programmeSlug === "professional-truck-driver" ? "Program 1: The Professional Truck Driver" : "Program 2: Eco-Driving Mastery" },
-              { type: "text", text: portalUrl },
             ]},
           ],
         });
       } else if (completionstate === 1 || completionstate === 2) {
         // TRIGGER 3 — Module complete (activity completion event)
+        // Template: bd_module_complete
+        //   {{1}} = driver first name
+        //   {{2}} = module number
+        //   (portal URL is hardcoded in the Meta template body)
         const moduleNum = progress.completedmodules;
         await sendWhatsAppMessage({
           to: driver.mobile,
@@ -153,7 +159,6 @@ export async function POST(req: NextRequest) {
             { type: "body", parameters: [
               { type: "text", text: driver.first_name },
               { type: "text", text: String(moduleNum) },
-              { type: "text", text: portalUrl },
             ]},
           ],
         });

@@ -16,15 +16,25 @@
  * All templates below must be created and approved in:
  *   Meta Business Suite → WhatsApp Manager → Message Templates
  *
+ * See docs/handover/16-WHATSAPP-TEMPLATE-SPEC.md for the exact approved copy.
+ *
  * Template names and their parameter counts:
  *
- *   bd_welcome_first_login     — {{1}} = driver name, {{2}} = programme name, {{3}} = portal link
- *   bd_module_complete         — {{1}} = driver name, {{2}} = module number, {{3}} = portal link
- *   bd_inactivity_7day         — {{1}} = driver name, {{2}} = modules completed, {{3}} = portal link
- *   bd_inactivity_14day        — {{1}} = driver name, {{2}} = modules completed, {{3}} = portal link
- *   bd_programme_complete      — {{1}} = driver name, {{2}} = programme name, {{3}} = portal link
+ *   bd_welcome_first_login  — {{1}} = driver name, {{2}} = programme name
+ *                             (portal URL is hardcoded in the template body)
+ *   bd_module_complete      — {{1}} = driver name, {{2}} = module number
+ *                             (portal URL is hardcoded in the template body)
+ *   bd_inactivity_7day      — {{1}} = driver name, {{2}} = modules completed
+ *                             (portal URL is hardcoded in the template body)
+ *   bd_inactivity_14day     — {{1}} = driver name, {{2}} = modules completed
+ *                             (portal URL is hardcoded in the template body)
+ *   bd_programme_complete   — {{1}} = driver name, {{2}} = programme name
+ *                             (portal URL is hardcoded in the template body)
  *
- * See MOODLE_SETUP.md for the exact approved copy for each template.
+ * IMPORTANT: The portal URL (https://betterdriver.co.za/portal) is hardcoded
+ * in the Meta template body, NOT passed as a variable. This is required for
+ * Meta Utility category approval — passing a full URL as a variable causes
+ * rejection because Meta cannot verify the destination.
  */
 
 const META_WA_TOKEN = process.env.META_WA_TOKEN ?? "";
@@ -107,6 +117,11 @@ export async function sendWhatsAppMessage(params: SendWhatsAppParams): Promise<b
 
 /**
  * TRIGGER 2 — Welcome to BetterDriver (sent on first portal access)
+ *
+ * Template: bd_welcome_first_login
+ *   {{1}} = driver first name
+ *   {{2}} = programme name
+ *   (portal URL is hardcoded in the Meta template body)
  */
 export async function sendWelcomeMessage(params: {
   to: string;
@@ -114,7 +129,6 @@ export async function sendWelcomeMessage(params: {
   programmeName: string;
   language: "en" | "zu";
 }): Promise<boolean> {
-  const portalUrl = `${process.env.NEXT_PUBLIC_BD_URL ?? "https://betterdriver.co.za"}/portal`;
   return sendWhatsAppMessage({
     to: params.to,
     templateName: "bd_welcome_first_login",
@@ -123,7 +137,6 @@ export async function sendWelcomeMessage(params: {
       { type: "body", parameters: [
         { type: "text", text: params.firstName },
         { type: "text", text: params.programmeName },
-        { type: "text", text: portalUrl },
       ]},
     ],
   });

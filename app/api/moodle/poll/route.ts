@@ -114,8 +114,10 @@ export async function POST(req: NextRequest) {
       if (isNowComplete && driver.mobile) {
         completions++;
         const lang = (driver.language_preference ?? "en") as "en" | "zu";
-        const portalUrl = `${process.env.NEXT_PUBLIC_BD_URL ?? "https://betterdriver.co.za"}/portal`;
-
+        // Template: bd_programme_complete
+        //   {{1}} = driver first name
+        //   {{2}} = programme name
+        //   (portal URL is hardcoded in the Meta template body)
         await sendWhatsAppMessage({
           to: driver.mobile,
           templateName: "bd_programme_complete",
@@ -126,7 +128,6 @@ export async function POST(req: NextRequest) {
               { type: "text", text: enrolment.programme_slug === "professional-truck-driver"
                 ? "Program 1: The Professional Truck Driver"
                 : "Program 2: Eco-Driving Mastery" },
-              { type: "text", text: portalUrl },
             ]},
           ],
         });

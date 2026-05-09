@@ -19,10 +19,16 @@
  * - 7 days inactive → send Trigger 4 (once only, tracked via wa_7day_sent_at)
  * - 14 days inactive → send Trigger 5 (once only, tracked via wa_14day_sent_at)
  * - Drivers who have completed their programme are excluded
+ *
+ * Template parameters (bd_inactivity_7day and bd_inactivity_14day):
+ *   {{1}} = driver first name
+ *   {{2}} = modules completed count
+ * (Portal URL is hardcoded in the Meta template body — not passed as a variable)
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
 // Lazy initialize to avoid build-time errors when env vars are missing
 const getSupabase = () => createClient(
@@ -72,7 +78,6 @@ export async function POST(req: NextRequest) {
 
   let sent7day = 0;
   let sent14day = 0;
-  const portalUrl = `${process.env.NEXT_PUBLIC_BD_URL ?? "https://betterdriver.co.za"}/portal`;
 
   for (const enrolment of enrolments ?? []) {
     const driver = Array.isArray(enrolment.drivers) ? enrolment.drivers[0] : enrolment.drivers;
@@ -81,9 +86,14 @@ export async function POST(req: NextRequest) {
     const lang = (driver.language_preference ?? "en") as "en" | "zu";
     const lastActivity = enrolment.last_activity_at ? new Date(enrolment.last_activity_at) : null;
     const isOlderThan14 = lastActivity && lastActivity < new Date(fourteenDaysAgo);
+    const modulesCompleted = String(enrolment.modules_completed ?? 0);
 
     if (isOlderThan14 && !enrolment.wa_14day_sent_at) {
       // Send Trigger 5 — 14-day reminder
+      // Template: bd_inactivity_14day
+      //   {{1}} = driver first name
+      //   {{2}} = modules completed
+      //   (portal URL is hardcoded in the Meta template body)
       await sendWhatsAppMessage({
         to: driver.mobile,
         templateName: "bd_inactivity_14day",
@@ -91,8 +101,7 @@ export async function POST(req: NextRequest) {
         components: [
           { type: "body", parameters: [
             { type: "text", text: driver.first_name },
-            { type: "text", text: String(enrolment.modules_completed ?? 0) },
-            { type: "text", text: portalUrl },
+            { type: "text", text: modulesCompleted },
           ]},
         ],
       });
@@ -103,6 +112,10 @@ export async function POST(req: NextRequest) {
       sent14day++;
     } else if (!isOlderThan14 && !enrolment.wa_7day_sent_at) {
       // Send Trigger 4 — 7-day reminder
+      // Template: bd_inactivity_7day
+      //   {{1}} = driver first name
+      //   {{2}} = modules completed
+      //   (portal URL is hardcoded in the Meta template body)
       await sendWhatsAppMessage({
         to: driver.mobile,
         templateName: "bd_inactivity_7day",
@@ -110,8 +123,7 @@ export async function POST(req: NextRequest) {
         components: [
           { type: "body", parameters: [
             { type: "text", text: driver.first_name },
-            { type: "text", text: String(enrolment.modules_completed ?? 0) },
-            { type: "text", text: portalUrl },
+            { type: "text", text: modulesCompleted },
           ]},
         ],
       });
