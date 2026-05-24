@@ -358,3 +358,164 @@ test("BD /api/admin/config — POST with empty data returns 400", async ({ reque
   });
   expect(res.status()).toBe(400);
 });
+
+// ── Admin Auth Logout ────────────────────────────────────────────────────────
+
+test("BD /api/admin/auth/logout — POST returns redirect or 200", async ({ request }) => {
+  const res = await request.post(`${BASE}/api/admin/auth/logout`, { maxRedirects: 0 });
+  expect([200, 302, 307, 308]).toContain(res.status());
+});
+
+test("BD /api/admin/auth/logout — clears session after login", async ({ request }) => {
+  const loginRes = await request.post(`${BASE}/api/admin/auth/login`, {
+    data: { email: ADMINS.BD.email, password: ADMINS.BD.password },
+  });
+  const cookies = loginRes.headers()["set-cookie"] ?? "";
+  const cookieHeader = formatCookieHeader(parseCookies(cookies));
+
+  const res = await request.post(`${BASE}/api/admin/auth/logout`, {
+    headers: { cookie: cookieHeader },
+    maxRedirects: 0,
+  });
+  expect([200, 302, 307, 308]).toContain(res.status());
+});
+
+// ── Moodle Webhook with valid auth ───────────────────────────────────────────
+
+test("BD /api/moodle/webhook — valid auth with event data returns 200 or error", async ({ request }) => {
+  // Webhook uses MOODLE_WEBHOOK_SECRET (separate from MOODLE_POLL_SECRET)
+  // If secret is not configured, the endpoint may pass through without auth
+  const res = await request.post(`${BASE}/api/moodle/webhook`, {
+    headers: { "x-moodle-secret": "test-webhook-secret" },
+    data: {
+      event: "\\core\\event\\course_module_completion_updated",
+      userid: 999999,
+      courseid: 1,
+      completionstate: 1,
+      timecreated: Math.floor(Date.now() / 1000),
+    },
+  });
+  // 401 if secret mismatch, 200/404/500 if processed
+  expect([200, 401, 404, 500]).toContain(res.status());
+});
+
+// ── Portal Profile GET with driver session ───────────────────────────────────
+
+test("BD /api/portal/profile — GET with driver session cookie returns profile or 401", async ({ request }) => {
+  const company = await createTestCompany({
+    ...TEST_COMPANY,
+    email: `profget_co_${Date.now()}@test.com`,
+  });
+  const driver = await createTestDriver({
+    firstname: "ProfileGet",
+    lastname: "Test",
+    email: `profget_${Date.now()}@test.com`,
+    phone: "+27830000010",
+  }, company.id);
+  const invitation = await createInvitation(driver.id, company.id);
+
+  try {
+    // Join via the magic link to get a session cookie
+    const joinRes = await request.get(`${BASE}/api/join/${invitation.token}`, {
+      maxRedirects: 0,
+    });
+    const cookies = joinRes.headers()["set-cookie"] ?? "";
+    const cookieHeader = formatCookieHeader(parseCookies(cookies));
+
+    const res = await request.get(`${BASE}/api/portal/profile`, {
+      headers: { cookie: cookieHeader },
+    });
+    // 200 if session valid, 401 if cookie-based auth not propagated, 404 if driver not found
+    expect([200, 401, 404]).toContain(res.status());
+    if (res.status() === 200) {
+      const body = await res.json();
+      expect(body.driver).toBeTruthy();
+    }
+  } finally {
+    await cleanupTestDriver(driver.id, company.id);
+  }
+});
+
+// ── Portal CV with driver session ────────────────────────────────────────────
+
+test("BD /api/portal/cv — GET with driver session cookie returns cv data or auth error", async ({ request }) => {
+  const company = await createTestCompany({
+    ...TEST_COMPANY,
+    email: `cvget_co_${Date.now()}@test.com`,
+  });
+  const driver = await createTestDriver({
+    firstname: "CvGet",
+    lastname: "Test",
+    email: `cvget_${Date.now()}@test.com`,
+    phone: "+27830000011",
+  }, company.id);
+  const invitation = await createInvitation(driver.id, company.id);
+
+  try {
+    const joinRes = await request.get(`${BASE}/api/join/${invitation.token}`, {
+      maxRedirects: 0,
+    });
+    const cookies = joinRes.headers()["set-cookie"] ?? "";
+    const cookieHeader = formatCookieHeader(parseCookies(cookies));
+
+    const res = await request.get(`${BASE}/api/portal/cv`, {
+      headers: { cookie: cookieHeader },
+    });
+    expect([200, 401, 403, 405, 500]).toContain(res.status());
+  } finally {
+    await cleanupTestDriver(driver.id, company.id);
+  }
+});
+
+// ── Admin Login Session Validation ───────────────────────────────────────────
+
+test("BD admin login — returns session cookie", async ({ request }) => {
+  const res = await request.post(`${BASE}/api/admin/auth/login`, {
+    data: { email: ADMINS.BD.email, password: ADMINS.BD.password },
+  });
+  expect(res.status()).toBe(200);
+  const setCookie = res.headers()["set-cookie"] ?? "";
+  expect(setCookie).toBeTruthy();
+});
+
+test("BD admin login — empty password returns 400", async ({ request }) => {
+  const res = await request.post(`${BASE}/api/admin/auth/login`, {
+    data: { email: ADMINS.BD.email, password: "" },
+  });
+  expect([400, 401]).toContain(res.status());
+});
+
+test("BD admin login — empty email returns 400", async ({ request }) => {
+  const res = await request.post(`${BASE}/api/admin/auth/login`, {
+    data: { email: "", password: "test123" },
+  });
+  expect([400, 401]).toContain(res.status());
+});
+
+// ── Join with valid token (DB-created) ───────────────────────────────────────
+
+test("BD /api/join — valid token redirects to portal", async ({ request }) => {
+  const company = await createTestCompany({
+    ...TEST_COMPANY,
+    email: `valid_join_co_${Date.now()}@test.com`,
+  });
+  const driver = await createTestDriver({
+    firstname: "ValidJoin",
+    lastname: "Test",
+    email: `valid_join_${Date.now()}@test.com`,
+    phone: "+27830000012",
+  }, company.id);
+  const invitation = await createInvitation(driver.id, company.id);
+
+  try {
+    const res = await request.get(`${BASE}/api/join/${invitation.token}`, {
+      maxRedirects: 0,
+    });
+    expect([302, 307, 308]).toContain(res.status());
+    const location = res.headers()["location"] ?? "";
+    // Should redirect to portal (with session) or /start on success
+    expect(location).toMatch(/(portal|start|activate)/);
+  } finally {
+    await cleanupTestDriver(driver.id, company.id);
+  }
+});

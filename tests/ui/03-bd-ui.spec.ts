@@ -104,3 +104,134 @@ test("BD admin dashboard loads without errors", async ({ page }) => {
   await expect(page.locator("body")).not.toContainText("Application error");
   await expect(page.locator("body")).not.toContainText("Internal Server Error");
 });
+
+// ── Additional Public Pages ──────────────────────────────────────────────────
+
+test("BD homepage loads", async ({ page }) => {
+  await page.goto(BASE, { waitUntil: "domcontentloaded" });
+  await expect(page).toHaveTitle(/.+/);
+  await expect(page.locator("body")).not.toContainText("Application error");
+});
+
+test("BD /activate page loads", async ({ page }) => {
+  await page.goto(`${BASE}/activate`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("Internal Server Error");
+});
+
+test("BD /login page loads", async ({ page }) => {
+  await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("Internal Server Error");
+});
+
+test("BD /help page loads", async ({ page }) => {
+  await page.goto(`${BASE}/help`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("Internal Server Error");
+});
+
+test("BD /registry page loads", async ({ page }) => {
+  await page.goto(`${BASE}/registry`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("Internal Server Error");
+});
+
+test("BD /start — shows error for deactivated link", async ({ page }) => {
+  await page.goto(`${BASE}/start?error=link-deactivated`);
+  await expect(page.locator("body")).toContainText(/(deactivated|revoked|error|link)/i);
+});
+
+// ── Portal Sub-pages (unauthenticated — should redirect to /start) ──────────
+
+test("BD /portal/profile — unauthenticated redirects to /start", async ({ page }) => {
+  await page.goto(`${BASE}/portal/profile`);
+  await page.waitForURL(/\/start/, { timeout: 10_000 });
+  expect(page.url()).toContain("/start");
+});
+
+test("BD /portal/course — unauthenticated redirects to /start", async ({ page }) => {
+  await page.goto(`${BASE}/portal/course`);
+  await page.waitForURL(/\/start/, { timeout: 10_000 });
+  expect(page.url()).toContain("/start");
+});
+
+test("BD /portal/learning — unauthenticated redirects to /start", async ({ page }) => {
+  await page.goto(`${BASE}/portal/learning`);
+  await page.waitForURL(/\/start/, { timeout: 10_000 });
+  expect(page.url()).toContain("/start");
+});
+
+test("BD /portal/progress — unauthenticated redirects to /start", async ({ page }) => {
+  await page.goto(`${BASE}/portal/progress`);
+  await page.waitForURL(/\/start/, { timeout: 10_000 });
+  expect(page.url()).toContain("/start");
+});
+
+test("BD /portal/certificate — unauthenticated redirects to /start", async ({ page }) => {
+  await page.goto(`${BASE}/portal/certificate`);
+  await page.waitForURL(/\/start/, { timeout: 10_000 });
+  expect(page.url()).toContain("/start");
+});
+
+test("BD /portal/cv — unauthenticated redirects to /start", async ({ page }) => {
+  await page.goto(`${BASE}/portal/cv`);
+  await page.waitForURL(/\/start/, { timeout: 10_000 });
+  expect(page.url()).toContain("/start");
+});
+
+test("BD /portal/tasks — unauthenticated redirects to /start", async ({ page }) => {
+  await page.goto(`${BASE}/portal/tasks`);
+  await page.waitForURL(/\/start/, { timeout: 10_000 });
+  expect(page.url()).toContain("/start");
+});
+
+test("BD /portal/setup — unauthenticated redirects to /start", async ({ page }) => {
+  await page.goto(`${BASE}/portal/setup`);
+  await page.waitForURL(/\/start/, { timeout: 10_000 });
+  expect(page.url()).toContain("/start");
+});
+
+test("BD /portal/support — unauthenticated redirects to /start", async ({ page }) => {
+  await page.goto(`${BASE}/portal/support`);
+  await page.waitForURL(/\/start/, { timeout: 10_000 });
+  expect(page.url()).toContain("/start");
+});
+
+test("BD /portal/cpd — unauthenticated redirects to /start", async ({ page }) => {
+  await page.goto(`${BASE}/portal/cpd`);
+  await page.waitForURL(/\/start/, { timeout: 10_000 });
+  expect(page.url()).toContain("/start");
+});
+
+test("BD /portal/bulletins — unauthenticated redirects to /start", async ({ page }) => {
+  await page.goto(`${BASE}/portal/bulletins`);
+  await page.waitForURL(/\/start/, { timeout: 10_000 });
+  expect(page.url()).toContain("/start");
+});
+
+// ── Admin Authenticated Sub-pages ────────────────────────────────────────────
+
+test.describe("BD admin authenticated navigation", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(`${BASE}/admin/login`, { waitUntil: "domcontentloaded" });
+    await page.locator("input[type='email']").pressSequentially(ADMINS.BD.email, { delay: 10 });
+    await page.locator("input[type='password']").pressSequentially(ADMINS.BD.password, { delay: 10 });
+    await page.click("button[type='submit']");
+    await page.waitForTimeout(3000);
+  });
+
+  test("BD admin — settings page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/settings`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("BD admin — dashboard page loads after login", async ({ page }) => {
+    await page.goto(`${BASE}/admin/dashboard`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+});

@@ -105,3 +105,140 @@ test("TAG admin dashboard loads after login", async ({ page }) => {
   await expect(page.locator("body")).not.toContainText("Application error");
   await expect(page.locator("body")).not.toContainText("Internal Server Error");
 });
+
+// ── Public Pages ─────────────────────────────────────────────────────────────
+
+test("TAG about page loads", async ({ page }) => {
+  await page.goto(`${BASE}/about`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("TAG academy page loads", async ({ page }) => {
+  await page.goto(`${BASE}/academy`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("TAG books page loads", async ({ page }) => {
+  await page.goto(`${BASE}/books`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("TAG ecosystem-partners page loads", async ({ page }) => {
+  await page.goto(`${BASE}/ecosystem-partners`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("TAG electric-truck page loads", async ({ page }) => {
+  await page.goto(`${BASE}/electric-truck`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("TAG green-freight page loads", async ({ page }) => {
+  await page.goto(`${BASE}/green-freight`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("TAG knowledge-hub page loads", async ({ page }) => {
+  await page.goto(`${BASE}/knowledge-hub`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("TAG partner-with-tag page loads", async ({ page }) => {
+  await page.goto(`${BASE}/partner-with-tag`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("TAG services page loads", async ({ page }) => {
+  await page.goto(`${BASE}/services`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("TAG tco-calculator page loads", async ({ page }) => {
+  await page.goto(`${BASE}/tco-calculator`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+// ── Admin Authenticated Sub-pages ────────────────────────────────────────────
+
+test.describe("TAG admin authenticated navigation", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(`${BASE}/admin/login`, { waitUntil: "domcontentloaded" });
+    await page.locator("input[type='email']").pressSequentially(ADMINS.TAG.email, { delay: 10 });
+    await page.locator("input[type='password']").pressSequentially(ADMINS.TAG.password, { delay: 10 });
+    await page.click("button[type='submit']");
+    await page.waitForTimeout(3000);
+  });
+
+  test("TAG admin — enquiries page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/enquiries`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("TAG admin — companies page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/companies`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("TAG admin — pricing page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/pricing`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("TAG admin — stats page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/stats`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("TAG admin — tco-submissions page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/tco-submissions`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("TAG admin — registry page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/registry`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("TAG admin — email-settings page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/email-settings`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("TAG admin — paystack page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/paystack`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("TAG admin — whatsapp page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/whatsapp`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+});

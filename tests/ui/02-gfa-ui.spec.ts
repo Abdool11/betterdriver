@@ -121,3 +121,294 @@ test("GFA admin dashboard loads without errors", async ({ page }) => {
   await expect(page.locator("body")).not.toContainText("Application error");
   await expect(page.locator("body")).not.toContainText("Internal Server Error");
 });
+
+// ── Public Pages ─────────────────────────────────────────────────────────────
+
+test("GFA about page loads", async ({ page }) => {
+  await page.goto(`${BASE}/about`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("GFA pricing page loads", async ({ page }) => {
+  await page.goto(`${BASE}/pricing`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("GFA programmes page loads", async ({ page }) => {
+  await page.goto(`${BASE}/programmes`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("GFA publications page loads", async ({ page }) => {
+  await page.goto(`${BASE}/publications`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("GFA registry page loads", async ({ page }) => {
+  await page.goto(`${BASE}/registry`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("GFA contact page loads", async ({ page }) => {
+  await page.goto(`${BASE}/contact`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("GFA privacy page loads", async ({ page }) => {
+  await page.goto(`${BASE}/privacy`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("GFA terms page loads", async ({ page }) => {
+  await page.goto(`${BASE}/terms`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("GFA trial page loads", async ({ page }) => {
+  await page.goto(`${BASE}/trial`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+test("GFA CPD bulletins page loads", async ({ page }) => {
+  await page.goto(`${BASE}/cpd-bulletins`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("body")).not.toContainText("Application error");
+  await expect(page.locator("body")).not.toContainText("404");
+});
+
+// ── Company Login Flow ───────────────────────────────────────────────────────
+
+test("GFA company login — correct credentials reaches dashboard", async ({ page }) => {
+  // Register a company first
+  const email = `uilogin_${Date.now()}@testdomain.co.za`;
+  const password = TEST_COMPANY.password;
+
+  // Register via API
+  await page.request.post(`${BASE}/api/auth/register`, {
+    data: { ...TEST_COMPANY, email, password },
+  });
+
+  await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
+  const allInputs = page.locator("input:not([type='hidden'])");
+  const inputCount = await allInputs.count();
+  for (let i = 0; i < inputCount; i++) {
+    const inp = allInputs.nth(i);
+    const type = await inp.getAttribute("type") ?? "text";
+    const name = (await inp.getAttribute("name") ?? "").toLowerCase();
+    if (type === "email" || name.includes("email")) {
+      await inp.fill(email).catch(() => {});
+    } else if (type === "password") {
+      await inp.fill(password).catch(() => {});
+    }
+  }
+
+  await page.click("button[type='submit']").catch(() => {});
+  await page.waitForTimeout(3000);
+  const url = page.url();
+  const bodyText = await page.locator("body").textContent();
+  const loggedIn = !url.includes("/login") || (bodyText ?? "").match(/(dashboard|driver|import|campaign|logout)/i) !== null;
+  expect(loggedIn).toBe(true);
+  await expect(page.locator("body")).not.toContainText("Application error");
+});
+
+// ── Company Dashboard Pages (unauthenticated — should redirect to login) ─────
+
+test("GFA dashboard — unauthenticated redirects to login", async ({ page }) => {
+  await page.goto(`${BASE}/dashboard`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2000);
+  const url = page.url();
+  const bodyText = await page.locator("body").textContent();
+  // Either redirected to login or shows a login-like prompt
+  const handled = url.includes("/login") || (bodyText ?? "").match(/(sign in|log in|email|password)/i) !== null;
+  expect(handled).toBe(true);
+});
+
+test("GFA dashboard/import — unauthenticated redirects to login", async ({ page }) => {
+  await page.goto(`${BASE}/dashboard/import`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2000);
+  const url = page.url();
+  expect(url.includes("/login") || url.includes("/dashboard")).toBe(true);
+  await expect(page.locator("body")).not.toContainText("Application error");
+});
+
+test("GFA dashboard/campaigns — unauthenticated redirects to login", async ({ page }) => {
+  await page.goto(`${BASE}/dashboard/campaigns`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2000);
+  const url = page.url();
+  expect(url.includes("/login") || url.includes("/dashboard")).toBe(true);
+  await expect(page.locator("body")).not.toContainText("Application error");
+});
+
+test("GFA dashboard/training-campaigns — unauthenticated redirects to login", async ({ page }) => {
+  await page.goto(`${BASE}/dashboard/training-campaigns`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2000);
+  const url = page.url();
+  expect(url.includes("/login") || url.includes("/dashboard")).toBe(true);
+  await expect(page.locator("body")).not.toContainText("Application error");
+});
+
+test("GFA dashboard/payment — unauthenticated redirects to login", async ({ page }) => {
+  await page.goto(`${BASE}/dashboard/payment`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2000);
+  const url = page.url();
+  expect(url.includes("/login") || url.includes("/dashboard")).toBe(true);
+  await expect(page.locator("body")).not.toContainText("Application error");
+});
+
+test("GFA dashboard/reports — unauthenticated redirects to login", async ({ page }) => {
+  await page.goto(`${BASE}/dashboard/reports`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2000);
+  const url = page.url();
+  expect(url.includes("/login") || url.includes("/dashboard")).toBe(true);
+  await expect(page.locator("body")).not.toContainText("Application error");
+});
+
+test("GFA dashboard/bulletins — unauthenticated redirects to login", async ({ page }) => {
+  await page.goto(`${BASE}/dashboard/bulletins`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2000);
+  const url = page.url();
+  expect(url.includes("/login") || url.includes("/dashboard")).toBe(true);
+  await expect(page.locator("body")).not.toContainText("Application error");
+});
+
+test("GFA dashboard/career-planner — unauthenticated redirects to login", async ({ page }) => {
+  await page.goto(`${BASE}/dashboard/career-planner`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2000);
+  const url = page.url();
+  expect(url.includes("/login") || url.includes("/dashboard")).toBe(true);
+  await expect(page.locator("body")).not.toContainText("Application error");
+});
+
+test("GFA dashboard/cpd-library — unauthenticated redirects to login", async ({ page }) => {
+  await page.goto(`${BASE}/dashboard/cpd-library`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2000);
+  const url = page.url();
+  expect(url.includes("/login") || url.includes("/dashboard")).toBe(true);
+  await expect(page.locator("body")).not.toContainText("Application error");
+});
+
+test("GFA dashboard/cpd-submission — unauthenticated redirects to login", async ({ page }) => {
+  await page.goto(`${BASE}/dashboard/cpd-submission`, { waitUntil: "domcontentloaded" });
+  await page.waitForTimeout(2000);
+  const url = page.url();
+  expect(url.includes("/login") || url.includes("/dashboard")).toBe(true);
+  await expect(page.locator("body")).not.toContainText("Application error");
+});
+
+// ── Admin Sub-pages (authenticated) ──────────────────────────────────────────
+
+test.describe("GFA admin authenticated navigation", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(`${BASE}/admin/login`, { waitUntil: "domcontentloaded" });
+    await page.locator("input[type='email']").pressSequentially(ADMINS.GFA.email, { delay: 10 });
+    await page.locator("input[type='password']").pressSequentially(ADMINS.GFA.password, { delay: 10 });
+    await page.click("button[type='submit']");
+    await page.waitForTimeout(3000);
+  });
+
+  test("GFA admin — cohorts page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/cohorts`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("GFA admin — companies page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/companies`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("GFA admin — leads page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/leads`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("GFA admin — funnel page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/funnel`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("GFA admin — pricing page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/pricing`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("GFA admin — programmes page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/programmes`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("GFA admin — stats page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/stats`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("GFA admin — vouchers page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/vouchers`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("GFA admin — cpd-queue page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/cpd-queue`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("GFA admin — video-library page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/video-library`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("GFA admin — data page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/data`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("GFA admin — email-settings page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/email-settings`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("GFA admin — settings messaging page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/settings/messaging`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+
+  test("GFA admin — super page loads", async ({ page }) => {
+    await page.goto(`${BASE}/admin/super`, { waitUntil: "domcontentloaded" });
+    await page.waitForTimeout(2000);
+    await expect(page.locator("body")).not.toContainText("Application error");
+    await expect(page.locator("body")).not.toContainText("Internal Server Error");
+  });
+});

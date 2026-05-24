@@ -197,3 +197,72 @@ test("TAG stats endpoint — returns data", async ({ request }) => {
   const res = await request.get(`${BASE}/api/stats`);
   expect(res.status()).toBe(200);
 });
+
+test("TAG stats endpoint — response has expected fields", async ({ request }) => {
+  const res = await request.get(`${BASE}/api/stats`);
+  expect(res.status()).toBe(200);
+  const body = await res.json();
+  expect(typeof body.workshops).toBe("number");
+  expect(typeof body.training_seats).toBe("number");
+  expect(typeof body.certifications).toBe("number");
+  expect(typeof body.companies).toBe("number");
+  expect(body.data_source).toBeTruthy();
+});
+
+test("TAG stats endpoint — CORS headers present", async ({ request }) => {
+  const res = await request.get(`${BASE}/api/stats`);
+  expect(res.status()).toBe(200);
+  const headers = res.headers();
+  expect(headers["access-control-allow-origin"]).toBe("*");
+});
+
+// ── Admin Pricing ─────────────────────────────────────────────────────────────
+
+test("TAG admin pricing — unauthenticated POST returns 401", async ({ request }) => {
+  const res = await request.post(`${BASE}/api/admin/pricing`, {
+    data: { courses: [], vatRate: 15, vatEnabled: true },
+  });
+  expect([401, 403]).toContain(res.status());
+});
+
+test("TAG admin pricing — GET returns 405 (POST only)", async ({ request }) => {
+  const res = await request.get(`${BASE}/api/admin/pricing`);
+  expect([405]).toContain(res.status());
+});
+
+// ── Admin Logout ──────────────────────────────────────────────────────────────
+
+test("TAG admin logout — POST returns redirect to login", async ({ request }) => {
+  const res = await request.post(`${BASE}/api/admin/logout`, { maxRedirects: 0 });
+  expect([302, 307, 308]).toContain(res.status());
+  const location = res.headers()["location"] ?? "";
+  expect(location).toContain("/admin/login");
+});
+
+// ── Submit Enquiry — additional edge cases ────────────────────────────────────
+
+test("TAG submit-enquiry — GET returns 405", async ({ request }) => {
+  const res = await request.get(`${BASE}/api/submit-enquiry`);
+  expect(res.status()).toBe(405);
+});
+
+test("TAG submit-enquiry — empty body returns 400", async ({ request }) => {
+  const res = await request.post(`${BASE}/api/submit-enquiry`, {
+    data: {},
+  });
+  expect(res.status()).toBe(400);
+});
+
+// ── TCO Submit — additional edge cases ────────────────────────────────────────
+
+test("TAG tco-submit — GET returns 405", async ({ request }) => {
+  const res = await request.get(`${BASE}/api/tco-submit`);
+  expect(res.status()).toBe(405);
+});
+
+test("TAG tco-submit — empty body returns 400", async ({ request }) => {
+  const res = await request.post(`${BASE}/api/tco-submit`, {
+    data: {},
+  });
+  expect(res.status()).toBe(400);
+});
