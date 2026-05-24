@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/moodle/poll",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/moodle/inactivity-check",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}
