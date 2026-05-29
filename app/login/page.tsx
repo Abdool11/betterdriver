@@ -1,28 +1,16 @@
-import { Metadata } from "next";
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import { Navigation } from "@/components/layout/Navigation";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Eye, EyeOff } from "lucide-react";
 
-export const dynamic = "force-dynamic";
-
-
-// DATA REQUIREMENTS:
-// - No data fetching on this page
-// - Form submits to Server Action: /app/login/actions.ts
-// - On success: redirect to /portal/tasks
 // TODO: Asif — implement Supabase Auth login Server Action
 // TODO: Asif — implement "Forgot password" flow (Supabase resetPasswordForEmail)
 
-export const metadata: Metadata = {
-  title: "Log in",
-  description: "Log in to your BetterDriver Driver University.",
-};
+export default function LoginPage() {
+  const [showPassword, setShowPassword] = useState(false);
 
-export default function LoginPage({
-  searchParams,
-}: {
-  searchParams: { returnTo?: string };
-}) {
   return (
     <div style={{ minHeight: "100vh", background: "#111827", display: "flex", flexDirection: "column" }}>
       <Navigation />
@@ -74,9 +62,9 @@ export default function LoginPage({
               padding: "2rem",
             }}
           >
-            {/* TODO: Asif — implement Supabase Auth login Server Action */}
-            {/* Server Action: signInWithPassword({ email, password }) → redirect to /portal/tasks */}
+            {/* TODO: Asif — wire form to Supabase Auth signInWithPassword Server Action → redirect to /portal/tasks */}
             <form style={{ display: "flex", flexDirection: "column", gap: "1.125rem" }}>
+              {/* Email */}
               <div>
                 <label style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, color: "#9CA3AF", marginBottom: "0.375rem" }}>
                   Email address *
@@ -100,6 +88,8 @@ export default function LoginPage({
                   }}
                 />
               </div>
+
+              {/* Password with visibility toggle */}
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.375rem" }}>
                   <label style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#9CA3AF" }}>
@@ -110,25 +100,48 @@ export default function LoginPage({
                     Forgot password?
                   </span>
                 </div>
-                <input
-                  type="password"
-                  name="password"
-                  required
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  style={{
-                    width: "100%",
-                    padding: "0.75rem 1rem",
-                    background: "#243044",
-                    border: "1px solid #2d3a4f",
-                    borderRadius: "0.75rem",
-                    color: "#F9FAFB",
-                    fontSize: "0.9375rem",
-                    outline: "none",
-                    boxSizing: "border-box",
-                  }}
-                />
+                <div style={{ position: "relative" }}>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    required
+                    autoComplete="current-password"
+                    placeholder="••••••••"
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 3rem 0.75rem 1rem",
+                      background: "#243044",
+                      border: "1px solid #2d3a4f",
+                      borderRadius: "0.75rem",
+                      color: "#F9FAFB",
+                      fontSize: "0.9375rem",
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(v => !v)}
+                    style={{
+                      position: "absolute",
+                      right: "0.875rem",
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      background: "none",
+                      border: "none",
+                      cursor: "pointer",
+                      color: "#6B7280",
+                      display: "flex",
+                      alignItems: "center",
+                      padding: 0,
+                    }}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
+
               <button type="submit" className="btn-primary" style={{ width: "100%", justifyContent: "center" }}>
                 Log in <ArrowRight size={16} />
               </button>
