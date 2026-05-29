@@ -1,22 +1,55 @@
-import { Metadata } from "next";
+"use client";
+import { useState } from "react";
+import { Award, Download, Share2, CheckCircle2, Loader2 } from "lucide-react";
 import { MOCK_DRIVER, MOCK_CERTIFICATE } from "@/lib/constants";
-import { Award, Download, Share2, CheckCircle2 } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
-
-export const dynamic = "force-dynamic";
-
 
 // DATA REQUIREMENTS:
 // - driver: Driver — from Supabase auth session
 // - certificate: Certificate | null — Supabase: SELECT * FROM certifications WHERE driver_id = ? AND status = 'active' ORDER BY issued_at DESC LIMIT 1
-// TODO: Asif — replace mock data with live Supabase query
-// TODO: Asif — implement PDF download via /api/certificate/download?id=
-
-export const metadata: Metadata = { title: "My Certificate" };
+// TODO: Asif — replace mock data with live Supabase query (remove MOCK_DRIVER / MOCK_CERTIFICATE)
 
 export default function PortalCertificatePage() {
   const driver = MOCK_DRIVER;
   const cert = MOCK_CERTIFICATE;
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownload = async () => {
+    setDownloading(true);
+    try {
+      // cert.id will be the real UUID once live data is wired
+      const res = await fetch(`/api/certificate/download${cert.id ? `?id=${cert.id}` : ""}`);
+      if (!res.ok) throw new Error("Download failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `BetterDriver-Certificate-${driver.name.replace(/\s+/g, "-")}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Certificate download error:", err);
+      alert("Could not download certificate. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  const handleShare = async () => {
+    const shareData = {
+      title: "BetterDriver Certificate",
+      text: `${driver.name} has completed the ${cert.programmeName}. Certificate No: ${cert.certNumber}`,
+      url: `${window.location.origin}/registry?cert=${cert.certNumber}`,
+    };
+    if (navigator.share) {
+      await navigator.share(shareData);
+    } else {
+      await navigator.clipboard.writeText(shareData.url);
+      alert("Certificate link copied to clipboard.");
+    }
+  };
 
   return (
     <div className="page-content">
@@ -105,20 +138,26 @@ export default function PortalCertificatePage() {
 
       {/* Actions */}
       <div style={{ display: "flex", gap: "0.875rem", flexWrap: "wrap" }}>
-        {/* TODO: Asif — implement PDF download via /api/certificate/download?id= */}
         <button
           className="btn-primary"
+          onClick={handleDownload}
+          disabled={downloading}
           style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
         >
-          <Download size={16} /> Download PDF
+          {downloading ? (
+            <><Loader2 size={16} className="animate-spin" /> Generating PDF…</>
+          ) : (
+            <><Download size={16} /> Download PDF</>
+          )}
         </button>
         <button
           className="btn-secondary"
+          onClick={handleShare}
           style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
         >
           <Share2 size={16} /> Share certificate
         </button>
-    </div>
+      </div>
     </div>
   );
 }

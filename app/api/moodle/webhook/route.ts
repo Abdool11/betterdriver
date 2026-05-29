@@ -123,7 +123,43 @@ export async function POST(req: NextRequest) {
       })
       .eq("id", enrolment.id);
 
-    // ── 6. Fire WhatsApp notifications ─────────────────────────────────────
+    // ── 6a. Auto-generate certificate on programme completion ──────────────
+    if (isNowComplete) {
+      // Generate a unique certificate number: BD-YYYYMMDD-XXXXXXXX
+      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const randomPart = Math.random().toString(36).substring(2, 10).toUpperCase();
+      const certificateNumber = `BD-${dateStr}-${randomPart}`;
+
+      const programmeName =
+        programmeSlug === "professional-truck-driver"
+          ? "Program 1: The Professional Truck Driver"
+          : "Program 2: Eco-Driving Mastery";
+
+      // Upsert — if a cert already exists for this driver+programme, do nothing
+      const { error: certInsertErr } = await supabase
+        .from("certifications")
+        .upsert(
+          {
+            driver_id: driver.id,
+            certificate_number: certificateNumber,
+            programme: programmeName,
+            issued_at: new Date().toISOString(),
+            status: "active",
+          },
+          {
+            onConflict: "driver_id,programme",
+            ignoreDuplicates: true,
+          },
+        );
+
+      if (certInsertErr) {
+        console.error("[MOODLE_WEBHOOK] Failed to insert certification:", certInsertErr);
+      } else {
+        console.log(`[MOODLE_WEBHOOK] Certificate issued: ${certificateNumber} for driver ${driver.id}`);
+      }
+    }
+
+    // ── 6b. Fire WhatsApp notifications ──────────────────────────────────────
     if (driver.mobile) {
       const lang = (driver.language_preference ?? "en") as "en" | "zu";
 
