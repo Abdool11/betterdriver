@@ -1,0 +1,360 @@
+﻿TAG Ecosystem - Comprehensive Handover & Integration Document
+Prepared for: Asif (Lead Developer) Prepared by: TAG Development Team Date: 29 May 2026 Covers: All code changes from the current development session, deployment sequence, SQL migrations, environment variables, and integration notes.
+
+
+
+1. Overview
+This document is your single reference for everything that has been built, changed, and pushed to GitHub in this session. It covers all three repositories in the TAG ecosystem:
+
+PlatformRepositoryDomainTransport Action GroupAbdool11/transportactiongrouptransportactiongroup.co.zaGreen Freight AcademyAbdool11/greenfreightacademygreenfreightacademy.co.zaBetterDriverAbdool11/betterdriverbetterdriver.co.zaAll three platforms share a single Supabase project and must be deployed in the correct sequence. Do not skip the gate checks.
+
+
+
+2. What Was Built in This Session
+2.1 Auth UX - All Platforms
+Problem: Login pages had no password visibility toggle, and the BD driver portal logout button was wired to a route that did not exist.
+
+What was built:
+• Password show/hide toggle added to all four login pages (GFA admin, GFA client, BD admin, BD driver)
+• Missing BD driver logout API route created at app/api/auth/logout/route.ts
+
+No database changes required.
+
+
+
+2.2 TCO Optimizer Mixing Desk - TAG
+Problem: The TCO Calculator showed the summary card first, then the charts below - users had to scroll past the results to reach the inputs.
+
+What was built:
+• New layout: Cumulative Cost Over Time graphs at the top (always visible)
+• New TCO Optimizer card below the graphs - a dual-sided "mixing desk" of sliders:
+◦ Left side (Diesel): Monthly km, Vehicle life, Vehicle price, Finance rate, Diesel price
+◦ Right side (Electric): Monthly km, Vehicle life, Vehicle price, Finance rate, Electricity price
+◦ Monthly km and Vehicle life are fully independent between Diesel and Electric (charging windows affect available driving hours)
+◦ Moving any slider instantly updates both graphs and the summary card
+• TCO Summary card moved to the bottom
+• Second chart added: annual saving bar chart (green = electric ahead, amber = diesel ahead)
+
+No database changes required.
+
+
+
+2.3 Certificate Auto-Generation - BD
+Problem: The certificate system was fully mocked. No PDF was generated, no record was inserted on completion, and the registry was empty.
+
+What was built:
+
+A. Auto-insert on programme completion When Moodle fires the completion webhook, the BD webhook route now automatically inserts a row into the certifications table. This happens whether or not the driver ever downloads their certificate. Certificate numbers follow the format BD-YYYYMMDD-XXXXXXXX.
+
+B. PDF download API GET /api/certificate/download generates a PDF on the fly using pdf-lib. It loads the active certificate template from Supabase Storage (or falls back to the default background at public/templates/certificate-bg.png) and overlays:
+• Driver full name
+• Programme name
+• Issue date
+• Certificate number
+
+C. Certificate Template Manager (GFA Admin) A new admin page at /admin/certificate-template allows you to:
+• Upload a new certificate background (PNG or JPG - design it in Canva, Illustrator, or any tool)
+• Set text overlay coordinates (so the driver name, programme, date, and cert number land in the right position on your design)
+• Activate or deactivate templates (stage a new design before going live)
+
+D. Public verification page /verify/[certNumber] is a public page that shows a green "Verified" card, amber "Not Found" card, or red "Revoked" card. This URL is embedded in the PDF certificate as a QR code destination and can be shared directly with employers.
+
+
+
+2.4 Survey Admin - GFA
+Problem: Pre-course and post-course survey questions were hardcoded in the frontend. There was no way to add, edit, or reorder questions without a code deployment.
+
+What was built: A full Survey Admin interface at /admin/surveys with:
+• Pre-course and Post-course tabs
+• Add, edit, and delete questions
+• Three question types: Multiple Choice, Scale (1-5), Free Text
+• Bilingual fields: English and IsiZulu for every question
+• Activate/deactivate per survey (so you can stage changes before going live)
+• Drag-to-reorder questions
+
+
+
+2.5 Live Certificate Registry - BD and GFA
+Problem: The BD registry was showing mock data. The GFA registry was wired to query Moodle directly - the wrong source of truth.
+
+What was built:
+
+BD:
+• GET /api/registry?q=&page=&limit= - public Supabase query on certifications joined to drivers. Supports search by name, ID number, or certificate number. Partial ID masking (last 4 digits visible only). Paginated.
+• /registry page rewritten as a live client component with debounced search, loading skeletons, empty state, and pagination.
+• /verify/[certNumber] public page for employer and auditor verification.
+
+GFA:
+• /registry now queries the BD Supabase API (NEXT_PUBLIC_BD_API_BASE_URL/api/registry) instead of Moodle. Both registries now show the same live data from the same source of truth.
+
+
+
+2.6 WhatsApp Template Compliance
+All six WhatsApp message templates were rewritten to comply with Meta's Utility category guidelines. The key changes:
+• Removed all promotional language ("Welcome!", "Good luck!", "Don't forget...")
+• Replaced full URL variables with hardcoded base URLs + token-only variables
+• Added opt-out instructions to all templates
+
+The approved copy is in docs/handover/16-WHATSAPP-TEMPLATE-SPEC.md in all three repos.
+
+
+
+3. GitHub Branches - What to Merge
+Merge these branches into main in the order listed. Each branch is independently deployable. Do not merge them all at once.
+
+BetterDriver (BD)
+OrderBranchWhat it contains1feature/auth-ux-phase1Password visibility toggles; driver logout API route2feature/phase3-certificate-systempdf-lib; certificate download API; webhook auto-insert; portal certificate page3feature/registry-live-wiringLive registry API; verify API; registry page; verify public page; updated READMEGreen Freight Academy (GFA)
+OrderBranchWhat it contains1feature/auth-ux-phase1Password visibility toggles on all login pages2feature/phase3-certificate-templateCertificate template manager admin page and upload API3feature/phase4-survey-adminSurvey admin interface (pre/post CRUD, bilingual, drag-to-reorder)4feature/registry-live-wiringGFA registry wired to BD Supabase API; updated READMETransport Action Group (TAG)
+OrderBranchWhat it contains1feature/tco-optimizer-v2TCO Optimizer mixing desk; dual charts; independent sliders; updated READMEImportant: Merge BD branches before GFA branches. The GFA registry depends on the BD registry API being live.
+
+
+
+4. SQL Migrations
+Run these SQL scripts in the Supabase SQL editor before deploying any of the new branches. All statements use IF NOT EXISTS or ON CONFLICT DO NOTHING - they are safe to re-run.
+
+4.1 Certificate System
+-- Certificate template settings (stores active template URL and text positions)
+CREATE TABLE IF NOT EXISTS certificate_templates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  storage_url TEXT NOT NULL,
+  text_positions JSONB NOT NULL DEFAULT '{}',
+  is_active BOOLEAN NOT NULL DEFAULT false,
+  uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ 
+-- Settings table (key-value store for platform config)
+CREATE TABLE IF NOT EXISTS settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL DEFAULT '',
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ 
+-- Seed default certificate template settings
+INSERT INTO settings (key, value)
+VALUES ('certificate_template_url', ''), ('certificate_text_positions', '{}')
+ON CONFLICT DO NOTHING;
+ 
+-- Ensure certifications table has revoked_at column
+ALTER TABLE certifications ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;
+ 
+-- RLS: allow anon reads on certifications (active only) for public registry
+ALTER TABLE certifications ENABLE ROW LEVEL SECURITY;
+ 
+CREATE POLICY IF NOT EXISTS "Public read active certifications"
+  ON certifications FOR SELECT
+  TO anon
+  USING (status = 'active');
+
+4.2 Survey System
+-- Survey definitions table
+CREATE TABLE IF NOT EXISTS surveys (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  type TEXT NOT NULL CHECK (type IN ('pre_course', 'post_course')),
+  is_active BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ 
+-- Survey questions table
+CREATE TABLE IF NOT EXISTS survey_questions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  survey_id UUID NOT NULL REFERENCES surveys(id) ON DELETE CASCADE,
+  question_en TEXT NOT NULL,
+  question_zu TEXT NOT NULL DEFAULT '',
+  question_type TEXT NOT NULL CHECK (question_type IN ('multiple_choice', 'scale', 'free_text')),
+  options_en JSONB,
+  options_zu JSONB,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ 
+-- Survey responses table
+CREATE TABLE IF NOT EXISTS survey_responses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  survey_id UUID NOT NULL REFERENCES surveys(id),
+  question_id UUID NOT NULL REFERENCES survey_questions(id),
+  driver_id UUID NOT NULL REFERENCES drivers(id),
+  response TEXT NOT NULL,
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ 
+-- Seed the two default surveys
+INSERT INTO surveys (type, is_active)
+VALUES ('pre_course', true), ('post_course', true)
+ON CONFLICT DO NOTHING;
+
+4.3 Supabase Storage Bucket (Certificate Templates)
+Run this in the Supabase dashboard under Storage → New Bucket:
+
+• Bucket name: certificate-templates
+• Public: Yes (certificates must be readable without auth)
+• File size limit: 10 MB
+• Allowed MIME types: image/png, image/jpeg
+
+Or via SQL:
+
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('certificate-templates', 'certificate-templates', true)
+ON CONFLICT DO NOTHING;
+
+
+
+5. New Environment Variables
+BetterDriver (BD) - add to .env.local
+No new environment variables are required for BD. All new features use existing Supabase credentials.
+
+Green Freight Academy (GFA) - add to .env.local
+# Required for the public driver registry to query live BD certifications
+NEXT_PUBLIC_BD_API_BASE_URL=https://betterdriver.co.za
+
+For local development, set this to http://localhost:3001 (or whatever port BD runs on locally).
+
+Transport Action Group (TAG)
+No new environment variables required.
+
+
+
+6. Deployment Sequence
+Follow this sequence exactly. Each gate must pass before proceeding.
+
+Step 1 - Run SQL Migrations
+1 Open the Supabase SQL editor for the shared project
+2 Run Section 4.1 (Certificate System) - paste and execute
+3 Run Section 4.2 (Survey System) - paste and execute
+4 Create the certificate-templates Storage bucket (Section 4.3)
+5 Verify: check that certificate_templates, surveys, survey_questions, and survey_responses tables exist
+
+GATE: All four new tables exist. certifications table has a revoked_at column. certificate-templates bucket is public.
+
+
+
+Step 2 - Merge and Deploy BD
+# On the server in the BD directory
+git fetch origin
+git checkout main
+git merge origin/feature/auth-ux-phase1
+git merge origin/feature/phase3-certificate-system
+git merge origin/feature/registry-live-wiring
+npm install          # picks up pdf-lib
+npm run build
+cp -r .next/static .next/standalone/.next/static
+cp -r public .next/standalone/public
+pm2 restart bd-app
+
+GATE: Visit https://betterdriver.co.za/registry - the page loads (empty state is fine, no mock data). Visit https://betterdriver.co.za/verify/BD-TEST-00000000 - shows "Certificate not found" card (not a 404 or error).
+
+
+
+Step 3 - Merge and Deploy GFA
+# On the server in the GFA directory
+git fetch origin
+git checkout main
+git merge origin/feature/auth-ux-phase1
+git merge origin/feature/phase3-certificate-template
+git merge origin/feature/phase4-survey-admin
+git merge origin/feature/registry-live-wiring
+npm install
+npm run build
+cp -r .next/static .next/standalone/.next/static
+cp -r public .next/standalone/public
+pm2 restart gfa-app
+
+GATE: Log into GFA admin → check that /admin/certificate-template and /admin/surveys pages load. Visit https://greenfreightacademy.co.za/registry - the page loads and queries the live BD API.
+
+
+
+Step 4 - Merge and Deploy TAG
+# On the server in the TAG directory
+git fetch origin
+git checkout main
+git merge origin/feature/tco-optimizer-v2
+npm install
+npm run build
+cp -r .next/static .next/standalone/.next/static
+cp -r public .next/standalone/public
+pm2 restart tag-app
+
+GATE: Visit https://transportactiongroup.co.za/tco-calculator - cumulative cost graphs appear at the top, mixing desk sliders appear below them, summary card appears at the bottom.
+
+
+
+7. WhatsApp Template Submission
+Before the WhatsApp notifications will work in production, you must submit all six templates to Meta Business Manager and wait for approval (typically 24-48 hours).
+
+The approved template copy is in docs/handover/16-WHATSAPP-TEMPLATE-SPEC.md in all three repos.
+
+Critical rule: When entering template bodies in Meta Business Manager, the portal base URL (https://betterdriver.co.za/portal) must be typed as static text in the template body - not wrapped in a {{variable}}. Only the unique token or driver name is passed as a variable.
+
+Template nameVariablesbd_welcome_first_login{{1}} = driver first namebd_module_complete{{1}} = driver first name, {{2}} = module namebd_programme_complete{{1}} = driver first name, {{2}} = programme namebd_inactivity_7day{{1}} = driver first namebd_inactivity_14day{{1}} = driver first namegfa_driver_magic_link{{1}} = driver first name, {{2}} = company name, {{3}} = programme name, {{4}} = invitation token
+
+8. Certificate Template - First Upload
+After deploying GFA, you need to upload the first certificate background before any certificates can be generated.
+
+6 Log into GFA Admin → /admin/certificate-template
+7 Click Upload Template
+8 Upload a PNG or JPG (recommended: 2480 × 1754px landscape - A4 at 300 DPI)
+9 Adjust the text overlay coordinates using the preview (driver name, programme, date, cert number)
+10 Click Activate to make it the live template
+
+A default fallback template (public/templates/certificate-bg.png) is included in the BD repo and will be used if no custom template has been uploaded yet. This is a dark navy branded design - functional for launch.
+
+
+
+9. Survey Setup - First Questions
+After deploying GFA, seed the pre-course and post-course surveys with the initial questions:
+
+11 Log into GFA Admin → /admin/surveys
+12 Select the Pre-Course tab
+13 Add the questions (English + IsiZulu for each)
+14 Click Activate Survey
+15 Repeat for the Post-Course tab
+
+The current question set is documented in docs/FSD-001-DRIVER-SURVEYS.md in the BD repo.
+
+
+
+10. Admin Login Credentials
+Action required: Change these passwords immediately after first login on the live server.
+
+PlatformURLEmailDefault PasswordGFA Admin/admin/loginadmin@greenfreightacademy.co.zaGfaAdmin2024!BD Admin/admin/loginadmin@betterdriver.co.zaBdAdmin2024!TAG Admin/admin/loginSet via ADMIN_EMAIL env varSet via ADMIN_PASSWORD env var
+
+11. Known Issues and Remaining Work
+These items are documented and planned for the next development sprint. They do not block the current deployment.
+
+ItemPlatformNotesBD driver portal uses mock dataBDAll portal pages (tasks, course, progress, profile, CPD) still render mock data. Live data wiring is the highest-priority item for the next sprint. FSD is written and approved.Per-programme certificate templatesBD + GFACurrently one master template. Next sprint will add per-programme template upload so each programme can have its own branded certificate design.Advanced Certificate tierBD + GFAAuto-issued when a driver completes all programmes. Planned for next sprint alongside per-programme templates.GFA contact formGFAServer Action not yet wired.GFA CPD submission paymentGFAPaystack flow not yet implemented.Sentry error monitoringTAGapp/error.tsx has a TODO to wire up Sentry for production error logging.
+
+12. Quick Reference - All Repos
+Git remote URLs
+# TAG
+git remote add origin https://github.com/Abdool11/transportactiongroup.git
+ 
+# GFA
+git remote add origin https://github.com/Abdool11/greenfreightacademy.git
+ 
+# BD
+git remote add origin https://github.com/Abdool11/betterdriver.git
+
+PM2 app names
+PlatformPM2 nameTAGtag-appGFAgfa-appBDbd-appPorts
+PlatformDefault portTAG3000GFA3001BD3002Useful commands
+# Check all three apps are running
+pm2 list
+ 
+# View live logs for BD
+pm2 logs bd-app --lines 50
+ 
+# Restart all three after a server reboot
+pm2 resurrect
+ 
+# Check Nginx config is valid before reloading
+nginx -t && systemctl reload nginx
+
+
+
+13. Contact and Support
+For any questions about the code, architecture decisions, or feature specifications, refer to the handover documentation in docs/handover/ in each repository. The key files are:
+
+FileContents00-INTRODUCTION-AND-EXECUTIVE-SUMMARY.mdPlatform overview and architecture02-DEPLOYMENT-SEQUENCE.mdFull first-time deployment sequence with gate checks03-CONFIGURATION-REFERENCE.mdAll environment variables with descriptions04-KNOWN-FAILURE-MODES.mdCommon issues and how to resolve them05-END-TO-END-TESTING.mdTest checklist for verifying a deployment09-MOODLE-SETUP.mdFull Moodle configuration guide16-WHATSAPP-TEMPLATE-SPEC.mdApproved WhatsApp template copy for Meta submission
+
+This document covers all work completed in the development session of 29 May 2026. For subsequent sessions, refer to the updated README files in each repository which list all open feature branches.

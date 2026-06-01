@@ -1,0 +1,41 @@
+# ============================================================
+# ROOT GITIGNORE — TAG Ecosystem
+# Prevents secrets and local files from being committed
+# ============================================================
+
+# ── Environment files ──
+.env
+.env.local
+.env.*.local
+!.env.local.example
+
+# ── SSH keys ──
+*.pem
+*.key
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+
+# ── Local test / debug scripts ──
+moodle_*.py
+moodle_*.sh
+check_*.py
+debug_*.py
+fix_*.py
+test_*.py
+reset_*.py
+
+# ── Python / Node artifacts ──
+__pycache__/
+*.pyc
+*.pyo
+node_modules/
+
+# ── IDE / OS files ──
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db

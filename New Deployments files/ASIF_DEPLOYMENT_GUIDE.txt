@@ -1,0 +1,679 @@
+TAG Ecosystem — Deployment Guide for Asif
+Version: May 2026 Build
+Applies to: BetterDriver (BD), Green Freight Academy (GFA), Transport Action Group (TAG)
+Author: Manus AI
+
+Overview
+This guide covers everything you need to deploy and maintain all three TAG ecosystem sites
+using the automated deployment scripts. Read it once end-to-end before your first
+deployment — it will save you significant time.
+The three sites share a single Supabase database and must be deployed in a specific order:
+BD (BetterDriver) → GFA (Green Freight Academy) → TAG (Transport Action Group)
+
+BD must always be deployed first because GFA’s registry feature calls the BD API.
+
+Part 1 — Server Prerequisites
+These steps only need to be done once on a fresh server. If your server is already running the
+sites, skip to Part 2.
+
+1.1 Install Node.js 20 LTS
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash sudo apt-get install -y nodejs
+node -v
+
+# should print v20.x.x
+
+1.2 Install PM2
+sudo npm install -g pm2
+pm2 -v
+
+# should print a version number
+
+1.3 Install Nginx
+sudo apt-get install -y nginx
+sudo systemctl enable nginx
+sudo systemctl start nginx
+
+1.4 Install Certbot (for SSL)
+sudo apt-get install -y certbot python3-certbot-nginx
+
+1.5 Clone the repositories
+mkdir -p /home/ubuntu
+cd /home/ubuntu
+git clone https://github.com/YOUR_ORG/bd-v2-clean.git
+git clone https://github.com/YOUR_ORG/gfa-v2-clean.git
+git clone https://github.com/YOUR_ORG/tag-v2-clean.git
+
+1.6 Create site directories
+mkdir -p /home/ubuntu/sites/bd
+mkdir -p /home/ubuntu/sites/gfa
+mkdir -p /home/ubuntu/sites/tag
+mkdir -p /var/log/pm2
+
+Part 2 — Environment Variables
+Each site requires a .env.local file. This file is never committed to Git — you must create it
+manually on the server.
+
+2.1 BetterDriver (BD)
+cd /home/ubuntu/bd-v2-clean
+cp .env.local.example /home/ubuntu/sites/bd/.env.local
+nano /home/ubuntu/sites/bd/.env.local
+
+Fill in every REPLACE_ME value:
+
+Variable
+
+BD_JWT_SECRET
+
+Where to find it
+Supabase → Project Settings → API
+Supabase → Project Settings → API
+Supabase → Project Settings → API
+Run: openssl rand -hex 32
+Same value as JWT_SECRET
+
+NEXT_PUBLIC_SITE_URL
+
+https://betterdriver.co.za
+
+GFA_BASE_URL
+
+https://greenfreightacademy.co.za
+
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+JWT_SECRET
+
+MOODLE_URL
+MOODLE_TOKEN
+MOODLE_DRIVER_PROGRAMME_COURSE_ID
+MOODLE_ECO_DRIVER_COURSE_ID
+META_WA_API_VERSION
+
+Your Moodle instance base URL
+Moodle → Site Admin → Web Services → Manage Tokens
+Moodle course ID (number in the URL)
+Moodle course ID (number in the URL)
+e.g. v19.0
+
+SUPPORT_EMAIL
+
+Meta Business → WhatsApp → Phone Numbers
+Meta Business → WhatsApp → API Setup
+resend.com → API Keys
+e.g. support@betterdriver.co.za
+
+PORT
+
+3004
+
+META_WA_PHONE_NUMBER_ID
+META_WA_ACCESS_TOKEN
+RESEND_API_KEY
+
+2.2 Green Freight Academy (GFA)
+cd /home/ubuntu/gfa-v2-clean
+cp .env.local.example /home/ubuntu/sites/gfa/.env.local
+nano /home/ubuntu/sites/gfa/.env.local
+
+Variable
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+ADMIN_JWT_SECRET
+JWT_SECRET
+GFA_JWT_SECRET
+WHATSAPP_ACCESS_TOKEN
+WHATSAPP_PHONE_NUMBER_ID
+
+Where to find it
+Same as BD
+Same as BD
+Same as BD
+Run: openssl rand -hex 32
+Same value as ADMIN_JWT_SECRET
+Same value as ADMIN_JWT_SECRET
+Same as BD META_WA_ACCESS_TOKEN
+Same as BD META_WA_PHONE_NUMBER_ID
+
+RESEND_API_KEY
+
+Same as BD
+
+NEXT_PUBLIC_SITE_URL
+
+https://greenfreightacademy.co.za
+
+BD_BASE_URL
+
+https://betterdriver.co.za
+https://betterdriver.co.za
+
+**NEXT_PUBLIC_BD_API_BASE_URL**
+
+registry
+
+PORT
+
+3003
+
+2.3 Transport Action Group (TAG)
+cd /home/ubuntu/tag-v2-clean
+cp .env.local.example /home/ubuntu/sites/tag/.env.local
+nano /home/ubuntu/sites/tag/.env.local
+
+← NEW — required for
+
+Variable
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY
+ADMIN_JWT_SECRET
+
+Where to find it
+Same as BD
+Same as BD
+Same as BD
+Run: openssl rand -hex 32
+
+RESEND_API_KEY
+
+Same as BD
+
+NEXT_PUBLIC_SITE_URL
+
+https://transportactiongroup.co.za
+https://greenfreightacademy.co.za/api/pricing
+
+**GFA_PRICING_API_URL**
+
+required for live pricing
+
+PORT
+
+3002
+
+← NEW —
+
+Important: The two variables marked NEW are required by this build. The sites will work
+without them (using fallback data), but the registry and live pricing features will not
+function until they are set.
+
+Part 3 — Database Setup
+The three sites share one Supabase project. Run the migration SQL once — it creates all
+tables for all three sites.
+
+3.1 Run the migration
+
+1. Open supabase.com and go to your project
+2. Click SQL Editor in the left sidebar
+3. Click New Query
+4. Open /home/ubuntu/bd-v2-clean/ALL_MIGRATIONS_RUN_ONCE.sql on the server:
+cat /home/ubuntu/bd-v2-clean/ALL_MIGRATIONS_RUN_ONCE.sql
+
+5. Copy the entire contents and paste into the Supabase SQL Editor
+6. Click Run
+
+The migration is idempotent — it uses CREATE TABLE IF NOT EXISTS throughout, so it is safe
+to re-run if you are unsure whether it has been applied.
+
+3.2 New tables in this build
+
+This build adds four new tables. They are included in ALL_MIGRATIONS_RUN_ONCE.sql :
+Table
+surveys
+survey_questions
+survey_responses
+certificate_templates
+
+Purpose
+Pre/post survey definitions (managed from GFA admin)
+Individual questions with English and isiZulu text
+Driver survey answers
+Uploadable certificate background images
+
+3.3 Add the Electric Truck Driver Programme
+Run this once in the Supabase SQL Editor:
+
+INSERT INTO courses (name, slug, price_individual, price_corporate, available,
+description)
+VALUES (
+'Electric Truck Driver Programme',
+'electric-truck-driver',
+1000,
+1000,
+true,
+'Once-off certification programme for drivers transitioning to electric trucks.'
+) ON CONFLICT (slug) DO NOTHING;
+
+3.4 Create the first admin users
+BD Admin:
+
+# Generate a bcrypt hash of your chosen password
+node -e "const b=require('bcryptjs'); b.hash('YourPassword123!', 10).then(h =>
+console.log(h))"
+
+Then in Supabase SQL Editor:
+
+INSERT INTO bd_admins (email, name, password_hash)
+VALUES ('admin@betterdriver.co.za', 'BD Admin', '$2a$10$PASTE_HASH_HERE');
+
+GFA Admin:
+INSERT INTO gfa_admins (email, name, password_hash, role)
+VALUES ('admin@greenfreightacademy.co.za', 'GFA Admin', '$2a$10$PASTE_HASH_HERE',
+'super_admin');
+
+Security: Change the default passwords immediately after first login. Do not leave
+changeme or any placeholder in production.
+
+Part 4 — Nginx Configuration
+4.1 Set up each site
+# BD
+sudo cp /home/ubuntu/bd-v2-clean/nginx.conf \
+/etc/nginx/sites-available/betterdriver.co.za
+sudo ln -sf /etc/nginx/sites-available/betterdriver.co.za \
+/etc/nginx/sites-enabled/
+# GFA
+sudo cp /home/ubuntu/gfa-v2-clean/nginx.conf \
+/etc/nginx/sites-available/greenfreightacademy.co.za
+sudo ln -sf /etc/nginx/sites-available/greenfreightacademy.co.za \
+/etc/nginx/sites-enabled/
+# TAG
+sudo cp /home/ubuntu/tag-v2-clean/nginx.conf \
+/etc/nginx/sites-available/transportactiongroup.co.za
+sudo ln -sf /etc/nginx/sites-available/transportactiongroup.co.za \
+/etc/nginx/sites-enabled/
+# Test and reload
+sudo nginx -t && sudo systemctl reload nginx
+
+4.2 Get SSL certificates
+
+Point your DNS A records to the server IP first, then run:
+sudo certbot --nginx \
+-d betterdriver.co.za -d www.betterdriver.co.za \
+-d greenfreightacademy.co.za -d www.greenfreightacademy.co.za \
+-d transportactiongroup.co.za -d www.transportactiongroup.co.za
+
+Certbot will automatically update the nginx configs with the SSL certificate paths.
+
+Part 5 — Running the Deployment Scripts
+5.1 First-time deployment (all three sites)
+cd /home/ubuntu/bd-v2-clean
+chmod +x deploy-all.sh deploy-update.sh
+./deploy-all.sh
+
+This will:
+1. Pull the latest code from GitHub for all three repos
+2. Install dependencies
+3. Build each site
+4. Copy the build to the site directory
+5. Check for required environment variables (and prompt you if any are missing)
+6. Prompt you to confirm database migrations have been run
+7. Start all three PM2 processes
+8. Run a health check on each site
+Expected runtime: 8–12 minutes for all three sites.
+
+5.2 Updating a single site
+# Update BD only
+./deploy-all.sh bd
+# Update GFA only
+./deploy-all.sh gfa
+# Update TAG only
+./deploy-all.sh tag
+
+Or from within each repo:
+cd /home/ubuntu/bd-v2-clean && ./deploy-update.sh
+cd /home/ubuntu/gfa-v2-clean && ./deploy-update.sh
+cd /home/ubuntu/tag-v2-clean && ./deploy-update.sh
+
+5.3 What the script output means
+The scripts use colour-coded output:
+Colour
+Yellow [1/7]
+Green ✓
+Red ✗
+Yellow ⚠
+
+Meaning
+Step in progress
+Step completed successfully
+Step failed — action required
+Warning — site will work but a feature may be limited
+
+If the script exits with a red error, read the message carefully — it will tell you exactly what to
+do.
+
+Part 6 — Post-Deployment Tasks
+After the scripts complete successfully, there are a few one-time tasks to complete in the
+admin panels.
+
+6.1 Upload the certificate template (GFA Admin)
+
+1. Log in to https://greenfreightacademy.co.za/admin/login
+2. Navigate to Certificate Template in the sidebar
+3. Upload your branded certificate background image (PNG or JPG, A4 landscape
+recommended — 2480×1754px)
+4. Adjust the text overlay positions so the driver name, programme name, date, and
+certificate number land correctly on your design
+5. Click Activate Template
+Until a template is uploaded, the PDF generator uses the default navy/gold template that ships
+with the code.
+
+6.2 Add survey questions (GFA Admin)
+
+1. Log in to https://greenfreightacademy.co.za/admin/login
+2. Navigate to Surveys in the sidebar
+3. Select the Pre-Course tab and add your questions
+4. Select the Post-Course tab and add your questions
+5. Questions support three types: Multiple Choice, Scale (1–5), and Free Text
+6. Each question has an English and isiZulu field
+
+6.3 Change default admin passwords
+
+Log in to each admin panel and change the password immediately:
+Site
+BD
+Admin
+GFA
+Admin
+
+URL
+
+Default email
+
+https://betterdriver.co.za/admin/login
+
+admin@betterdriver.co.za
+
+https://greenfreightacademy.co.za/admin/login
+
+admin@greenfreightacademy.co.za
+
+6.4 Submit WhatsApp templates to Meta
+
+The WhatsApp templates must be approved by Meta before they will send. The full submission
+copy is in:
+
+/home/ubuntu/bd-v2-clean/docs/handover/16-WHATSAPP-TEMPLATE-SPEC.md
+
+Key rule: never wrap a full URL in a {{variable}} . The base URL must be hardcoded in the
+template body. Only the unique token is passed as a variable.
+
+Part 7 — Useful Commands
+PM2 process management
+pm2 status
+
+# View all running processes
+
+pm2 logs bd-site --lines 50
+
+# View BD logs (last 50 lines)
+
+pm2 logs gfa-site --lines 50
+
+# View GFA logs
+
+pm2 logs tag --lines 50
+
+# View TAG logs
+
+pm2 restart bd-site
+
+# Restart BD
+
+pm2 restart gfa-site
+
+# Restart GFA
+
+pm2 restart tag
+
+# Restart TAG
+
+pm2 restart all
+
+# Restart all three
+
+pm2 stop all
+
+# Stop all three
+
+pm2 save
+
+# Save process list (persists across reboots)
+
+pm2 startup
+
+# Generate startup script (run once after first
+
+deploy)
+
+Health checks
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3004
+
+# BD
+
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3003
+
+# GFA
+
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3002
+
+# TAG
+
+Expected response: 200 or 307 (redirect to HTTPS).
+
+Nginx
+sudo nginx -t
+
+# Test config for syntax errors
+
+sudo systemctl reload nginx
+
+# Apply config changes without downtime
+
+sudo systemctl status nginx
+
+# Check nginx is running
+
+sudo tail -f /var/log/nginx/error.log
+
+# Watch nginx errors live
+
+Git
+cd /home/ubuntu/bd-v2-clean && git log --oneline -5
+
+# Last 5 commits
+
+cd /home/ubuntu/bd-v2-clean && git status
+
+# Check for uncommitted
+
+changes
+
+Part 8 — Troubleshooting
+Problem: Site returns HTTP 502 Bad Gateway
+Cause: The Next.js server is not running or has crashed.
+Fix:
+pm2 status
+
+# Check if the process is online
+
+pm2 logs bd-site
+
+# Read the error
+
+pm2 restart bd-site
+
+# Restart it
+
+If it keeps crashing, check the logs for a specific error message and refer to the relevant section
+below.
+
+Problem: CSS and JavaScript are not loading (site has no styling)
+
+Cause: The _next/static directory was not copied into the standalone build directory.
+Fix:
+# For BD:
+cp -r /home/ubuntu/bd-v2-clean/.next/static /home/ubuntu/sites/bd/.next/static
+# For GFA:
+cp -r /home/ubuntu/gfa-v2-clean/.next/static /home/ubuntu/sites/gfa/.next/static
+# For TAG:
+cp -r /home/ubuntu/tag-v2-clean/.next/static /home/ubuntu/sites/tag/.next/static
+pm2 restart all
+
+The deployment scripts do this automatically, but if you deployed manually this is the most
+common cause of a “broken” looking site.
+
+Problem: “Cannot find module ‘pdf-lib’” error in BD logs
+Cause: The pdf-lib package was not installed before the build.
+Fix:
+cd /home/ubuntu/bd-v2-clean
+npm install
+npm run build
+# Then re-run the deploy script
+./deploy-update.sh
+
+Problem: GFA registry shows no results / “Unable to search” error
+Cause: NEXT_PUBLIC_BD_API_BASE_URL is not set in the GFA .env.local .
+Fix:
+echo "NEXT_PUBLIC_BD_API_BASE_URL=https://betterdriver.co.za" >>
+/home/ubuntu/sites/gfa/.env.local
+pm2 restart gfa-site
+
+Problem: TAG Academy page shows old prices
+
+Cause: GFA_PRICING_API_URL is not set, so the page is using hardcoded fallback prices.
+Fix:
+echo "GFA_PRICING_API_URL=https://greenfreightacademy.co.za/api/pricing" >>
+/home/ubuntu/sites/tag/.env.local
+pm2 restart tag
+
+Note: After adding environment variables, you must restart the PM2 process. The Next.js
+server reads .env.local at startup — changes do not take effect until a restart.
+
+Problem: “Error: ENOENT: no such file or directory, open
+‘.next/standalone/server.js’”
+Cause: The build has not been run, or the build failed silently.
+Fix:
+cd /home/ubuntu/bd-v2-clean
+
+# (or gfa/tag)
+
+npm run build
+# Check for errors in the build output
+# If build succeeds, re-run the deploy script
+./deploy-update.sh
+
+Problem: Database migration errors (table already exists, column not found)
+
+Cause: The migration was run on a partial schema, or a previous migration was interrupted.
+Fix: The migration SQL uses IF NOT EXISTS on all CREATE TABLE statements, so it is safe to
+re-run. If you see a column error, check whether the table exists in Supabase first:
+-- In Supabase SQL Editor:
+SELECT table_name FROM information_schema.tables
+WHERE table_schema = 'public'
+ORDER BY table_name;
+
+If a table is missing, re-run the full ALL_MIGRATIONS_RUN_ONCE.sql .
+
+Problem: WhatsApp messages not sending
+
+Cause: One of three things — wrong API credentials, template not yet approved by Meta, or the
+Moodle webhook is not firing.
+Diagnostic steps:
+1. Check BD logs for WhatsApp errors: pm2 logs bd-site | grep -i whatsapp
+2. Verify META_WA_ACCESS_TOKEN and META_WA_PHONE_NUMBER_ID in
+/home/ubuntu/sites/bd/.env.local
+
+3. Check Meta Business Manager → WhatsApp → Message Templates — all six templates
+must show Approved status
+
+4. Test the webhook manually: curl -X POST
+https://betterdriver.co.za/api/moodle/webhook -H "Content-Type:
+application/json" -d
+'{"event":"programme_complete","userid":1,"courseid":123}'
+
+Problem: SSL certificate renewal fails
+
+Cause: Certbot auto-renewal is not configured, or the domain DNS is not pointing to this
+server.
+Fix:
+# Test renewal (dry run — no changes made)
+sudo certbot renew --dry-run
+# If it fails, check that DNS A records for all three domains point to this server
+IP
+# Then force renewal:
+sudo certbot renew --force-renewal
+sudo systemctl reload nginx
+
+Certbot installs a cron job automatically. To verify it is active:
+sudo systemctl status certbot.timer
+
+Problem: PM2 processes do not restart after a server reboot
+Cause: PM2 startup script was not generated.
+Fix (run once):
+pm2 startup
+# Copy and run the command it outputs (it will look like: sudo env PATH=... pm2
+startup ...)
+pm2 save
+
+Part 9 — Port and Process Reference
+Site
+BetterDriver
+Green Freight Academy
+Transport Action Group
+
+PM2 App Name
+
+Port
+
+Domain
+
+bd-site
+
+3004
+
+betterdriver.co.za
+
+gfa-site
+
+3003
+
+greenfreightacademy.co.za
+
+tag
+
+3002
+
+transportactiongroup.co.za
+
+Part 10 — Running the Test Suite
+The Layer 1 unit test suite (52 tests across 7 suites) can be run at any time to verify the API
+routes are working correctly:
+# BD tests
+cd /home/ubuntu/bd-v2-clean
+npm test
+# GFA tests
+cd /home/ubuntu/gfa-v2-clean
+npm test
+
+Expected output: All tests pass. If any test fails after a deployment, it indicates a code
+regression or a missing environment variable. The test output will identify exactly which route
+and which scenario is failing.
+
+Part 11 — Getting Help
+If you encounter an issue not covered in this guide:
+1. Check the PM2 logs first — pm2 logs [app-name] --lines 100 — the error message
+will usually point directly to the cause
+2. Check the handover docs — /home/ubuntu/bd-v2-clean/docs/handover/ contains
+detailed documentation on every system
+3. Check the README — each repo’s README.md has been updated with all new features
+and open items
+
+4. Run the test suite — npm test in BD or GFA will confirm whether the API routes are
+functioning
+
+This guide covers the May 2026 build. For changes introduced in subsequent builds, refer to
+the updated QUICK-START-CARD.md and README.md in each repository.
+
+
