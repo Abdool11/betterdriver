@@ -1,0 +1,37 @@
+name: Moodle Cron Jobs
+
+# Schedule:
+#   - Poll: Every 15 minutes
+#   - Inactivity Check: Daily at 08:00 SAST (06:00 UTC)
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # Poll every 15 minutes
+    - cron: "0 6 * * *"      # Inactivity check at 06:00 UTC (08:00 SAST)
+  workflow_dispatch:         # Allow manual trigger from GitHub Actions tab
+
+jobs:
+  poll:
+    name: Moodle Progress Poll
+    if: github.event.schedule == '*/15 * * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Poll Moodle Progress
+        run: |
+          curl -X POST "https://betterdriver.co.za/api/moodle/poll" \
+            -H "Authorization: Bearer ${{ secrets.MOODLE_POLL_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -w "\nHTTP Status: %{http_code}\n" \
+            -s -o /dev/null
+
+  inactivity:
+    name: Inactivity Check
+    if: github.event.schedule == '0 6 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Inactivity Check
+        run: |
+          curl -X POST "https://betterdriver.co.za/api/moodle/inactivity-check" \
+            -H "Authorization: Bearer ${{ secrets.MOODLE_POLL_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -w "\nHTTP Status: %{http_code}\n" \
+            -s -o /dev/null
