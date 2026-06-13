@@ -1,0 +1,496 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=Inter:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design Tokens ─────────────────────────────────────────────────────────── */
+:root {
+  /* Amber/charcoal palette — driver-facing, warm, energetic */
+  --color-bg:          #111827;   /* near-black charcoal */
+  --color-bg-card:     #1C2333;   /* slightly lighter card bg */
+  --color-bg-elevated: #243044;   /* elevated card / hover */
+  --color-border:      #2d3a4f;   /* subtle border */
+
+  --color-amber:       #F59E0B;   /* primary accent — amber */
+  --color-amber-light: #FCD34D;   /* lighter amber for gradients */
+  --color-amber-dark:  #D97706;   /* darker amber for hover */
+
+  --color-text-primary:   #F9FAFB;
+  --color-text-secondary: #9CA3AF;
+  --color-text-muted:     #6B7280;
+
+  --color-success:  #10B981;
+  --color-warning:  #F59E0B;
+  --color-danger:   #EF4444;
+  --color-info:     #3B82F6;
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+}
+
+/* ─── Base ───────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 1rem;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Typography ─────────────────────────────────────────────────────────────── */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--color-text-primary);
+}
+
+h1 { font-size: clamp(2rem, 5vw, 3.5rem); }
+h2 { font-size: clamp(1.5rem, 3.5vw, 2.5rem); }
+h3 { font-size: clamp(1.125rem, 2.5vw, 1.5rem); }
+
+/* ─── Utility Classes ────────────────────────────────────────────────────────── */
+.text-amber { color: var(--color-amber); }
+.bg-amber { background-color: var(--color-amber); }
+.border-amber { border-color: var(--color-amber); }
+
+.gradient-amber {
+  background: linear-gradient(135deg, var(--color-amber) 0%, var(--color-amber-light) 100%);
+}
+
+.gradient-text-amber {
+  background: linear-gradient(90deg, var(--color-amber) 0%, var(--color-amber-light) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.card:hover {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: var(--color-bg-elevated);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.875rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.pill-amber {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--color-amber);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.pill-green {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10B981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.pill-red {
+  background: rgba(239, 68, 68, 0.15);
+  color: #EF4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.pill-blue {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3B82F6;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+/* section-label — consistent with TAG and GFA */
+.section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.875rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--color-amber);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.75rem;
+  background: var(--color-amber);
+  color: #111827;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 0.9375rem;
+  border-radius: 9999px;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 4px 20px rgba(245, 158, 11, 0.3);
+}
+
+.btn-primary:hover {
+  background: var(--color-amber-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 28px rgba(245, 158, 11, 0.45);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.75rem;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  border-radius: 9999px;
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  text-decoration: none;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.btn-secondary:hover {
+  border-color: var(--color-amber);
+  color: var(--color-amber);
+}
+
+/* ─── Mock Data Banner ───────────────────────────────────────────────────────── */
+.mock-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-radius: var(--radius-md);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-amber);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ─── Progress Bar ───────────────────────────────────────────────────────────── */
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: var(--color-border);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-amber) 0%, var(--color-amber-light) 100%);
+  border-radius: 9999px;
+  transition: width 0.6s ease;
+}
+
+/* ─── Portal Layout ──────────────────────────────────────────────────────────── */
+.portal-layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+.portal-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--color-bg-card);
+  border-right: 1px solid var(--color-border);
+  padding: 2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.portal-main {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
+
+.portal-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--radius-md);
+  color: var(--color-text-secondary);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.portal-nav-item:hover {
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+}
+
+.portal-nav-item.active {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--color-amber);
+}
+
+/* ─── Task Cards ─────────────────────────────────────────────────────────────── */
+.task-card {
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  transition: border-color 0.2s;
+}
+
+.task-card.urgent {
+  border-left: 3px solid var(--color-danger);
+}
+
+.task-card.warning {
+  border-left: 3px solid var(--color-warning);
+}
+
+.task-card.normal {
+  border-left: 3px solid var(--color-border);
+}
+
+/* ─── Radial Glow ────────────────────────────────────────────────────────────── */
+.glow-amber {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(245, 158, 11, 0.08) 0%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* ─── Section Spacing ────────────────────────────────────────────────────────── */
+.section { padding: 5rem 0; }
+.section-sm { padding: 3rem 0; }
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+@media (max-width: 768px) {
+  .portal-sidebar { display: none; }
+  .portal-main { padding: 1.25rem; }
+}
+
+/* ─── PWA Mobile-First Shell ─────────────────────────────────────────────────── */
+/* Full-height app shell that pins bottom nav on mobile */
+.pwa-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  min-height: 100vh; /* fallback */
+  background: var(--color-bg);
+  position: relative;
+}
+
+/* Desktop: sidebar + content side by side */
+@media (min-width: 768px) {
+  .pwa-shell {
+    flex-direction: row;
+  }
+}
+
+/* ─── Desktop Sidebar ──────────────────────────────────────────────────────────── */
+.portal-sidebar-desktop {
+  width: 260px;
+  flex-shrink: 0;
+  background: var(--color-bg-card);
+  border-right: 1px solid var(--color-border);
+  display: none;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+@media (min-width: 768px) {
+  .portal-sidebar-desktop {
+    display: flex;
+  }
+}
+
+/* ─── Main Content Area ────────────────────────────────────────────────────────── */
+.pwa-main {
+  flex: 1;
+  overflow-y: auto;
+  /* On mobile: leave room for top bar and bottom nav */
+  padding-top: 0;
+  padding-bottom: 5rem; /* bottom nav height */
+  min-height: 0;
+}
+
+@media (min-width: 768px) {
+  .pwa-main {
+    padding-bottom: 0;
+  }
+}
+
+/* ─── Mobile Top App Bar ───────────────────────────────────────────────────────── */
+.mobile-app-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  height: 3.25rem;
+  background: var(--color-bg-card);
+  border-bottom: 1px solid var(--color-border);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  flex-shrink: 0;
+}
+
+.app-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.app-bar-title {
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  color: var(--color-text-primary);
+}
+
+@media (min-width: 768px) {
+  .mobile-app-bar {
+    display: none;
+  }
+}
+
+/* ─── Mobile Bottom Navigation ─────────────────────────────────────────────────── */
+.bottom-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4rem;
+  background: var(--color-bg-card);
+  border-top: 1px solid var(--color-border);
+  z-index: 100;
+  /* Safe area for iPhone home indicator */
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+@media (min-width: 768px) {
+  .bottom-nav {
+    display: none;
+  }
+}
+
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  flex: 1;
+  height: 100%;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: 0.625rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  transition: color 0.15s;
+  position: relative;
+}
+
+.bottom-nav-item.active {
+  color: var(--color-amber);
+}
+
+.bottom-nav-item span {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.625rem;
+  font-weight: 600;
+}
+
+.bottom-nav-badge {
+  position: absolute;
+  top: -2px;
+  right: calc(50% - 18px);
+  min-width: 16px;
+  height: 16px;
+  background: var(--color-danger);
+  color: white;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 3px;
+}
+
+/* ─── Avatar ──────────────────────────────────────────────────────────────────── */
+.avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, var(--color-amber), var(--color-amber-dark));
+  color: #0d1526;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 700;
+}
+
+/* ─── Tap Target (min 44px for accessibility) ─────────────────────────────────── */
+.tap-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* ─── Page Content Padding ────────────────────────────────────────────────────── */
+.page-content {
+  padding: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .page-content {
+    padding: 2rem;
+  }
+}

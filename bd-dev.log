@@ -1,0 +1,246 @@
+
+> betterdriver@1.0.0 dev
+> next dev
+
+ ⚠ Port 3000 is in use, using available port 3002 instead.
+   ▲ Next.js 15.3.1
+   - Local:        http://localhost:3002
+   - Network:      http://10.0.0.105:3002
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 6.7s
+ ○ Compiling / ...
+ ✓ Compiled / in 3.1s (763 modules)
+ GET / 200 in 4460ms
+ GET / 200 in 378ms
+ ○ Compiling /start ...
+(node:11608) ExperimentalWarning: Support for loading ES Module in require() is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ Compiled /start in 13.7s (800 modules)
+ ✓ Compiled in 1084ms (345 modules)
+ GET /start 200 in 14867ms
+ ○ Compiling /activate ...
+ ✓ Compiled /activate in 1182ms (798 modules)
+ GET /activate 200 in 1435ms
+ ✓ Compiled /login in 469ms (804 modules)
+ GET /login 200 in 685ms
+ ○ Compiling /help ...
+ ✓ Compiled /help in 938ms (855 modules)
+ GET /help 200 in 2276ms
+ ○ Compiling /registry ...
+ ✓ Compiled /registry in 1875ms (858 modules)
+ GET /registry 200 in 2239ms
+ ○ Compiling /middleware ...
+ ✓ Compiled /middleware in 553ms (162 modules)
+ ○ Compiling /admin/login ...
+ ✓ Compiled /admin/login in 945ms (866 modules)
+ GET /admin/login 200 in 1252ms
+ GET /admin/login 200 in 116ms
+ GET /start 200 in 162ms
+ GET /start 200 in 122ms
+ GET /start 200 in 134ms
+ ○ Compiling /api/admin/auth/login ...
+ ✓ Compiled /api/admin/auth/login in 8s (557 modules)
+ POST /api/admin/auth/login 200 in 9335ms
+ ✓ Compiled in 2s (353 modules)
+ POST /api/admin/auth/login 401 in 868ms
+ POST /api/admin/auth/login 400 in 856ms
+ POST /api/admin/auth/login 401 in 241ms
+ POST /api/admin/auth/login 401 in 247ms
+ ○ Compiling /api/activate ...
+ ✓ Compiled /api/activate in 2.6s (545 modules)
+ POST /api/activate 410 in 2777ms
+ GET /api/activate 307 in 62ms
+ ○ Compiling /start ...
+ ✓ Compiled /start in 4.3s (567 modules)
+ GET /start?error=missing-token 200 in 5634ms
+ ○ Compiling /api/join/[token] ...
+ ✓ Compiled /api/join/[token] in 1478ms (908 modules)
+ GET /api/join/invalid-token-abc123 307 in 5629ms
+ GET /api/join/e3hnf97bunikya8o98b7j 307 in 269ms
+ GET /api/join/j3rpevti6pmkgmuh2jka9c 307 in 249ms
+ ○ Compiling /api/moodle/poll ...
+ ✓ Compiled /api/moodle/poll in 2.6s (912 modules)
+ POST /api/moodle/poll 401 in 2872ms
+ POST /api/moodle/poll 401 in 18ms
+[MOODLE_POLL] Error fetching enrolments: Could not find a relationship between 'enrolments' and 'drivers' in the schema cache
+ POST /api/moodle/poll 500 in 275ms
+ ○ Compiling /api/moodle/inactivity-check ...
+ ✓ Compiled /api/moodle/inactivity-check in 1941ms (914 modules)
+ POST /api/moodle/inactivity-check 401 in 2052ms
+ POST /api/moodle/inactivity-check 401 in 18ms
+ POST /api/moodle/inactivity-check 500 in 241ms
+ ○ Compiling /api/moodle/webhook ...
+ ✓ Compiled /api/moodle/webhook in 5.3s (916 modules)
+[MOODLE_WEBHOOK] Invalid secret — rejecting request
+ POST /api/moodle/webhook 401 in 6035ms
+[MOODLE_WEBHOOK] Invalid secret — rejecting request
+ POST /api/moodle/webhook 401 in 24ms
+ ○ Compiling /api/portal/profile ...
+ ✓ Compiled /api/portal/profile in 2.3s (918 modules)
+Error: Route "/api/portal/profile" used `headers().get('authorization')`. `headers()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at getSession (lib\auth.ts:117:35)
+    at async GET (app\api\portal\profile\route.ts:7:18)
+  115 |     if (!token) {
+  116 |       const { headers } = await import("next/headers");
+> 117 |       const authHeader = headers().get("authorization");
+      |                                   ^
+  118 |       if (authHeader?.startsWith("Bearer ")) {
+  119 |         token = authHeader.substring(7);
+  120 |       }
+ GET /api/portal/profile 401 in 2924ms
+Error: Route "/api/portal/profile" used `headers().get('authorization')`. `headers()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at getSession (lib\auth.ts:117:35)
+    at async PATCH (app\api\portal\profile\route.ts:33:18)
+  115 |     if (!token) {
+  116 |       const { headers } = await import("next/headers");
+> 117 |       const authHeader = headers().get("authorization");
+      |                                   ^
+  118 |       if (authHeader?.startsWith("Bearer ")) {
+  119 |         token = authHeader.substring(7);
+  120 |       }
+ PATCH /api/portal/profile 401 in 228ms
+ POST /api/admin/auth/login 200 in 494ms
+ PATCH /api/portal/profile 401 in 64ms
+Error: Route "/api/portal/profile" used `headers().get('authorization')`. `headers()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at getSession (lib\auth.ts:117:35)
+    at async PATCH (app\api\portal\profile\route.ts:33:18)
+  115 |     if (!token) {
+  116 |       const { headers } = await import("next/headers");
+> 117 |       const authHeader = headers().get("authorization");
+      |                                   ^
+  118 |       if (authHeader?.startsWith("Bearer ")) {
+  119 |         token = authHeader.substring(7);
+  120 |       }
+ PATCH /api/portal/profile 200 in 1012ms
+Error: Route "/api/portal/profile" used `headers().get('authorization')`. `headers()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at getSession (lib\auth.ts:117:35)
+    at async PATCH (app\api\portal\profile\route.ts:33:18)
+  115 |     if (!token) {
+  116 |       const { headers } = await import("next/headers");
+> 117 |       const authHeader = headers().get("authorization");
+      |                                   ^
+  118 |       if (authHeader?.startsWith("Bearer ")) {
+  119 |         token = authHeader.substring(7);
+  120 |       }
+ PATCH /api/portal/profile 200 in 922ms
+ ○ Compiling /api/portal/cv ...
+ ✓ Compiled /api/portal/cv in 2.2s (920 modules)
+ GET /api/portal/cv 405 in 2509ms
+Error: Route "/api/portal/cv" used `headers().get('authorization')`. `headers()` should be awaited before using its value. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+    at getSession (lib\auth.ts:117:35)
+    at async POST (app\api\portal\cv\route.ts:7:18)
+  115 |     if (!token) {
+  116 |       const { headers } = await import("next/headers");
+> 117 |       const authHeader = headers().get("authorization");
+      |                                   ^
+  118 |       if (authHeader?.startsWith("Bearer ")) {
+  119 |         token = authHeader.substring(7);
+  120 |       }
+ POST /api/portal/cv 401 in 79ms
+ ○ Compiling /api/admin/config ...
+ ✓ Compiled /api/admin/config in 4.4s (922 modules)
+ POST /api/admin/config 401 in 9582ms
+ GET /api/admin/config 405 in 13ms
+ POST /api/admin/auth/login 200 in 396ms
+ POST /api/admin/config 400 in 16ms
+ POST /api/admin/auth/login 200 in 324ms
+ POST /api/admin/config 400 in 14ms
+ ○ Compiling /api/admin/auth/logout ...
+ ✓ Compiled /api/admin/auth/logout in 3.3s (924 modules)
+ POST /api/admin/auth/logout 200 in 3390ms
+ POST /api/admin/auth/login 200 in 320ms
+ POST /api/admin/auth/logout 200 in 11ms
+[MOODLE_WEBHOOK] Invalid secret — rejecting request
+ POST /api/moodle/webhook 401 in 15ms
+ GET /api/join/nrbtpm7zmdjpomme5rqnd 307 in 1013ms
+ GET /api/portal/profile 404 in 811ms
+ GET /api/join/vqlsz8ww4gcpvt8n5k8f59 307 in 1040ms
+ GET /api/portal/cv 405 in 42ms
+ POST /api/admin/auth/login 200 in 459ms
+ POST /api/admin/auth/login 400 in 19ms
+ POST /api/admin/auth/login 400 in 20ms
+ GET /api/join/fj8eovqt8vtpg0p1qs820e 307 in 1054ms
+ ○ Compiling / ...
+ ✓ Compiled / in 15.8s (439 modules)
+ GET / 200 in 18490ms
+ ✓ Compiled /start in 512ms (455 modules)
+ GET /start 200 in 1701ms
+ ○ Compiling /activate ...
+ ✓ Compiled /activate in 1456ms (463 modules)
+ GET /activate 200 in 1759ms
+ ✓ Compiled /login in 373ms (468 modules)
+ GET /login 200 in 819ms
+ ○ Compiling /help ...
+ ✓ Compiled /help in 905ms (518 modules)
+ GET /help 200 in 2202ms
+ ○ Compiling /registry ...
+ ✓ Compiled /registry in 738ms (521 modules)
+ GET /registry 200 in 1085ms
+ ○ Compiling /admin/login ...
+ ✓ Compiled /admin/login in 559ms (527 modules)
+ GET /admin/login 200 in 790ms
+ GET /admin/login 200 in 99ms
+ GET /start 200 in 213ms
+ GET /start 200 in 161ms
+ GET /start 200 in 159ms
+ GET /start 200 in 212ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 1941ms (873 modules)
+ GET /join/e2e-invalid-token-1780342510402 404 in 2435ms
+ GET /start 200 in 178ms
+ GET /admin/login 200 in 128ms
+ ○ Compiling /api/admin/auth/login ...
+ ✓ Compiled /api/admin/auth/login in 1630ms (587 modules)
+BD admin login error: SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>)
+    at POST (app\api\admin\auth\login\route.ts:6:42)
+  4 | export async function POST(req: NextRequest) {
+  5 |   try {
+> 6 |     const { email, password } = await req.json();
+    |                                          ^
+  7 |     if (!email || !password) {
+  8 |       return NextResponse.json({ error: "Email and password required" }, { status: 400 });
+  9 |     }
+ ○ Compiling / ...
+ ✓ Compiled / in 4.4s (439 modules)
+ GET / 200 in 6166ms
+ ✓ Compiled /start in 370ms (455 modules)
+ GET /start 200 in 929ms
+ ✓ Compiled /activate in 234ms (463 modules)
+ GET /activate 200 in 518ms
+ ○ Compiling /login ...
+ ✓ Compiled /login in 1153ms (468 modules)
+ GET /login 200 in 1439ms
+ ○ Compiling /help ...
+ ✓ Compiled /help in 1144ms (518 modules)
+ GET /help 200 in 2557ms
+ ○ Compiling /registry ...
+ ✓ Compiled /registry in 544ms (521 modules)
+ GET /registry 200 in 841ms
+ ○ Compiling /admin/login ...
+ ✓ Compiled /admin/login in 4.5s (527 modules)
+ GET /admin/login 200 in 6795ms
+ GET /admin/login 200 in 68ms
+ GET /start 200 in 636ms
+ GET /start 200 in 118ms
+ GET /start 200 in 633ms
+ GET /start 200 in 206ms
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 683ms (528 modules)
+ GET /join/e2e-invalid-token-1780343179980 404 in 882ms
+ GET /start 200 in 174ms
+ GET /admin/login 200 in 172ms
+ ○ Compiling /api/admin/auth/login ...
+ ✓ Compiled /api/admin/auth/login in 1519ms (607 modules)
+BD admin login error: SyntaxError: Unexpected end of JSON input
+    at JSON.parse (<anonymous>)
+    at POST (app\api\admin\auth\login\route.ts:6:42)
+  4 | export async function POST(req: NextRequest) {
+  5 |   try {
+> 6 |     const { email, password } = await req.json();
+    |                                          ^
+  7 |     if (!email || !password) {
+  8 |       return NextResponse.json({ error: "Email and password required" }, { status: 400 });
+  9 |     }
