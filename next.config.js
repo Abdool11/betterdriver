@@ -22,6 +22,16 @@ const nextConfig = {
       },
     ],
   },
+
+  // Magic link short URL → API handler
+  async rewrites() {
+    return [
+      {
+        source: "/join/:token",
+        destination: "/api/join/:token",
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
