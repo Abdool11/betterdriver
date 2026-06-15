@@ -7,14 +7,17 @@ export default async function JoinPage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
+  console.error("[JOIN_PAGE] Received token:", token ? token.slice(0, 8) + "..." : "(empty)");
 
   if (!token) {
+    console.error("[JOIN_PAGE] Missing token — redirecting");
     redirect("/start?error=missing-token");
   }
 
   const result = await resolveInvitationToken(token);
 
   if ("error" in result) {
+    console.error("[JOIN_PAGE] resolveInvitationToken error:", result.code, "—", result.error);
     const errorMap: Record<string, string> = {
       invalid: "invalid-link",
       revoked: "link-deactivated",
@@ -24,6 +27,8 @@ export default async function JoinPage({
     redirect(`/start?error=${errorCode}`);
   }
 
+  console.error("[JOIN_PAGE] Token valid. isFirstAccess:", result.isFirstAccess, "lang:", result.session.languagePreference);
+
   // Issue the 30-day rolling JWT session cookie
   await createSession(result.session);
 
@@ -32,7 +37,7 @@ export default async function JoinPage({
       ? `?video=${encodeURIComponent(result.inviteVideoUrl)}`
       : "";
 
-    if (!result.languagePreference) {
+    if (!result.session.languagePreference) {
       redirect(`/portal/language${videoParam}`);
     }
 

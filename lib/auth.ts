@@ -199,7 +199,14 @@ export async function resolveInvitationToken(opaqueToken: string): Promise<
     .eq("token", opaqueToken)
     .single();
 
-  if (error || !invitation) return { error: "This activation link is not valid.", code: "invalid" };
+  if (error) {
+    console.error("[RESOLVE_INVITE] Supabase query error for token", opaqueToken.slice(0, 8) + "...", error.message, error.details, error.hint);
+    return { error: "This activation link is not valid.", code: "invalid" };
+  }
+  if (!invitation) {
+    console.error("[RESOLVE_INVITE] No invitation found for token", opaqueToken.slice(0, 8) + "...");
+    return { error: "This activation link is not valid.", code: "invalid" };
+  }
   if (invitation.revoked_at) return { error: "This link has been deactivated. Please contact your fleet manager.", code: "revoked" };
   if (invitation.expires_at && new Date(invitation.expires_at) < new Date()) return { error: "This link has expired. Please contact your fleet manager.", code: "expired" };
 
