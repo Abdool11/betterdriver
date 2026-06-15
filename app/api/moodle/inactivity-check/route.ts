@@ -63,8 +63,9 @@ export async function POST(req: NextRequest) {
       wa_14day_sent_at,
       drivers (
         id,
-        full_name,
-        phone,
+        first_name,
+        last_name,
+        mobile,
         language_preference
       )
     `)
@@ -81,13 +82,13 @@ export async function POST(req: NextRequest) {
 
   for (const enrolment of enrolments ?? []) {
     const driver = Array.isArray(enrolment.drivers) ? enrolment.drivers[0] : enrolment.drivers;
-    if (!driver?.phone) continue;
+    if (!driver?.mobile) continue;
 
     const lang = (driver.language_preference ?? "en") as "en" | "zu";
     const lastActivity = enrolment.last_activity_at ? new Date(enrolment.last_activity_at) : null;
     const isOlderThan14 = lastActivity && lastActivity < new Date(fourteenDaysAgo);
     const modulesCompleted = String(enrolment.modules_completed ?? 0);
-    const [firstName = ""] = (driver.full_name || "").split(" ");
+    const firstName = (driver.first_name || "");
 
     if (isOlderThan14 && !enrolment.wa_14day_sent_at) {
       // Send Trigger 5 — 14-day reminder
@@ -96,7 +97,7 @@ export async function POST(req: NextRequest) {
       //   {{2}} = modules completed
       //   (portal URL is hardcoded in the Meta template body)
       await sendWhatsAppMessage({
-        to: driver.phone,
+        to: driver.mobile,
         templateName: "bd_inactivity_14day",
         language: lang,
         components: [
@@ -118,7 +119,7 @@ export async function POST(req: NextRequest) {
       //   {{2}} = modules completed
       //   (portal URL is hardcoded in the Meta template body)
       await sendWhatsAppMessage({
-        to: driver.phone,
+        to: driver.mobile,
         templateName: "bd_inactivity_7day",
         language: lang,
         components: [

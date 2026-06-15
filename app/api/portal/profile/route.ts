@@ -10,13 +10,12 @@ export async function GET() {
   const { data: driver, error } = await supabaseAdmin
     .from("drivers")
     .select(`
-      id, full_name, email, phone,
-      id_number, date_of_birth,
-      licence_number, licence_class, licence_expiry, prpd_number,
+      id, first_name, last_name, email, mobile,
+      id_number,
+      licence_number, licence_class, licence_expiry,
       years_experience, vehicle_types,
-      profile_photo_url, profile_complete,
-      activation_status, activated_at,
-      status
+      profile_complete,
+      activation_status, activated_at
     `)
     .eq("id", session.driverId)
     .single();
@@ -37,16 +36,13 @@ export async function PATCH(req: NextRequest) {
 
   // Allowed fields for driver self-update
   const allowed = [
-    "phone",
+    "mobile",
     "id_number",
-    "date_of_birth",
     "licence_number",
     "licence_class",
     "licence_expiry",
-    "prpd_number",
     "years_experience",
     "vehicle_types",
-    "profile_photo_url",
     "language_preference", // Required by the /portal/language selection screen
   ];
 
@@ -84,7 +80,7 @@ export async function PATCH(req: NextRequest) {
     .from("drivers")
     .update(updates)
     .eq("id", session.driverId)
-    .select("id, full_name, profile_complete")
+    .select("id, first_name, last_name, profile_complete")
     .single();
 
   if (error) {

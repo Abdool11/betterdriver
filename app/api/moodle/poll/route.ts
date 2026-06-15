@@ -58,8 +58,9 @@ export async function POST(req: NextRequest) {
       completed_at,
       drivers (
         id,
-        full_name,
-        phone,
+        first_name,
+        last_name,
+        mobile,
         language_preference,
         moodle_user_id
       )
@@ -111,16 +112,16 @@ export async function POST(req: NextRequest) {
       updated++;
 
       // Fire programme complete WhatsApp only on first completion detection
-      if (isNowComplete && driver.phone) {
+      if (isNowComplete && driver.mobile) {
         completions++;
         const lang = (driver.language_preference ?? "en") as "en" | "zu";
         // Template: bd_programme_complete
         //   {{1}} = driver first name
         //   {{2}} = programme name
         //   (portal URL is hardcoded in the Meta template body)
-        const [firstName = ""] = (driver.full_name || "").split(" ");
+        const firstName = (driver.first_name || "");
         await sendWhatsAppMessage({
-          to: driver.phone,
+          to: driver.mobile,
           templateName: "bd_programme_complete",
           language: lang,
           components: [
