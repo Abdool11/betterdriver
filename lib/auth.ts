@@ -187,6 +187,23 @@ export async function resolveInvitationToken(opaqueToken: string): Promise<
   | { session: DriverSession; isFirstAccess: boolean; inviteVideoUrl?: string }
   | { error: string; code: "invalid" | "revoked" | "expired" }
 > {
+  console.error("[RESOLVE_INVITE] Supabase URL:", process.env.NEXT_PUBLIC_SUPABASE_URL);
+  console.error("[RESOLVE_INVITE] Full token queried:", opaqueToken);
+  console.error("[RESOLVE_INVITE] Token length:", opaqueToken.length);
+
+  // Diagnostic: count total invitations to verify DB connectivity
+  const { count, error: countErr } = await supabaseAdmin
+    .from("driver_invitations")
+    .select("id", { count: "exact", head: true });
+  console.error("[RESOLVE_INVITE] Total invitations in DB:", count, "countError:", countErr?.message ?? "none");
+
+  // Diagnostic: try to find the token without .single() first
+  const { data: tokenCheck, error: tokenCheckErr } = await supabaseAdmin
+    .from("driver_invitations")
+    .select("id, token, driver_id")
+    .eq("token", opaqueToken);
+  console.error("[RESOLVE_INVITE] Token check rows:", tokenCheck?.length ?? 0, "tokenCheckError:", tokenCheckErr?.message ?? "none");
+
   const { data: invitation, error } = await supabaseAdmin
     .from("driver_invitations")
     .select(`
@@ -200,11 +217,11 @@ export async function resolveInvitationToken(opaqueToken: string): Promise<
     .single();
 
   if (error) {
-    console.error("[RESOLVE_INVITE] Supabase query error for token", opaqueToken.slice(0, 8) + "...", error.message, error.details, error.hint);
+    console.error("[RESOLVE_INVITE] Supabase query error for token", opaqueToken, "message:", error.message, "details:", error.details, "hint:", error.hint);
     return { error: "This activation link is not valid.", code: "invalid" };
   }
   if (!invitation) {
-    console.error("[RESOLVE_INVITE] No invitation found for token", opaqueToken.slice(0, 8) + "...");
+    console.error("[RESOLVE_INVITE] No invitation found for token", opaqueToken);
     return { error: "This activation link is not valid.", code: "invalid" };
   }
   if (invitation.revoked_at) return { error: "This link has been deactivated. Please contact your fleet manager.", code: "revoked" };
