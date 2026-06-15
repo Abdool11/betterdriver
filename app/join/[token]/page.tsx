@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { resolveInvitationToken, createSession } from "@/lib/auth";
+import { resolveInvitationToken } from "@/lib/auth";
 
 export default async function JoinPage({
   params,
@@ -29,20 +29,7 @@ export default async function JoinPage({
 
   console.error("[JOIN_PAGE] Token valid. isFirstAccess:", result.isFirstAccess, "lang:", result.session.languagePreference);
 
-  // Issue the 30-day rolling JWT session cookie
-  await createSession(result.session);
-
-  if (result.isFirstAccess) {
-    const videoParam = result.inviteVideoUrl
-      ? `?video=${encodeURIComponent(result.inviteVideoUrl)}`
-      : "";
-
-    if (!result.session.languagePreference) {
-      redirect(`/portal/language${videoParam}`);
-    }
-
-    redirect(`/portal/welcome${videoParam}`);
-  }
-
-  redirect("/portal");
+  // Cookies can only be modified in a Route Handler or Server Action.
+  // Hand off to the API route to issue the session cookie and redirect.
+  redirect(`/api/join/${token}`);
 }
