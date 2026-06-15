@@ -1,40 +1,92 @@
 import { Metadata } from "next";
-import { MOCK_ENROLMENT, MOCK_MODULES, MOCK_CPD_RECORDS } from "@/lib/constants";
+import { getSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase";
+import { moodleGetCourseModules, normalizeProgrammeSlug } from "@/lib/moodle";
 import { CheckCircle2, TrendingUp, Calendar } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
 
 export const dynamic = "force-dynamic";
 
-
-// DATA REQUIREMENTS:
-// - enrolment: Enrolment — Supabase: SELECT * FROM enrolments WHERE driver_id = ?
-// - modules: Module[] — Supabase: SELECT * FROM modules WHERE programme_id = ? ORDER BY order_index
-// - cpdRecords: CpdRecord[] — Supabase: SELECT * FROM cpd_records WHERE driver_id = ? ORDER BY due_date DESC
-// TODO: Asif — replace mock data with live Supabase queries
-
 export const metadata: Metadata = { title: "My Progress" };
 
-export default function ProgressPage() {
-  const enrolment = MOCK_ENROLMENT;
-  const modules = MOCK_MODULES;
-  const cpdRecords = MOCK_CPD_RECORDS;
-  const completedModules = modules.filter((m) => m.status === "completed");
-  const completedCpd = cpdRecords.filter((c) => c.status === "completed");
+export default async function ProgressPage() {
+  const session = await getSession();
+
+  let progressPercent = 0;
+  let completedModulesCount = 0;
+  let totalModules = 0;
+  let modules: { id: string; name: string; status: "completed" | "in_progress" | "available" | "locked" }[] = [];
+  let cpdDue = false;
+
+  if (session) {
+    const { data: driver } = await supabaseAdmin
+      .from("drivers")
+      .select("id, moodle_user_id")
+      .eq("id", session.driverId)
+      .single();
+
+    const { data: enrolment } = await supabaseAdmin
+      .from("enrolments")
+      .select("programme_slug, progress_percent, modules_completed")
+      .eq("driver_id", session.driverId)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (enrolment) {
+      progressPercent = enrolment.progress_percent ?? 0;
+      completedModulesCount = enrolment.modules_completed ?? 0;
+    }
+
+    if (driver?.moodle_user_id && enrolment?.programme_slug) {
+      try {
+        const canonicalSlug = normalizeProgrammeSlug(enrolment.programme_slug);
+        const moodleModules = await moodleGetCourseModules({
+          moodleUserId: driver.moodle_user_id,
+          programmeSlug: canonicalSlug,
+        });
+
+        let foundIncomplete = false;
+        modules = moodleModules.map((mod) => {
+          const isComplete = mod.completionstate === 1 || mod.completionstate === 2;
+          const isFail = mod.completionstate === 3;
+
+          let status: "completed" | "in_progress" | "available" | "locked" = "locked";
+          if (isComplete) {
+            status = "completed";
+          } else if (isFail) {
+            status = "available";
+          } else if (!foundIncomplete) {
+            status = "in_progress";
+            foundIncomplete = true;
+          } else {
+            status = "locked";
+          }
+
+          return { id: String(mod.id), name: mod.name, status };
+        });
+
+        totalModules = modules.length;
+        completedModulesCount = modules.filter((m) => m.status === "completed").length;
+        progressPercent = totalModules > 0 ? Math.round((completedModulesCount / totalModules) * 100) : 0;
+      } catch (err) {
+        console.error("[PROGRESS] Moodle fetch failed:", err);
+      }
+    }
+  }
 
   return (
     <div className="page-content">
-      <div className="mock-banner" style={{ marginBottom: "1.5rem" }}>
-        MOCK DATA — Asif to connect live Supabase progress data
-      </div>
       <TranslatedPageHeader pageKey="progress" />
 
       {/* Stats row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>
         {[
-          { label: "Course progress", value: `${enrolment.progressPercent}%`, color: "#F59E0B" },
-          { label: "Modules completed", value: `${completedModules.length}/${modules.length}`, color: "#10B981" },
-          { label: "CPD sessions done", value: `${completedCpd.length}`, color: "#3B82F6" },
-          { label: "Next CPD due", value: "30 Apr", color: "#9CA3AF" },
+          { label: "Course progress", value: `${progressPercent}%`, color: "#F59E0B" },
+          { label: "Modules completed", value: `${completedModulesCount}/${totalModules}`, color: "#10B981" },
+          { label: "CPD sessions done", value: `0`, color: "#3B82F6" },
+          { label: "Next CPD due", value: cpdDue ? "Due soon" : "No CPD due", color: "#9CA3AF" },
         ].map(({ label, value, color }) => (
           <div key={label} style={{ background: "#1C2333", border: "1px solid #2d3a4f", borderRadius: "1rem", padding: "1.25rem" }}>
             <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 800, fontSize: "1.75rem", color, margin: "0 0 0.25rem" }}>
@@ -81,15 +133,15 @@ export default function ProgressPage() {
                 <div style={{ width: 16, height: 16, borderRadius: "50%", border: "2px solid #2d3a4f", flexShrink: 0 }} />
               )}
               <p style={{ fontSize: "0.875rem", color: mod.status === "completed" ? "#F9FAFB" : "#6B7280", margin: 0, flex: 1 }}>
-                {mod.title}
+                {mod.name}
               </p>
-              {mod.status === "in-progress" && (
+              {mod.status === "in_progress" && (
                 <span className="pill pill-amber" style={{ fontSize: "0.6875rem" }}>
                   In progress
                 </span>
               )}
               {mod.status === "completed" && (
-                <span style={{ fontSize: "0.75rem", color: "#6B7280" }}>{mod.durationMinutes} min</span>
+                <span style={{ fontSize: "0.75rem", color: "#6B7280" }}>Done</span>
               )}
             </div>
           ))}
@@ -112,40 +164,10 @@ export default function ProgressPage() {
         >
           <Calendar size={18} style={{ color: "#3B82F6" }} /> CPD history
         </h2>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          {cpdRecords.map((cpd) => (
-            <div
-              key={cpd.id}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "1rem",
-                padding: "0.875rem 1rem",
-                background: "#1C2333",
-                border: "1px solid #2d3a4f",
-                borderRadius: "0.75rem",
-                flexWrap: "wrap",
-              }}
-            >
-              <p style={{ fontSize: "0.875rem", color: "#F9FAFB", margin: 0 }}>{cpd.title}</p>
-              {cpd.status === "completed" && (
-                <span className="pill pill-green" style={{ fontSize: "0.6875rem" }}>
-                  Completed
-                </span>
-              )}
-              {cpd.status === "urgent" && (
-                <span className="pill pill-amber" style={{ fontSize: "0.6875rem" }}>
-                  Due soon
-                </span>
-              )}
-              {cpd.status === "upcoming" && (
-                <span style={{ fontSize: "0.6875rem", background: "#243044", color: "#9CA3AF", padding: "0.25rem 0.625rem", borderRadius: "999px" }}>
-                  Upcoming
-                </span>
-              )}
-            </div>
-          ))}
+        <div style={{ padding: "1.25rem", background: "#1C2333", border: "1px solid #2d3a4f", borderRadius: "0.75rem", textAlign: "center" }}>
+          <p style={{ fontSize: "0.875rem", color: "#6B7280", margin: 0 }}>
+            No CPD records yet. Complete your programme to unlock CPD tracking.
+          </p>
         </div>
       </div>
     </div>

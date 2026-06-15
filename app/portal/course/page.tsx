@@ -1,40 +1,110 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { MOCK_ENROLMENT, MOCK_MODULES } from "@/lib/constants";
+import { getSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase";
+import { moodleGetCourseModules, normalizeProgrammeSlug } from "@/lib/moodle";
 import { CheckCircle2, Clock, PlayCircle, ArrowRight, Lock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
-
-
-// DATA REQUIREMENTS:
-// - enrolment: Enrolment — Supabase: SELECT * FROM enrolments WHERE driver_id = ? AND status = 'active' LIMIT 1
-// - modules: Module[] — Supabase: SELECT * FROM modules WHERE programme_id = ? ORDER BY order_index ASC
-// TODO: Asif — replace MOCK_ENROLMENT and MOCK_MODULES with live Supabase + Moodle data
-// moodleGetCourseModules() returns completion state per module
 
 export const metadata: Metadata = {
   title: "My Programme | BetterDriver",
   description: "Track your progress through the Professional Truck Driver programme.",
 };
 
-export default function CoursePage() {
-  const enrolment = MOCK_ENROLMENT;
-  const modules = MOCK_MODULES;
-  const completed = modules.filter((m) => m.status === "completed").length;
-  const inProgress = modules.find((m) => m.status === "in-progress");
-  const nextModule = inProgress ?? modules.find((m) => m.status === "upcoming");
+export default async function CoursePage() {
+  const session = await getSession();
+
+  // Default empty state for unauthenticated / no moodle
+  let programmeTitle = "The Professional Truck Driver Programme";
+  let progressPercent = 0;
+  let completedCount = 0;
+  let totalModules = 0;
+  let mappedModules: {
+    id: string;
+    name: string;
+    status: "completed" | "in_progress" | "available" | "locked";
+    url?: string;
+    order: number;
+  }[] = [];
+
+  if (session) {
+    const { data: driver } = await supabaseAdmin
+      .from("drivers")
+      .select("id, moodle_user_id")
+      .eq("id", session.driverId)
+      .single();
+
+    const { data: enrolment } = await supabaseAdmin
+      .from("enrolments")
+      .select("programme_slug, status, progress_percent, modules_completed")
+      .eq("driver_id", session.driverId)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    const programmeSlug = enrolment?.programme_slug ?? "ptdp";
+    const canonicalSlug = normalizeProgrammeSlug(programmeSlug);
+
+    programmeTitle =
+      canonicalSlug === "professional-truck-driver"
+        ? "The Professional Truck Driver Programme"
+        : "Eco-Driver Training";
+
+    if (driver?.moodle_user_id) {
+      try {
+        const modules = await moodleGetCourseModules({
+          moodleUserId: driver.moodle_user_id,
+          programmeSlug: canonicalSlug,
+        });
+
+        let foundIncomplete = false;
+        mappedModules = modules.map((mod, index) => {
+          const isComplete = mod.completionstate === 1 || mod.completionstate === 2;
+          const isFail = mod.completionstate === 3;
+
+          let status: "completed" | "in_progress" | "available" | "locked" = "locked";
+          if (isComplete) {
+            status = "completed";
+          } else if (isFail) {
+            status = "available";
+          } else if (!foundIncomplete) {
+            status = "in_progress";
+            foundIncomplete = true;
+          } else {
+            status = "locked";
+          }
+
+          return {
+            id: String(mod.id),
+            name: mod.name,
+            url: mod.url,
+            status,
+            order: index + 1,
+          };
+        });
+
+        completedCount = mappedModules.filter((m) => m.status === "completed").length;
+        totalModules = mappedModules.length;
+        progressPercent = totalModules > 0 ? Math.round((completedCount / totalModules) * 100) : 0;
+      } catch (err) {
+        console.error("[COURSE] Moodle fetch failed:", err);
+      }
+    }
+  }
+
+  const inProgress = mappedModules.find((m) => m.status === "in_progress");
+  const nextModule = inProgress ?? mappedModules.find((m) => m.status === "available");
 
   return (
     <div className="page-content">
-      <div className="mock-banner" style={{ marginBottom: "1.5rem" }}>
-        MOCK DATA — Asif to connect live Supabase enrolment + Moodle module data
-      </div>
       <div style={{ marginBottom: "2rem" }}>
         <h1 style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 800, fontSize: "1.75rem", color: "#F9FAFB", margin: "0 0 0.375rem" }}>
-          {enrolment.programmeTitle}
+          {programmeTitle}
         </h1>
         <p style={{ color: "#9CA3AF", margin: 0, fontSize: "0.9375rem" }}>
-          {completed} of {modules.length} modules complete
+          {completedCount} of {totalModules} modules complete
         </p>
       </div>
 
@@ -56,27 +126,27 @@ export default function CoursePage() {
         <div>
           <p style={{ fontSize: "0.8125rem", color: "#6B7280", margin: "0 0 0.25rem" }}>Your progress</p>
           <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 800, fontSize: "2rem", color: "#F59E0B", margin: "0 0 0.5rem" }}>
-            {enrolment.progressPercent}%
+            {progressPercent}%
           </p>
           <div className="progress-bar" style={{ width: 200 }}>
-            <div className="progress-fill" style={{ width: `${enrolment.progressPercent}%` }} />
+            <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
           </div>
         </div>
         <div style={{ display: "flex", gap: "2rem" }}>
           <div style={{ textAlign: "center" }}>
             <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 700, fontSize: "1.5rem", color: "#F9FAFB", margin: "0 0 0.25rem" }}>
-              {completed}
+              {completedCount}
             </p>
             <p style={{ fontSize: "0.75rem", color: "#6B7280", margin: 0 }}>Done</p>
           </div>
           <div style={{ textAlign: "center" }}>
             <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 700, fontSize: "1.5rem", color: "#F9FAFB", margin: "0 0 0.25rem" }}>
-              {modules.length - completed}
+              {totalModules - completedCount}
             </p>
             <p style={{ fontSize: "0.75rem", color: "#6B7280", margin: 0 }}>Remaining</p>
           </div>
         </div>
-        {/* Continue / Start CTA — links to the next module landing page */}
+        {/* Continue / Start CTA */}
         {nextModule && (
           <Link
             href={`/portal/module/${nextModule.id}`}
@@ -104,15 +174,15 @@ export default function CoursePage() {
         All modules
       </h2>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
-        {modules.map((mod, i) => {
-          const isLocked = mod.status === "upcoming" && i > 0 && modules[i - 1].status !== "completed";
+        {mappedModules.map((mod, i) => {
+          const isLocked = mod.status === "locked";
           return (
           <Link
             key={mod.id}
             href={isLocked ? "#" : `/portal/module/${mod.id}`}
             style={{
               background: "#1C2333",
-              border: `1px solid ${mod.status === "in-progress" ? "rgba(245,158,11,0.35)" : "#2d3a4f"}`,
+              border: `1px solid ${mod.status === "in_progress" ? "rgba(245,158,11,0.35)" : "#2d3a4f"}`,
               borderRadius: "0.875rem",
               padding: "1rem 1.25rem",
               display: "flex",
@@ -131,10 +201,10 @@ export default function CoursePage() {
                 background:
                   mod.status === "completed"
                     ? "rgba(16,185,129,0.12)"
-                    : mod.status === "in-progress"
+                    : mod.status === "in_progress"
                       ? "rgba(245,158,11,0.12)"
                       : "#243044",
-                border: `1px solid ${mod.status === "completed" ? "rgba(16,185,129,0.25)" : mod.status === "in-progress" ? "rgba(245,158,11,0.25)" : "#2d3a4f"}`,
+                border: `1px solid ${mod.status === "completed" ? "rgba(16,185,129,0.25)" : mod.status === "in_progress" ? "rgba(245,158,11,0.25)" : "#2d3a4f"}`,
                 borderRadius: "0.625rem",
                 display: "flex",
                 alignItems: "center",
@@ -144,7 +214,7 @@ export default function CoursePage() {
             >
               {mod.status === "completed" ? (
                 <CheckCircle2 size={16} style={{ color: "#10B981" }} />
-              ) : mod.status === "in-progress" ? (
+              ) : mod.status === "in_progress" ? (
                 <PlayCircle size={16} style={{ color: "#F59E0B" }} />
               ) : isLocked ? (
                 <Lock size={14} style={{ color: "#6B7280" }} />
@@ -156,17 +226,17 @@ export default function CoursePage() {
             </div>
             <div style={{ flex: 1 }}>
               <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 600, fontSize: "0.9rem", color: "#F9FAFB", margin: "0 0 0.125rem" }}>
-                {mod.title}
+                {mod.name}
               </p>
               <p style={{ fontSize: "0.75rem", color: "#6B7280", margin: 0, display: "flex", alignItems: "center", gap: "0.375rem" }}>
                 {isLocked ? (
                   "Complete the previous module to unlock this one."
                 ) : (
-                  <><Clock size={12} /> {mod.durationMinutes} min</>
+                  <><Clock size={12} /> {mod.status === "completed" ? "Done" : "Available"}</>
                 )}
               </p>
             </div>
-            {mod.status === "in-progress" && (
+            {mod.status === "in_progress" && (
               <span className="pill pill-amber" style={{ fontSize: "0.6875rem" }}>
                 In progress
               </span>

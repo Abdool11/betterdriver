@@ -58,21 +58,8 @@ interface CpdRecord {
   year: number;
 }
 
-// Mock certifications — replace with Supabase query
-const MOCK_CERTS: Certification[] = [
-  {
-    id: "cert-1",
-    programme_title: "Professional Truck Driver Programme",
-    issued_at: "2025-03-15",
-    certificate_number: "BD-PTDP-2025-00142",
-    status: "certified",
-  },
-];
-
-const MOCK_CPD: CpdRecord[] = [
-  { id: "cpd-1", module_title: "Fatigue Management — Q1 2025", completed_at: "2025-03-20", year: 1 },
-  { id: "cpd-2", module_title: "Defensive Driving Refresh — Q2 2025", completed_at: "2025-06-10", year: 1 },
-];
+const certs: Certification[] = [];
+const cpdRecords: CpdRecord[] = [];
 
 export default function CVPage() {
   const [profile, setProfile] = useState<DriverProfile | null>(null);
@@ -346,11 +333,11 @@ export default function CVPage() {
             Certifications
           </span>
         </div>
-        {MOCK_CERTS.length === 0 ? (
+        {certs.length === 0 ? (
           <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>No certifications yet. Complete your programme to earn your certificate.</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {MOCK_CERTS.map((cert) => (
+            {certs.map((cert) => (
               <div
                 key={cert.id}
                 style={{
@@ -399,11 +386,11 @@ export default function CVPage() {
             CPD Record
           </span>
         </div>
-        {MOCK_CPD.length === 0 ? (
+        {cpdRecords.length === 0 ? (
           <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>No CPD modules completed yet.</p>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-            {MOCK_CPD.map((cpd) => (
+            {cpdRecords.map((cpd) => (
               <div key={cpd.id} style={rowStyle}>
                 <span style={{ color: "var(--text-secondary)", fontSize: "0.875rem" }}>{cpd.module_title}</span>
                 <span style={{ color: "var(--text-muted)", fontSize: "0.8125rem", flexShrink: 0 }}>

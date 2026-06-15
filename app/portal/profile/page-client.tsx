@@ -1,69 +1,96 @@
 "use client";
 
-import { Metadata } from "next";
-import { MOCK_DRIVER } from "@/lib/constants";
+import { useEffect, useState } from "react";
 import { User, Truck, Briefcase, ChevronDown } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
-import { useState } from "react";
 
-
-
-// DATA REQUIREMENTS:
-// - driver: Driver — Supabase: SELECT * FROM drivers WHERE id = auth.uid()
-// - UPDATE via Server Action: /api/profile/update
-// TODO: Asif — replace mock data with live Supabase query and implement form submission
+interface DriverProfile {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  mobile: string;
+  id_number: string | null;
+  licence_number: string | null;
+  licence_class: string | null;
+  licence_expiry: string | null;
+  years_experience: number | null;
+  vehicle_types: string[] | null;
+  profile_complete: boolean;
+}
 
 export default function ProfilePage() {
-  const driver = MOCK_DRIVER;
+  const [driver, setDriver] = useState<DriverProfile | null>(null);
+  const [loading, setLoading] = useState(true);
   const [openSection, setOpenSection] = useState<string | null>("personal");
+
+  useEffect(() => {
+    fetch("/api/portal/profile")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.driver) setDriver(d.driver);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="page-content">
+        <TranslatedPageHeader pageKey="profile" />
+        <p style={{ color: "#6B7280", fontSize: "0.875rem" }}>Loading profile…</p>
+      </div>
+    );
+  }
+
+  if (!driver) {
+    return (
+      <div className="page-content">
+        <TranslatedPageHeader pageKey="profile" />
+        <p style={{ color: "#6B7280", fontSize: "0.875rem" }}>Unable to load profile.</p>
+      </div>
+    );
+  }
+
+  const fullName = `${driver.first_name} ${driver.last_name}`;
 
   const sections = [
     {
       id: "personal",
       icon: <User size={18} />,
       title: "Personal details",
-      completion: 80,
       fields: [
-        { label: "Full name", value: driver.name, type: "text" },
-        { label: "ID number", value: driver.idNumber, type: "text" },
-        { label: "Mobile", value: driver.mobile, type: "tel" },
-        { label: "Email", value: driver.email, type: "email" },
+        { label: "Full name", value: fullName, type: "text", readOnly: true },
+        { label: "ID number", value: driver.id_number || "", type: "text" },
+        { label: "Mobile", value: driver.mobile || "", type: "tel" },
+        { label: "Email", value: driver.email || "", type: "email" },
       ],
     },
     {
       id: "licence",
       icon: <Truck size={18} />,
       title: "Licence & PDP",
-      completion: 60,
       fields: [
-        { label: "Licence number", value: driver.licenceNumber, type: "text" },
-        { label: "Licence code", value: driver.licenceCode, type: "text" },
-        { label: "PDP number", value: driver.pdpNumber || "", type: "text" },
-        { label: "PDP expiry", value: driver.pdpExpiry || "", type: "date" },
+        { label: "Licence number", value: driver.licence_number || "", type: "text" },
+        { label: "Licence class", value: driver.licence_class || "", type: "text" },
+        { label: "Licence expiry", value: driver.licence_expiry || "", type: "date" },
       ],
     },
     {
       id: "work",
       icon: <Briefcase size={18} />,
       title: "Work history",
-      completion: 40,
       fields: [
-        { label: "Current employer", value: driver.currentEmployer || "", type: "text" },
-        { label: "Years driving", value: driver.yearsExperience?.toString() || "", type: "number" },
-        { label: "Vehicle types driven", value: driver.vehicleTypes?.join(", ") || "", type: "text" },
+        { label: "Years driving", value: driver.years_experience?.toString() || "", type: "number" },
+        { label: "Vehicle types driven", value: driver.vehicle_types?.join(", ") || "", type: "text" },
       ],
     },
   ];
 
-  const overallCompletion = Math.round(
-    sections.reduce((sum, s) => sum + s.completion, 0) / sections.length
-  );
+  const overallCompletion = driver.profile_complete ? 100 : 50;
 
   return (
     <div className="page-content">
-      <div className="mock-banner" style={{ marginBottom: "1.5rem" }}>
-        MOCK DATA — Asif to connect live Supabase driver profile query and Server Action for updates
-      </div>
       <TranslatedPageHeader pageKey="profile" />
 
       {/* Completion meter */}
@@ -121,7 +148,7 @@ export default function ProfilePage() {
             <span style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 700, fontSize: "0.9375rem", color: "#F9FAFB", flex: 1 }}>
               {section.title}
             </span>
-            <span style={{ fontSize: "0.75rem", color: "#6B7280", marginRight: "0.5rem" }}>{section.completion}%</span>
+            <span style={{ fontSize: "0.75rem", color: "#6B7280", marginRight: "0.5rem" }}>{Math.round((section.fields.filter((f) => (f as any).value).length / section.fields.length) * 100)}%</span>
             <ChevronDown
               size={16}
               style={{
@@ -142,14 +169,15 @@ export default function ProfilePage() {
                     </label>
                     <input
                       type={field.type}
-                      defaultValue={field.value}
+                      defaultValue={(field as any).value}
+                      readOnly={(field as any).readOnly}
                       style={{
                         width: "100%",
-                        background: "#243044",
+                        background: (field as any).readOnly ? "#1a2230" : "#243044",
                         border: "1px solid #2d3a4f",
                         borderRadius: "0.625rem",
                         padding: "0.625rem 0.875rem",
-                        color: "#F9FAFB",
+                        color: (field as any).readOnly ? "#6B7280" : "#F9FAFB",
                         fontSize: "0.875rem",
                         outline: "none",
                         boxSizing: "border-box",

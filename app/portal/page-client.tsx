@@ -28,16 +28,16 @@ interface DriverStats {
   unreadBulletins: number;
 }
 
-const DEMO_STATS: DriverStats = {
-  firstName: "Demo",
-  lastName: "Driver",
-  programmeTitle: "Driver University Programme",
-  progressPercent: 42,
-  completedModules: 5,
-  totalModules: 12,
-  cpdDue: true,
+const EMPTY_STATS: DriverStats = {
+  firstName: "",
+  lastName: "",
+  programmeTitle: "",
+  progressPercent: 0,
+  completedModules: 0,
+  totalModules: 0,
+  cpdDue: false,
   certificateReady: false,
-  unreadBulletins: 2,
+  unreadBulletins: 0,
 };
 
 const COPY: Record<Lang, {
@@ -133,7 +133,7 @@ const COPY: Record<Lang, {
 };
 
 export default function PortalHomePage() {
-  const [stats, setStats] = useState<DriverStats>(DEMO_STATS);
+  const [stats, setStats] = useState<DriverStats>(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
   const lang = useLanguage();
   const copy = COPY[lang];

@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-
 
 import {
   BookOpen,
@@ -19,47 +18,18 @@ import {
 
 interface Module {
   id: string;
-  title: string;
-  duration: string;
+  name: string;
   status: "completed" | "in_progress" | "locked" | "available";
-  unit: number;
+  order: number;
+  url?: string;
 }
 
 interface Programme {
-  id: string;
   title: string;
-  description: string;
-  progress: number;
+  progressPercent: number;
   totalModules: number;
   completedModules: number;
-  estimatedHours: number;
-  modules: Module[];
 }
-
-const MOCK_PROGRAMME: Programme = {
-  id: "prog-1",
-  title: "Driver University Programme",
-  description:
-    "Build the skills, knowledge, and professional standing that make you a safer, more valuable driver on South African roads.",
-  progress: 42,
-  totalModules: 12,
-  completedModules: 5,
-  estimatedHours: 24,
-  modules: [
-    { id: "m1", unit: 1, title: "Road Traffic Act — Your Rights and Responsibilities", duration: "45 min", status: "completed" },
-    { id: "m2", unit: 2, title: "Defensive Driving Principles", duration: "60 min", status: "completed" },
-    { id: "m3", unit: 3, title: "Fatigue Management and Hours of Service", duration: "50 min", status: "completed" },
-    { id: "m4", unit: 4, title: "Vehicle Inspection and Pre-Trip Checks", duration: "40 min", status: "completed" },
-    { id: "m5", unit: 5, title: "Load Security and Overloading", duration: "55 min", status: "completed" },
-    { id: "m6", unit: 6, title: "Hazardous Materials Awareness", duration: "60 min", status: "in_progress" },
-    { id: "m7", unit: 7, title: "Emergency Procedures and Incident Reporting", duration: "45 min", status: "available" },
-    { id: "m8", unit: 8, title: "Fuel Efficiency and Eco-Driving", duration: "40 min", status: "locked" },
-    { id: "m9", unit: 9, title: "Driver Health and Wellness", duration: "35 min", status: "locked" },
-    { id: "m10", unit: 10, title: "Professional Communication", duration: "30 min", status: "locked" },
-    { id: "m11", unit: 11, title: "Green Freight Awareness", duration: "50 min", status: "locked" },
-    { id: "m12", unit: 12, title: "Final Assessment and Certification", duration: "90 min", status: "locked" },
-  ],
-};
 
 const statusConfig = {
   completed: { icon: CheckCircle2, color: "var(--success)", label: "Completed", bg: "var(--success-subtle)" },
@@ -71,7 +41,27 @@ const statusConfig = {
 export default function LearningPage() {
   const [expanded, setExpanded] = useState<string | null>("prog-1");
   const [showDownloadBanner, setShowDownloadBanner] = useState(true);
-  const prog = MOCK_PROGRAMME;
+  const [programme, setProgramme] = useState<Programme | null>(null);
+  const [modules, setModules] = useState<Module[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/portal/course")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.programme) setProgramme(d.programme);
+        if (d.modules) setModules(d.modules);
+      })
+      .catch((err) => console.error("[LEARNING] Failed to fetch course:", err))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const prog = programme ?? {
+    title: "Driver University Programme",
+    progressPercent: 0,
+    totalModules: 0,
+    completedModules: 0,
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
@@ -97,12 +87,12 @@ export default function LearningPage() {
               <p style={{ fontWeight: 700, fontSize: "0.875rem", color: "var(--text-primary)", margin: "0 0 0.25rem" }}>Save data — download on WiFi</p>
               <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: "0 0 0.625rem", lineHeight: 1.5 }}>Download your course materials now while on WiFi so you can study without using mobile data.</p>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                {prog.modules.filter(m => m.status !== "locked").map((mod) => (
+                {modules.filter((m: Module) => m.status !== "locked").map((mod: Module) => (
                   <button key={mod.id} type="button"
                     style={{ display: "inline-flex", alignItems: "center", gap: "0.375rem", padding: "0.375rem 0.625rem", background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.25)", borderRadius: "0.5rem", color: "#3B82F6", fontSize: "0.75rem", fontWeight: 600, cursor: "pointer" }}
-                    onClick={() => alert(`Downloading: ${mod.title}`)}
+                    onClick={() => alert(`Downloading: ${mod.name}`)}
                   >
-                    <Download size={11} /> Module {mod.unit}
+                    <Download size={11} /> Module {mod.order}
                   </button>
                 ))}
               </div>
@@ -132,7 +122,7 @@ export default function LearningPage() {
           <div style={{ flex: 1 }}>
             <h3 style={{ marginBottom: "0.25rem", fontSize: "1rem" }}>{prog.title}</h3>
             <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
-              {prog.description}
+              Build the skills, knowledge, and professional standing that make you a safer, more valuable driver on South African roads.
             </p>
           </div>
         </div>
@@ -144,11 +134,11 @@ export default function LearningPage() {
               {prog.completedModules} of {prog.totalModules} modules complete
             </span>
             <span style={{ fontSize: "0.8125rem", fontWeight: 700, color: "var(--amber)" }}>
-              {prog.progress}%
+              {prog.progressPercent}%
             </span>
           </div>
           <div className="progress-track">
-            <div className="progress-fill" style={{ width: `${prog.progress}%` }} />
+            <div className="progress-fill" style={{ width: `${prog.progressPercent}%` }} />
           </div>
         </div>
 
@@ -156,7 +146,7 @@ export default function LearningPage() {
         <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
             <Clock size={13} style={{ color: "var(--text-muted)" }} />
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{prog.estimatedHours}h total</span>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Self-paced modules</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
             <Award size={13} style={{ color: "var(--success)" }} />
@@ -175,7 +165,7 @@ export default function LearningPage() {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          {prog.modules.map((mod) => {
+          {modules.map((mod: Module) => {
             const cfg = statusConfig[mod.status];
             const Icon = cfg.icon;
             const isClickable = mod.status !== "locked";
@@ -225,10 +215,9 @@ export default function LearningPage() {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {mod.unit}. {mod.title}
+                    {mod.order}. {mod.name}
                   </div>
                   <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "flex", gap: "0.5rem", marginTop: "0.125rem" }}>
-                    <span>{mod.duration}</span>
                     {mod.status === "in_progress" && (
                       <span style={{ color: "var(--amber)", fontWeight: 600 }}>· In progress</span>
                     )}
@@ -252,7 +241,7 @@ export default function LearningPage() {
             );
 
             return isClickable ? (
-              <Link key={mod.id} href={`/portal/learning/${mod.id}`} style={{ textDecoration: "none" }}>
+              <Link key={mod.id} href={`/portal/module/${mod.id}`} style={{ textDecoration: "none" }}>
                 {content}
               </Link>
             ) : (
@@ -263,7 +252,7 @@ export default function LearningPage() {
       </div>
 
       {/* Completion CTA */}
-      {prog.progress >= 100 && (
+      {prog.progressPercent >= 100 && (
         <Link href="/portal/certificate" style={{ textDecoration: "none" }}>
           <div className="card-amber" style={{ display: "flex", alignItems: "center", gap: "0.875rem" }}>
             <Award size={24} style={{ color: "var(--amber)", flexShrink: 0 }} />

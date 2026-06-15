@@ -12,34 +12,10 @@ const BULLETINS_COPY = {
 interface BulletinSummary {
   id: string;
   title: string;
-  category: string;
   urgency: "urgent" | "standard";
-  sender_company: string;
-  disseminated_at: string;
-  read: boolean;
+  created_at: string;
+  read?: boolean;
 }
-
-// Mock data — replace with live Supabase fetch
-const MOCK_BULLETINS: BulletinSummary[] = [
-  {
-    id: "b-001",
-    title: "Tyre blowout response — updated procedure",
-    category: "Safety",
-    urgency: "urgent",
-    sender_company: "Transnet Freight",
-    disseminated_at: "2025-04-18T08:00:00Z",
-    read: false,
-  },
-  {
-    id: "b-002",
-    title: "New rest stop facilities on N3 corridor",
-    category: "Operations",
-    urgency: "standard",
-    sender_company: "Transnet Freight",
-    disseminated_at: "2025-04-10T09:00:00Z",
-    read: true,
-  },
-];
 
 function BulletinsTitle() {
   const lang = useLanguage();
@@ -59,16 +35,24 @@ export default function BulletinsListPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // TODO: Replace with live fetch from /api/portal/bulletins
-    setTimeout(() => {
-      setBulletins(MOCK_BULLETINS);
-      setLoading(false);
-    }, 300);
+    fetch("/api/portal/bulletins")
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d.bulletins)) {
+          setBulletins(d.bulletins);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   const formatDate = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+  };
+
+  const getCategoryLabel = (urgency: string) => {
+    return urgency === "urgent" ? "Urgent" : "Update";
   };
 
   return (
@@ -177,12 +161,12 @@ export default function BulletinsListPage() {
                       fontWeight: b.urgency === "urgent" ? 700 : 400,
                     }}
                   >
-                    {b.urgency === "urgent" ? "Urgent" : b.category}
+                    {getCategoryLabel(b.urgency)}
                   </span>
                   <span style={{ color: "#374151", fontSize: "0.75rem" }}>·</span>
                   <span style={{ display: "flex", alignItems: "center", gap: "0.25rem", fontSize: "0.75rem", color: "#6B7280" }}>
                     <Clock size={11} />
-                    {formatDate(b.disseminated_at)}
+                    {formatDate(b.created_at)}
                   </span>
                 </div>
               </div>

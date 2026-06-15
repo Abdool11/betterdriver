@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +18,11 @@ import {
 
 import StartErrorBanner from "./StartErrorBanner";
 
-export default function HowToJoinPage() {
+export default async function HowToJoinPage() {
+  const session = await getSession();
+  if (session) {
+    redirect("/portal");
+  }
   return (
     <div
       style={{

@@ -1,28 +1,26 @@
 import { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { getSession } from "@/lib/auth";
 import { Navigation } from "@/components/layout/Navigation";
 import { ArrowRight } from "lucide-react";
 
 export const dynamic = "force-dynamic";
-
-
-// DATA REQUIREMENTS:
-// - No data fetching on this page
-// - Form submits to Server Action: /app/login/actions.ts
-// - On success: redirect to /portal/tasks
-// TODO: Asif — implement Supabase Auth login Server Action
-// TODO: Asif — implement "Forgot password" flow (Supabase resetPasswordForEmail)
 
 export const metadata: Metadata = {
   title: "Log in",
   description: "Log in to your BetterDriver Driver University.",
 };
 
-export default function LoginPage({
+export default async function LoginPage({
   searchParams,
 }: {
   searchParams: { returnTo?: string };
 }) {
+  const session = await getSession();
+  if (session) {
+    redirect(searchParams?.returnTo ?? "/portal");
+  }
   return (
     <div style={{ minHeight: "100vh", background: "#111827", display: "flex", flexDirection: "column" }}>
       <Navigation />

@@ -1,43 +1,87 @@
 import { Metadata } from "next";
 import Link from "next/link";
-import { MOCK_TASKS, MOCK_DRIVER } from "@/lib/constants";
+import { getSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase";
+import { moodleGetCourseModules, normalizeProgrammeSlug } from "@/lib/moodle";
 import { AlertTriangle, Clock, BookOpen, RefreshCw, ArrowRight, CheckCircle2 } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
 
 export const dynamic = "force-dynamic";
 
-
-// DATA REQUIREMENTS:
-// - driver: Driver — from Supabase auth session (ctx.user)
-// - tasks: Task[] — from Supabase query: SELECT * FROM tasks WHERE driver_id = ? AND status != 'completed' ORDER BY priority ASC, due_date ASC
-// - Task status values: 'overdue' | 'urgent' | 'in_progress' | 'upcoming' | 'completed'
-// - Task type values: 'module' | 'cpd' | 'refresh' | 'evaluation' | 'profile'
-// TODO: Asif — replace MOCK_TASKS with live Supabase query
-// TODO: Asif — protect this route with Supabase Auth middleware (redirect to /login if no session)
-
 export const metadata: Metadata = {
   title: "My Tasks",
 };
 
-export default function TasksPage() {
-  // TODO: Asif — replace with live data
-  const tasks = MOCK_TASKS;
-  const driver = MOCK_DRIVER;
+export default async function TasksPage() {
+  const session = await getSession();
 
-  const overdueTasks = tasks.filter((t) => t.status === "overdue");
-  const urgentTasks = tasks.filter((t) => t.status === "urgent");
-  const inProgressTasks = tasks.filter((t) => t.status === "in_progress");
-  const upcomingTasks = tasks.filter((t) => t.status === "upcoming");
+  let driverName = "Driver";
+  let inProgressTasks: { id: string; title: string; description: string; progressPercent?: number; actionHref: string; actionLabel: string }[] = [];
+  let urgentTasks: { id: string; title: string; description: string; actionHref: string; actionLabel: string; dueLabel: string }[] = [];
+  let upcomingTasks: { id: string; title: string; description: string; dueLabel?: string }[] = [];
+
+  if (session) {
+    const { data: driver } = await supabaseAdmin
+      .from("drivers")
+      .select("id, first_name, last_name, moodle_user_id, profile_complete")
+      .eq("id", session.driverId)
+      .single();
+
+    driverName = driver?.first_name ?? session.firstName ?? "Driver";
+
+    if (!driver?.profile_complete) {
+      upcomingTasks.push({
+        id: "profile",
+        title: "Complete your professional profile",
+        description: "Add your licence details and work history to unlock your full CV.",
+        dueLabel: "No deadline",
+      });
+    }
+
+    const { data: enrolment } = await supabaseAdmin
+      .from("enrolments")
+      .select("programme_slug, progress_percent")
+      .eq("driver_id", session.driverId)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (driver?.moodle_user_id && enrolment?.programme_slug) {
+      try {
+        const canonicalSlug = normalizeProgrammeSlug(enrolment.programme_slug);
+        const modules = await moodleGetCourseModules({
+          moodleUserId: driver.moodle_user_id,
+          programmeSlug: canonicalSlug,
+        });
+
+        let foundIncomplete = false;
+        for (let i = 0; i < modules.length; i++) {
+          const mod = modules[i];
+          const isComplete = mod.completionstate === 1 || mod.completionstate === 2;
+          if (!isComplete && !foundIncomplete) {
+            foundIncomplete = true;
+            inProgressTasks.push({
+              id: String(mod.id),
+              title: mod.name,
+              description: "Continue your training programme",
+              progressPercent: enrolment.progress_percent ?? undefined,
+              actionHref: `/portal/module/${mod.id}`,
+              actionLabel: "Resume module",
+            });
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  const overdueTasks: typeof urgentTasks = [];
 
   return (
     <div className="page-content">
-      {/* Mock data banner */}
-      <div className="mock-banner" style={{ marginBottom: "1.5rem" }}>
-        ⚠ MOCK DATA — Asif to connect live Supabase tasks query
-      </div>
-
-      {/* Header — translated */}
-      <TranslatedPageHeader pageKey="tasks" driverFirstName={driver.name.split(" ")[0]} />
+      <TranslatedPageHeader pageKey="tasks" driverFirstName={driverName} />
 
       {/* Overdue — highest priority */}
       {overdueTasks.length > 0 && (

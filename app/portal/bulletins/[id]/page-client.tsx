@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-
 
 import {
   AlertTriangle,
@@ -41,57 +40,62 @@ interface BulletinData {
   questions: Question[];
 }
 
-// Mock data — replace with live API call
-const MOCK_BULLETIN: BulletinData = {
-  id: "b-001",
-  title: "Tyre blowout response — updated procedure",
-  category: "Safety",
-  urgency: "urgent",
-  description:
-    "Three incidents on the N3 in the past 30 days have involved tyre blowouts at highway speed. In each case, the driver's response in the first 3 seconds determined the outcome. This bulletin updates the recommended response procedure based on what we learned from those incidents.",
-  why_it_matters:
-    "A blowout at speed creates an immediate steering pull. The instinct to brake hard is the most dangerous response — it transfers weight to the front axle and worsens the pull. Knowing the correct response before it happens is the difference between a controlled stop and a rollover.",
-  mitigation:
-    "When a blowout occurs: (1) Grip the wheel firmly with both hands. (2) Do NOT brake immediately — maintain throttle briefly to stabilise. (3) Steer gently to correct the pull. (4) Gradually reduce speed. (5) Move to the shoulder only when speed is below 60 km/h. (6) Activate hazards and call dispatch.",
-  driver_action:
-    "Read this bulletin fully. Complete the understanding check. If you have questions or have experienced a similar incident, use the feedback section to share it.",
-  sender_company: "Transnet Freight",
-  disseminated_at: "2025-04-18T08:00:00Z",
-  questions: [
-    {
-      question: "What is the FIRST thing you should do when a tyre blows out at highway speed?",
-      options: [
-        "Brake hard immediately to slow down",
-        "Grip the wheel firmly and maintain throttle briefly",
-        "Steer immediately to the shoulder",
-        "Call dispatch before doing anything",
-      ],
-      correct: 1,
-    },
-    {
-      question: "At what speed is it safe to move to the shoulder after a blowout?",
-      options: ["Below 100 km/h", "Below 80 km/h", "Below 60 km/h", "As soon as possible"],
-      correct: 2,
-    },
-    {
-      question: "Why should you NOT brake hard immediately after a blowout?",
-      options: [
-        "It wastes fuel",
-        "It transfers weight to the front axle and worsens the pull",
-        "It damages the brake pads",
-        "It is against traffic regulations",
-      ],
-      correct: 1,
-    },
-  ],
-};
-
 const STEP_ORDER: FlowStep[] = ["reading", "acknowledge", "check", "feedback", "done"];
 
+function parseBulletin(raw: any): BulletinData {
+  const content = raw?.content ?? "";
+  // Attempt to extract sections from plain text or HTML content
+  const paragraphs = content
+    .replace(/<[^>]+>/g, "\n")
+    .split("\n")
+    .map((s: string) => s.trim())
+    .filter(Boolean);
+
+  return {
+    id: raw?.id ?? "",
+    title: raw?.title ?? "Bulletin",
+    category: "Update",
+    urgency: raw?.urgency ?? "standard",
+    description: paragraphs[0] ?? content,
+    why_it_matters: paragraphs[1] ?? "",
+    mitigation: paragraphs.slice(2).join("\n\n") ?? "",
+    driver_action: "Read this bulletin fully and acknowledge it.",
+    sender_company: "Your company",
+    disseminated_at: raw?.created_at ?? new Date().toISOString(),
+    questions: [],
+  };
+}
+
 export default function BulletinReadPage() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams<{ id: string }>();
+  const id = params?.id ?? "";
   const router = useRouter();
-  const bulletin = MOCK_BULLETIN; // Replace with fetch by id
+  const [rawBulletin, setRawBulletin] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/portal/bulletins/${id}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.bulletin) setRawBulletin(d.bulletin);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  const bulletin: BulletinData = rawBulletin ? parseBulletin(rawBulletin) : {
+    id: id,
+    title: "Bulletin",
+    category: "Update",
+    urgency: "standard",
+    description: "",
+    why_it_matters: "",
+    mitigation: "",
+    driver_action: "",
+    sender_company: "",
+    disseminated_at: new Date().toISOString(),
+    questions: [],
+  };
 
   const [step, setStep] = useState<FlowStep>("reading");
   const [answers, setAnswers] = useState<(number | null)[]>(Array(bulletin.questions.length).fill(null));
@@ -110,9 +114,22 @@ export default function BulletinReadPage() {
   }
 
   function submitCheck() {
-    const correct = answers.filter((a, i) => a === bulletin.questions[i].correct).length;
+    if (bulletin.questions.length === 0) {
+      setScore(0);
+      setSubmitted(true);
+      return;
+    }
+    const correct = answers.filter((a, i) => a === bulletin.questions[i]?.correct).length;
     setScore(correct);
     setSubmitted(true);
+  }
+
+  if (loading) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 0, minHeight: "100%", padding: "2rem 1rem", color: "#6B7280" }}>
+        Loading bulletin…
+      </div>
+    );
   }
 
   async function submitFeedback() {

@@ -1,28 +1,83 @@
 import { Metadata } from "next";
-import { MOCK_DRIVER, MOCK_CERTIFICATE } from "@/lib/constants";
+import { getSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase";
+import { moodleIsCourseComplete, normalizeProgrammeSlug } from "@/lib/moodle";
 import { Award, Download, Share2, CheckCircle2 } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
 
 export const dynamic = "force-dynamic";
 
-
-// DATA REQUIREMENTS:
-// - driver: Driver — from Supabase auth session
-// - certificate: Certificate | null — Supabase: SELECT * FROM certifications WHERE driver_id = ? AND status = 'active' ORDER BY issued_at DESC LIMIT 1
-// TODO: Asif — replace mock data with live Supabase query
-// TODO: Asif — implement PDF download via /api/certificate/download?id=
-
 export const metadata: Metadata = { title: "My Certificate" };
 
-export default function PortalCertificatePage() {
-  const driver = MOCK_DRIVER;
-  const cert = MOCK_CERTIFICATE;
+export default async function PortalCertificatePage() {
+  const session = await getSession();
+
+  let driverName = "Driver";
+  let programmeName = "The Professional Truck Driver Programme";
+  let certNumber = "";
+  let issuedDate = "";
+  let isComplete = false;
+
+  if (session) {
+    const { data: driver } = await supabaseAdmin
+      .from("drivers")
+      .select("id, first_name, last_name, moodle_user_id")
+      .eq("id", session.driverId)
+      .single();
+
+    const { data: enrolment } = await supabaseAdmin
+      .from("enrolments")
+      .select("programme_slug")
+      .eq("driver_id", session.driverId)
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    driverName = driver?.first_name ?? session.firstName ?? "Driver";
+
+    if (driver?.moodle_user_id && enrolment?.programme_slug) {
+      const canonicalSlug = normalizeProgrammeSlug(enrolment.programme_slug);
+      programmeName =
+        canonicalSlug === "professional-truck-driver"
+          ? "The Professional Truck Driver Programme"
+          : "Eco-Driver Training";
+
+      try {
+        isComplete = await moodleIsCourseComplete({
+          moodleUserId: driver.moodle_user_id,
+          programmeSlug: canonicalSlug,
+        });
+      } catch {
+        // ignore
+      }
+    }
+
+    if (isComplete) {
+      const { data: cert } = await supabaseAdmin
+        .from("certifications")
+        .select("certificate_number, issued_at")
+        .eq("driver_id", session.driverId)
+        .eq("status", "active")
+        .order("issued_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (cert) {
+        certNumber = cert.certificate_number;
+        issuedDate = cert.issued_at
+          ? new Date(cert.issued_at).toLocaleDateString("en-ZA", {
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })
+          : "";
+      }
+    }
+  }
 
   return (
     <div className="page-content">
-      <div className="mock-banner" style={{ marginBottom: "1.5rem" }}>
-        MOCK DATA — Asif to connect live Supabase certifications query
-      </div>
       <TranslatedPageHeader pageKey="certificate" />
 
       {/* Congratulations banner */}
@@ -41,10 +96,12 @@ export default function PortalCertificatePage() {
         <Award size={32} style={{ color: "#F59E0B", flexShrink: 0 }} />
         <div>
           <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 700, fontSize: "1.0625rem", color: "#F9FAFB", margin: "0 0 0.25rem" }}>
-            Congratulations, {driver.name.split(" ")[0]}!
+            {isComplete ? `Congratulations, ${driverName}!` : `Hi, ${driverName}`}
           </p>
           <p style={{ color: "#9CA3AF", fontSize: "0.875rem", margin: 0 }}>
-            You have completed the {cert.programmeName} and earned your professional certification.
+            {isComplete
+              ? `You have completed the ${programmeName} and earned your professional certification.`
+              : `Complete the ${programmeName} to earn your professional certification.`}
           </p>
         </div>
       </div>
@@ -81,18 +138,18 @@ export default function PortalCertificatePage() {
             Certificate of Completion
           </p>
           <h2 style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 800, fontSize: "1.375rem", color: "#F9FAFB", marginBottom: "0.375rem" }}>
-            {driver.name}
+            {driverName}
           </h2>
           <p style={{ color: "#9CA3AF", fontSize: "0.9rem" }}>has successfully completed</p>
           <h3 style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 700, fontSize: "1.125rem", color: "#F59E0B", marginBottom: "0.375rem" }}>
-            {cert.programmeName}
+            {programmeName}
           </h3>
-          <p style={{ color: "#6B7280", fontSize: "0.875rem" }}>Issued {cert.issuedDate}</p>
+          <p style={{ color: "#6B7280", fontSize: "0.875rem" }}>{issuedDate ? `Issued ${issuedDate}` : "Pending completion"}</p>
         </div>
         <div style={{ borderTop: "1px solid #2d3a4f", paddingTop: "1.25rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <p style={{ fontSize: "0.75rem", color: "#6B7280", margin: "0 0 0.125rem" }}>Certificate number</p>
-            <p style={{ fontFamily: "monospace", fontSize: "0.875rem", color: "#9CA3AF", margin: 0 }}>{cert.certNumber}</p>
+            <p style={{ fontFamily: "monospace", fontSize: "0.875rem", color: "#9CA3AF", margin: 0 }}>{certNumber || "—"}</p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
             <CheckCircle2 size={16} style={{ color: "#10B981" }} />

@@ -46,7 +46,23 @@ const MOODLE_TOKEN = process.env.MOODLE_TOKEN ?? "";
 export const MOODLE_COURSE_IDS: Record<string, number> = {
   "professional-truck-driver": parseInt(process.env.MOODLE_DRIVER_PROGRAMME_COURSE_ID ?? "0"),
   "eco-driver": parseInt(process.env.MOODLE_ECO_DRIVER_COURSE_ID ?? "0"),
+  // Aliases used in the database and invitations
+  "ptdp": parseInt(process.env.MOODLE_DRIVER_PROGRAMME_COURSE_ID ?? "0"),
+  "p1": parseInt(process.env.MOODLE_DRIVER_PROGRAMME_COURSE_ID ?? "0"),
+  "p2": parseInt(process.env.MOODLE_ECO_DRIVER_COURSE_ID ?? "0"),
 };
+
+/** Normalize a programme slug to a canonical Moodle key */
+export function normalizeProgrammeSlug(slug: string): "professional-truck-driver" | "eco-driver" {
+  const map: Record<string, "professional-truck-driver" | "eco-driver"> = {
+    "ptdp": "professional-truck-driver",
+    "p1": "professional-truck-driver",
+    "professional-truck-driver": "professional-truck-driver",
+    "eco-driver": "eco-driver",
+    "p2": "eco-driver",
+  };
+  return map[slug] ?? "professional-truck-driver";
+}
 
 function moodleUrl(fn: string, params: Record<string, string | number> = {}): string {
   const base = `${MOODLE_URL}/webservice/rest/server.php`;
@@ -286,32 +302,47 @@ export async function moodleIsCourseComplete(params: {
 // ─── SSO / Deep Link ──────────────────────────────────────────────────────────
 
 /**
- * MOODLE_STUB: Generate a direct deep-link URL into a specific Moodle course.
- * Used by Driver University to launch the actual Moodle course content.
+ * Generate a signed auto-login URL that a small PHP script on the Moodle server
+ * can verify, then log the user in programmatically and redirect to the target
+ * course module. This removes the need for the driver to manually log into Moodle.
  *
- * Two options for Asif:
+ * SETUP (Asif / Moodle admin):
+ *   1. Copy docs/moodle-autologin.php to your Moodle server at:
+ *      {moodle_root}/local/betterdriver/autologin.php
+ *   2. Set the same secret in both places:
+ *      - BetterDriver .env.local: MOODLE_AUTOLOGIN_SECRET=... (min 32 chars)
+ *      - PHP script: $SHARED_SECRET = '...';
+ *   3. In Moodle: Site Admin → Security → HTTP security → Allow frame embedding → ON
  *
- * OPTION A — Moodle iframe embed (recommended for seamless UX):
- *   Embed the Moodle course page in an iframe within the BD portal.
- *   Requires Moodle to allow iframe embedding:
- *     Site Admin → Security → HTTP security → Allow frame embedding → ON
- *   URL: {MOODLE_URL}/course/view.php?id={courseId}
- *   The driver must be logged into Moodle — use the auto-login token approach below.
- *
- * OPTION B — Moodle auto-login token (for redirect):
- *   Generate a one-time auto-login token for the driver, then redirect to Moodle.
- *   Moodle API: auth_token_request_token (requires auth_token plugin)
- *   OR use the built-in ?logintoken= approach if Moodle version supports it.
- *
- * SIMPLEST APPROACH for Asif:
- *   Use Moodle's "Auto-login" feature with a shared secret:
- *   Site Admin → Plugins → Authentication → Manage authentication → Auto-login key
- *   Then construct: {MOODLE_URL}/login/token.php?username={username}&password={password}&service=moodle_mobile_app
- *   And redirect to: {MOODLE_URL}/course/view.php?id={courseId}
+ * The token is a short-lived JWT (5 minutes) signed with the shared secret.
  */
+const AUTOLOGIN_SECRET = new TextEncoder().encode(
+  process.env.MOODLE_AUTOLOGIN_SECRET ?? ""
+);
+
+export async function generateMoodleAutoLoginUrl(params: {
+  moodleUserId: number;
+  redirectUrl: string;
+}): Promise<string | null> {
+  if (!MOODLE_URL || !AUTOLOGIN_SECRET.byteLength) return null;
+
+  const { SignJWT } = await import("jose");
+  const token = await new SignJWT({
+    uid: params.moodleUserId,
+    redirect: params.redirectUrl,
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("5m")
+    .sign(AUTOLOGIN_SECRET);
+
+  const scriptUrl = `${MOODLE_URL}/local/betterdriver/autologin.php`;
+  const qs = new URLSearchParams({ token, redirect: params.redirectUrl });
+  return `${scriptUrl}?${qs.toString()}`;
+}
+
 export function moodleCourseUrl(programmeSlug: "professional-truck-driver" | "eco-driver"): string {
   const courseId = MOODLE_COURSE_IDS[programmeSlug];
-  // MOODLE_STUB: Replace with actual course URL construction
   return `${MOODLE_URL}/course/view.php?id=${courseId}`;
 }
 

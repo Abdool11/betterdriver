@@ -1,31 +1,63 @@
 import { Metadata } from "next";
-import Link from "next/link";
-import { MOCK_CPD_RECORDS } from "@/lib/constants";
-import { AlertTriangle, Clock, CheckCircle2, ArrowRight } from "lucide-react";
+import { getSession } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase";
+import { AlertTriangle, Clock, CheckCircle2 } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
 
 export const dynamic = "force-dynamic";
 
-
-// DATA REQUIREMENTS:
-// - cpdRecords: CpdRecord[] — Supabase: SELECT * FROM cpd_records WHERE driver_id = ? ORDER BY due_date DESC
-// - CpdRecord status values: 'urgent' | 'upcoming' | 'completed' | 'overdue'
-// TODO: Asif — replace mock data with live Supabase query
-
 export const metadata: Metadata = { title: "CPD & Refresh" };
 
-export default function CpdPage() {
-  const records = MOCK_CPD_RECORDS;
-  const urgent = records.filter((r) => r.status === "urgent");
-  const upcoming = records.filter((r) => r.status === "upcoming");
-  const completed = records.filter((r) => r.status === "completed");
+export default async function CpdPage() {
+  const session = await getSession();
+  let urgent: { id: string; title: string; dueDate: string }[] = [];
+  let upcoming: { id: string; title: string; dueDate: string }[] = [];
+  let completed: { id: string; title: string; completedAt: string }[] = [];
+
+  if (session) {
+    const { data: rows } = await supabaseAdmin
+      .from("cpd_records")
+      .select("id, module_title, completed_at")
+      .eq("driver_id", session.driverId)
+      .order("completed_at", { ascending: false });
+
+    if (rows) {
+      completed = rows.map((r) => ({
+        id: r.id,
+        title: r.module_title ?? "CPD Module",
+        completedAt: r.completed_at
+          ? new Date(r.completed_at).toLocaleDateString("en-ZA", {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })
+          : "",
+      }));
+    }
+  }
 
   return (
     <div className="page-content">
-      <div className="mock-banner" style={{ marginBottom: "1.5rem" }}>
-        MOCK DATA — Asif to connect live Supabase CPD records
-      </div>
       <TranslatedPageHeader pageKey="cpd" />
+
+      {urgent.length === 0 && upcoming.length === 0 && completed.length === 0 && (
+        <div
+          style={{
+            background: "#1C2333",
+            border: "1px solid #2d3a4f",
+            borderRadius: "1rem",
+            padding: "1.5rem",
+            textAlign: "center",
+          }}
+        >
+          <p style={{ fontSize: "0.9375rem", color: "#9CA3AF", margin: "0 0 0.5rem" }}>
+            No CPD records yet.
+          </p>
+          <p style={{ fontSize: "0.8125rem", color: "#6B7280", margin: 0 }}>
+            Complete your programme to unlock CPD tracking.
+          </p>
+        </div>
+      )}
 
       {/* Urgent / action required */}
       {urgent.length > 0 && (
@@ -58,25 +90,6 @@ export default function CpdPage() {
                 </p>
                 <p style={{ fontSize: "0.8125rem", color: "#9CA3AF", margin: 0 }}>Due {r.dueDate}</p>
               </div>
-              <Link
-                href="/portal/cpd"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.375rem",
-                  background: "#F59E0B",
-                  color: "#111827",
-                  fontFamily: "var(--font-dm-sans), sans-serif",
-                  fontWeight: 700,
-                  fontSize: "0.8125rem",
-                  padding: "0.5rem 1rem",
-                  borderRadius: "0.625rem",
-                  textDecoration: "none",
-                  flexShrink: 0,
-                }}
-              >
-                Start now <ArrowRight size={14} />
-              </Link>
             </div>
           ))}
         </div>
@@ -134,8 +147,8 @@ export default function CpdPage() {
                 <p style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 600, fontSize: "0.9rem", color: "#F9FAFB", margin: "0 0 0.125rem" }}>
                   {r.title}
                 </p>
-                {"completedAt" in r && (
-                  <p style={{ fontSize: "0.8125rem", color: "#6B7280", margin: 0 }}>Completed {String(r.completedAt)}</p>
+                {r.completedAt && (
+                  <p style={{ fontSize: "0.8125rem", color: "#6B7280", margin: 0 }}>Completed {r.completedAt}</p>
                 )}
               </div>
               <span className="pill pill-green" style={{ fontSize: "0.6875rem" }}>
