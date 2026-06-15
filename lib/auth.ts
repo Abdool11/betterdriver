@@ -192,7 +192,7 @@ export async function resolveInvitationToken(opaqueToken: string): Promise<
     .select(`
       id, token, driver_id, company_id,
       expires_at, first_accessed_at, revoked_at,
-      programme_slug,
+      program_assignment,
       drivers ( id, full_name, email, phone, activation_status, profile_complete, language_preference ),
       companies ( id, name )
     `)
@@ -230,7 +230,7 @@ export async function resolveInvitationToken(opaqueToken: string): Promise<
     lastName,
     role: "driver",
     fleetId: (company?.id as string) ?? undefined,
-    programAssignment: (invitation.programme_slug as "p1" | "p2" | "p1_p2") ?? "p1",
+    programAssignment: (invitation.program_assignment as "p1" | "p2" | "p1_p2") ?? "p1",
     cohortId: undefined, // No cohort_id in this schema
     campaignExpiry: invitation.expires_at ?? undefined,
     languagePreference: (driver?.language_preference as string) ?? "en",
