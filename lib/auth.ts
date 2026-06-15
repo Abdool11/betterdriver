@@ -193,7 +193,7 @@ export async function resolveInvitationToken(opaqueToken: string): Promise<
       id, token, driver_id, company_id,
       expires_at, first_accessed_at, revoked_at,
       program_assignment,
-      drivers ( id, full_name, email, phone, activation_status, profile_complete, language_preference ),
+      drivers ( id, first_name, last_name, email, mobile, activation_status, profile_complete, language_preference ),
       companies ( id, name )
     `)
     .eq("token", opaqueToken)
@@ -218,10 +218,8 @@ export async function resolveInvitationToken(opaqueToken: string): Promise<
       .eq("id", invitation.driver_id);
   }
 
-  // Split full_name into firstName/lastName for the session interface
-  const fullName = (driver?.full_name as string) ?? "";
-  const [firstName = "", ...lastNameParts] = fullName.split(" ");
-  const lastName = lastNameParts.join(" ");
+  const firstName = (driver?.first_name as string) ?? "";
+  const lastName = (driver?.last_name as string) ?? "";
 
   const session: DriverSession = {
     driverId: invitation.driver_id,
