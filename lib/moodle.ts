@@ -42,6 +42,14 @@
 const MOODLE_URL = process.env.MOODLE_URL ?? "";
 const MOODLE_TOKEN = process.env.MOODLE_TOKEN ?? "";
 
+function checkMoodleConfig() {
+  if (!MOODLE_URL || !MOODLE_TOKEN) {
+    throw new Error(
+      "[Moodle] Not configured — MOODLE_URL and/or MOODLE_TOKEN environment variables are missing."
+    );
+  }
+}
+
 /** Map BD programme slugs to Moodle course IDs */
 export const MOODLE_COURSE_IDS: Record<string, number> = {
   "professional-truck-driver": parseInt(process.env.MOODLE_DRIVER_PROGRAMME_COURSE_ID ?? "0"),
@@ -65,6 +73,7 @@ export function normalizeProgrammeSlug(slug: string): "professional-truck-driver
 }
 
 function moodleUrl(fn: string, params: Record<string, string | number> = {}): string {
+  checkMoodleConfig();
   const base = `${MOODLE_URL}/webservice/rest/server.php`;
   const qs = new URLSearchParams({
     wstoken: MOODLE_TOKEN,
@@ -127,6 +136,7 @@ export async function moodleCreateUser(params: {
   lastname: string;
   email: string;
 }): Promise<{ id: number; username: string }> {
+  checkMoodleConfig();
   const body = new URLSearchParams({
     wstoken: MOODLE_TOKEN,
     wsfunction: "core_user_create_users",
@@ -181,6 +191,7 @@ export async function moodleEnrolUser(params: {
   moodleUserId: number;
   programmeSlug: "professional-truck-driver" | "eco-driver";
 }): Promise<boolean> {
+  checkMoodleConfig();
   const courseId = MOODLE_COURSE_IDS[params.programmeSlug];
   if (!courseId) {
     console.error(`[Moodle] No course ID configured for programme: ${params.programmeSlug}`);
@@ -364,6 +375,7 @@ export async function moodleEnrolInCPD(params: {
   moodleUserId: number;
   cpdMoodleCourseId: number;
 }): Promise<boolean> {
+  checkMoodleConfig();
   const body = new URLSearchParams({
     wstoken: MOODLE_TOKEN,
     wsfunction: "enrol_manual_enrol_users",
