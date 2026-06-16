@@ -8,7 +8,7 @@ interface Props {
 }
 
 export default function MoodleIframe({ moduleUrl, moduleName }: Props) {
-  const [src, setSrc] = useState<string>(moduleUrl);
+  const [src, setSrc] = useState<string>("");
   const [status, setStatus] = useState<"loading" | "autologin" | "fallback">("loading");
 
   useEffect(() => {
@@ -23,10 +23,14 @@ export default function MoodleIframe({ moduleUrl, moduleName }: Props) {
           setSrc(data.url);
           setStatus("autologin");
         } else {
+          setSrc(moduleUrl);
           setStatus("fallback");
         }
       })
-      .catch(() => setStatus("fallback"));
+      .catch(() => {
+        setSrc(moduleUrl);
+        setStatus("fallback");
+      });
   }, [moduleUrl]);
 
   return (
@@ -54,7 +58,6 @@ export default function MoodleIframe({ moduleUrl, moduleName }: Props) {
             border: "none",
           }}
           allow="fullscreen; autoplay"
-          sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
         />
       </div>
       {status === "loading" && (

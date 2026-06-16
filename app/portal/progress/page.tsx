@@ -61,7 +61,7 @@ export default async function ProgressPage() {
             status = "in_progress";
             foundIncomplete = true;
           } else {
-            status = "locked";
+            status = "available";
           }
 
           return { id: String(mod.id), name: mod.name, status };

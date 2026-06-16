@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
       status = "in_progress";
       foundIncomplete = true;
     } else {
-      status = "locked";
+      status = "available";
     }
 
     return {

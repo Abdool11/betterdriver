@@ -73,7 +73,7 @@ export default async function CoursePage() {
             status = "in_progress";
             foundIncomplete = true;
           } else {
-            status = "locked";
+            status = "available";
           }
 
           return {
