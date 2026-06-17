@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { moodleGetCourseModules, normalizeProgrammeSlug } from "@/lib/moodle";
-import { CheckCircle2, Clock, PlayCircle, ArrowRight, Lock } from "lucide-react";
+import { CheckCircle2, Clock, PlayCircle, ArrowRight } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +23,7 @@ export default async function CoursePage() {
   let mappedModules: {
     id: string;
     name: string;
-    status: "completed" | "in_progress" | "available" | "locked";
+    status: "completed" | "in_progress" | "available";
     url?: string;
     order: number;
   }[] = [];
@@ -64,7 +64,7 @@ export default async function CoursePage() {
           const isComplete = mod.completionstate === 1 || mod.completionstate === 2;
           const isFail = mod.completionstate === 3;
 
-          let status: "completed" | "in_progress" | "available" | "locked" = "locked";
+          let status: "completed" | "in_progress" | "available" = "available";
           if (isComplete) {
             status = "completed";
           } else if (isFail) {
@@ -174,12 +174,10 @@ export default async function CoursePage() {
         All modules
       </h2>
       <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
-        {mappedModules.map((mod, i) => {
-          const isLocked = mod.status === "locked";
-          return (
+        {mappedModules.map((mod, i) => (
           <Link
             key={mod.id}
-            href={isLocked ? "#" : `/portal/module/${mod.id}`}
+            href={`/portal/module/${mod.id}`}
             style={{
               background: "#1C2333",
               border: `1px solid ${mod.status === "in_progress" ? "rgba(245,158,11,0.35)" : "#2d3a4f"}`,
@@ -188,10 +186,8 @@ export default async function CoursePage() {
               display: "flex",
               alignItems: "center",
               gap: "1rem",
-              opacity: isLocked ? 0.5 : 1,
-              cursor: isLocked ? "default" : "pointer",
+              cursor: "pointer",
               textDecoration: "none",
-              pointerEvents: isLocked ? "none" : "auto",
             }}
           >
             <div
@@ -216,8 +212,6 @@ export default async function CoursePage() {
                 <CheckCircle2 size={16} style={{ color: "#10B981" }} />
               ) : mod.status === "in_progress" ? (
                 <PlayCircle size={16} style={{ color: "#F59E0B" }} />
-              ) : isLocked ? (
-                <Lock size={14} style={{ color: "#6B7280" }} />
               ) : (
                 <span style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 700, fontSize: "0.75rem", color: "#6B7280" }}>
                   {i + 1}
@@ -229,11 +223,7 @@ export default async function CoursePage() {
                 {mod.name}
               </p>
               <p style={{ fontSize: "0.75rem", color: "#6B7280", margin: 0, display: "flex", alignItems: "center", gap: "0.375rem" }}>
-                {isLocked ? (
-                  "Complete the previous module to unlock this one."
-                ) : (
-                  <><Clock size={12} /> {mod.status === "completed" ? "Done" : "Available"}</>
-                )}
+                <Clock size={12} /> {mod.status === "completed" ? "Done" : "Available"}
               </p>
             </div>
             {mod.status === "in_progress" && (
@@ -246,12 +236,11 @@ export default async function CoursePage() {
                 Done
               </span>
             )}
-            {!isLocked && mod.status !== "completed" && (
+            {mod.status !== "completed" && (
               <ArrowRight size={16} style={{ color: "#6B7280", flexShrink: 0 }} />
             )}
           </Link>
-          );
-        })}
+        ))}
       </div>
     </div>
   );

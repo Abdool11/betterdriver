@@ -15,7 +15,7 @@ export default async function ProgressPage() {
   let progressPercent = 0;
   let completedModulesCount = 0;
   let totalModules = 0;
-  let modules: { id: string; name: string; status: "completed" | "in_progress" | "available" | "locked" }[] = [];
+  let modules: { id: string; name: string; status: "completed" | "in_progress" | "available" }[] = [];
   let cpdDue = false;
 
   if (session) {
@@ -52,7 +52,7 @@ export default async function ProgressPage() {
           const isComplete = mod.completionstate === 1 || mod.completionstate === 2;
           const isFail = mod.completionstate === 3;
 
-          let status: "completed" | "in_progress" | "available" | "locked" = "locked";
+          let status: "completed" | "in_progress" | "available" = "available";
           if (isComplete) {
             status = "completed";
           } else if (isFail) {

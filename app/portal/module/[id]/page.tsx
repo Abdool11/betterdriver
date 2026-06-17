@@ -3,7 +3,7 @@ import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { moodleGetCourseModules, normalizeProgrammeSlug } from "@/lib/moodle";
-import { CheckCircle2, PlayCircle, ArrowRight, ExternalLink } from "lucide-react";
+import { CheckCircle2, PlayCircle, ArrowRight } from "lucide-react";
 import MoodleIframe from "./MoodleIframe";
 
 export const dynamic = "force-dynamic";
@@ -141,37 +141,8 @@ export default async function ModuleLandingPage({
         </div>
       </div>
 
-      {/* Moodle iframe — auto-login via signed JWT */}
+      {/* Moodle iframe — auto-login via signed JWT, with fallback */}
       {moduleUrl && <MoodleIframe moduleUrl={moduleUrl} moduleName={moduleName} />}
-
-      {/* Open in Moodle fallback */}
-      {moduleUrl && (
-        <a
-          href={moduleUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "0.625rem",
-            width: "100%",
-            padding: "1rem 1.5rem",
-            background: "linear-gradient(135deg, #F59E0B, #D97706)",
-            color: "#111827",
-            border: "none",
-            borderRadius: "0.875rem",
-            fontFamily: "var(--font-dm-sans), sans-serif",
-            fontWeight: 700,
-            fontSize: "1rem",
-            textDecoration: "none",
-            cursor: "pointer",
-            marginBottom: "2rem",
-          }}
-        >
-          Open in Moodle <ExternalLink size={16} />
-        </a>
-      )}
 
       {/* Completion status */}
       <div

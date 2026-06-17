@@ -7,7 +7,6 @@ import {
   BookOpen,
   CheckCircle2,
   Clock,
-  Lock,
   PlayCircle,
   ChevronRight,
   Award,
@@ -19,7 +18,7 @@ import {
 interface Module {
   id: string;
   name: string;
-  status: "completed" | "in_progress" | "locked" | "available";
+  status: "completed" | "in_progress" | "available";
   order: number;
   url?: string;
 }
@@ -35,7 +34,6 @@ const statusConfig = {
   completed: { icon: CheckCircle2, color: "var(--success)", label: "Completed", bg: "var(--success-subtle)" },
   in_progress: { icon: PlayCircle, color: "var(--amber)", label: "In Progress", bg: "var(--amber-subtle)" },
   available: { icon: PlayCircle, color: "var(--info)", label: "Start", bg: "var(--info-subtle)" },
-  locked: { icon: Lock, color: "var(--text-muted)", label: "Locked", bg: "rgba(255,255,255,0.04)" },
 };
 
 export default function LearningPage() {
@@ -87,7 +85,7 @@ export default function LearningPage() {
               <p style={{ fontWeight: 700, fontSize: "0.875rem", color: "var(--text-primary)", margin: "0 0 0.25rem" }}>Save data — download on WiFi</p>
               <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: "0 0 0.625rem", lineHeight: 1.5 }}>Download your course materials now while on WiFi so you can study without using mobile data.</p>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                {modules.filter((m: Module) => m.status !== "locked").map((mod: Module) => (
+                {modules.map((mod: Module) => (
                   <button key={mod.id} type="button"
                     style={{ display: "inline-flex", alignItems: "center", gap: "0.375rem", padding: "0.375rem 0.625rem", background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.25)", borderRadius: "0.5rem", color: "#3B82F6", fontSize: "0.75rem", fontWeight: 600, cursor: "pointer" }}
                     onClick={() => alert(`Downloading: ${mod.name}`)}
@@ -168,17 +166,16 @@ export default function LearningPage() {
           {modules.map((mod: Module) => {
             const cfg = statusConfig[mod.status];
             const Icon = cfg.icon;
-            const isClickable = mod.status !== "locked";
 
-            const content = (
+            return (
+              <Link key={mod.id} href={`/portal/module/${mod.id}`} style={{ textDecoration: "none" }}>
               <div
                 className="card"
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: "0.875rem",
-                  opacity: mod.status === "locked" ? 0.55 : 1,
-                  cursor: isClickable ? "pointer" : "default",
+                  cursor: "pointer",
                   transition: "border-color 0.15s",
                   borderLeft: mod.status === "in_progress"
                     ? "3px solid var(--amber)"
@@ -209,7 +206,7 @@ export default function LearningPage() {
                     style={{
                       fontWeight: 600,
                       fontSize: "0.9rem",
-                      color: mod.status === "locked" ? "var(--text-muted)" : "var(--text-primary)",
+                      color: "var(--text-primary)",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
@@ -234,18 +231,8 @@ export default function LearningPage() {
                 {mod.status === "completed" && (
                   <CheckCircle2 size={16} style={{ color: "var(--success)", flexShrink: 0 }} />
                 )}
-                {mod.status === "locked" && (
-                  <Lock size={14} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
-                )}
               </div>
-            );
-
-            return isClickable ? (
-              <Link key={mod.id} href={`/portal/module/${mod.id}`} style={{ textDecoration: "none" }}>
-                {content}
               </Link>
-            ) : (
-              <div key={mod.id}>{content}</div>
             );
           })}
         </div>

@@ -484,6 +484,16 @@ h3 { font-size: clamp(1.125rem, 2.5vw, 1.5rem); }
   min-width: 44px;
 }
 
+/* ─── Spinner Animation ──────────────────────────────────────────────────────── */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
 /* ─── Page Content Padding ────────────────────────────────────────────────────── */
 .page-content {
   padding: 1.25rem;

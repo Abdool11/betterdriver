@@ -63,13 +63,13 @@ export async function GET(req: NextRequest) {
 
   // 3. Map Moodle completion states to UI statuses
   // 0 = incomplete, 1 = complete, 2 = complete (pass), 3 = complete (fail)
-  // We derive "in-progress" / "available" / "locked" from sequential ordering
+  // We derive "in-progress" / "available" from sequential ordering
   let foundIncomplete = false;
   const mappedModules = modules.map((mod, index) => {
     const isComplete = mod.completionstate === 1 || mod.completionstate === 2;
     const isFail = mod.completionstate === 3;
 
-    let status: "completed" | "in_progress" | "available" | "locked" = "locked";
+    let status: "completed" | "in_progress" | "available" = "available";
     if (isComplete) {
       status = "completed";
     } else if (isFail) {
