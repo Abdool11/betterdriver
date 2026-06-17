@@ -45,7 +45,8 @@ export default async function ModuleLandingPage({
       .eq("id", session.driverId)
       .single();
 
-    const { data: enrolment } = await supabaseAdmin
+    // Try active enrolment first, then any enrolment, then fall back to ptdp
+    let { data: enrolment } = await supabaseAdmin
       .from("enrolments")
       .select("programme_slug")
       .eq("driver_id", session.driverId)
@@ -54,13 +55,26 @@ export default async function ModuleLandingPage({
       .limit(1)
       .maybeSingle();
 
+    if (!enrolment?.programme_slug) {
+      const { data: anyEnrolment } = await supabaseAdmin
+        .from("enrolments")
+        .select("programme_slug")
+        .eq("driver_id", session.driverId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (anyEnrolment?.programme_slug) {
+        enrolment = anyEnrolment;
+      }
+    }
+
+    const programmeSlug = enrolment?.programme_slug ?? "ptdp";
+
     if (!driver?.moodle_user_id) {
       loadError = "Your account is not linked to Moodle yet.";
-    } else if (!enrolment?.programme_slug) {
-      loadError = "No active programme enrolment found.";
     } else {
       try {
-        const canonicalSlug = normalizeProgrammeSlug(enrolment.programme_slug);
+        const canonicalSlug = normalizeProgrammeSlug(programmeSlug);
         const modules = await moodleGetCourseModules({
           moodleUserId: driver.moodle_user_id,
           programmeSlug: canonicalSlug,
