@@ -39,7 +39,7 @@
  *   {MOODLE_URL}/webservice/rest/server.php?wstoken={MOODLE_TOKEN}&moodlewsrestformat=json&wsfunction={FUNCTION}
  */
 
-const MOODLE_URL = process.env.MOODLE_URL ?? "";
+export const MOODLE_URL = process.env.MOODLE_URL ?? "";
 const MOODLE_TOKEN = process.env.MOODLE_TOKEN ?? "";
 
 function checkMoodleConfig() {
@@ -111,6 +111,8 @@ export interface MoodleCompletionStatus {
 export interface MoodleModule {
   id: number;
   name: string;
+  modname: string; // e.g. "scorm", "page", "url"
+  instance: number;
   completionstate: number; // 0 = incomplete, 1 = complete
   url?: string;
 }
@@ -287,8 +289,10 @@ export async function moodleGetCourseModules(params: {
       modules.push({
         id: mod.id as number,
         name: mod.name as string,
+        modname: (mod.modname ?? "page") as string,
+        instance: (mod.instance ?? mod.id) as number,
         completionstate: (mod.completiondata?.state ?? 0) as number,
-        url: mod.url as string | undefined,
+        url: (mod.url as string | undefined) || undefined,
       });
     }
   }
