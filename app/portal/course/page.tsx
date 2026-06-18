@@ -82,8 +82,10 @@ export default async function CoursePage() {
             status = "completed";
           } else if (isFail) {
             status = "available";
-          } else if (partialPercent && partialPercent > 0) {
+          } else if (partialPercent && partialPercent > 0 && partialPercent < 100) {
             status = "in_progress";
+          } else if (partialPercent && partialPercent >= 100) {
+            status = "completed";
           } else if (!foundIncomplete) {
             status = "in_progress";
             foundIncomplete = true;
@@ -242,7 +244,7 @@ export default async function CoursePage() {
                 <Clock size={12} />
                 {mod.status === "completed"
                   ? "Done"
-                  : mod.percentWatched
+                  : mod.percentWatched && mod.percentWatched > 0 && mod.percentWatched < 100
                     ? `${mod.percentWatched}% watched`
                     : "Available"}
               </p>
