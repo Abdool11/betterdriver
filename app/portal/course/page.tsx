@@ -26,6 +26,7 @@ export default async function CoursePage() {
     status: "completed" | "in_progress" | "available";
     url?: string;
     order: number;
+    percentWatched?: number;
   }[] = [];
 
   if (session) {
@@ -59,16 +60,30 @@ export default async function CoursePage() {
           programmeSlug: canonicalSlug,
         });
 
+        // Fetch partial progress from BD so we can show "in progress" for
+        // modules that have been started but not yet completed in Moodle.
+        const { data: partialProgress } = await supabaseAdmin
+          .from("driver_module_progress")
+          .select("module_id, percent_watched")
+          .eq("driver_id", session.driverId);
+
+        const partialMap = new Map(
+          (partialProgress ?? []).map((p) => [String(p.module_id), p.percent_watched as number])
+        );
+
         let foundIncomplete = false;
         mappedModules = modules.map((mod, index) => {
           const isComplete = mod.completionstate === 1 || mod.completionstate === 2;
           const isFail = mod.completionstate === 3;
+          const partialPercent = partialMap.get(String(mod.id));
 
           let status: "completed" | "in_progress" | "available" = "available";
           if (isComplete) {
             status = "completed";
           } else if (isFail) {
             status = "available";
+          } else if (partialPercent && partialPercent > 0) {
+            status = "in_progress";
           } else if (!foundIncomplete) {
             status = "in_progress";
             foundIncomplete = true;
@@ -82,6 +97,7 @@ export default async function CoursePage() {
             url: mod.url,
             status,
             order: index + 1,
+            percentWatched: partialPercent,
           };
         });
 
@@ -223,7 +239,12 @@ export default async function CoursePage() {
                 {mod.name}
               </p>
               <p style={{ fontSize: "0.75rem", color: "#6B7280", margin: 0, display: "flex", alignItems: "center", gap: "0.375rem" }}>
-                <Clock size={12} /> {mod.status === "completed" ? "Done" : "Available"}
+                <Clock size={12} />
+                {mod.status === "completed"
+                  ? "Done"
+                  : mod.percentWatched
+                    ? `${mod.percentWatched}% watched`
+                    : "Available"}
               </p>
             </div>
             {mod.status === "in_progress" && (

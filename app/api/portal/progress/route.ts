@@ -23,14 +23,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { moduleId?: string; completed?: boolean };
+  let body: { moduleId?: string; completed?: boolean; percentWatched?: number };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { moduleId, completed } = body;
+  const { moduleId, completed, percentWatched } = body;
   if (!moduleId || typeof completed !== "boolean") {
     return NextResponse.json(
       { error: "moduleId and completed are required" },
@@ -115,6 +115,26 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     console.error("[PROGRESS] Failed to update enrolment:", err);
+  }
+
+  // Upsert partial progress (percent watched) so the course listing can show it
+  if (typeof percentWatched === "number" && percentWatched >= 0 && percentWatched <= 100) {
+    try {
+      await supabaseAdmin
+        .from("driver_module_progress")
+        .upsert(
+          {
+            driver_id: session.driverId,
+            module_id: moduleId,
+            percent_watched: Math.round(percentWatched),
+            last_watched_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: "driver_id,module_id" }
+        );
+    } catch (err) {
+      console.error("[PROGRESS] Failed to upsert module progress:", err);
+    }
   }
 
   // Generate a signed autologin URL so the CLIENT can trigger Moodle's

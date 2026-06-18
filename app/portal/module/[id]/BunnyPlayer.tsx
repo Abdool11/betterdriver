@@ -27,6 +27,7 @@ export default function BunnyPlayer({
   const [phase, setPhase] = useState<"loading" | "ready" | "ended">("loading");
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const markedRef = useRef(false);
+  const lastReportedRef = useRef(0);
 
   useEffect(() => {
     if (phase !== "ready") return;
@@ -57,10 +58,19 @@ export default function BunnyPlayer({
 
         player.on("timeupdate", (data: { seconds: number; duration: number }) => {
           const dur = data.duration || duration;
-          if (dur > 0 && data.seconds / dur >= 0.9 && !markedRef.current) {
-            console.log("[BunnyPlayer] 90% watched — marking complete");
-            markedRef.current = true;
-            markComplete();
+          if (dur > 0) {
+            const percent = (data.seconds / dur) * 100;
+            // Report partial progress every 10 percentage points (throttled)
+            const reportThreshold = Math.floor(percent / 10) * 10;
+            if (reportThreshold > lastReportedRef.current && reportThreshold < 90) {
+              lastReportedRef.current = reportThreshold;
+              reportProgress(percent, false);
+            }
+            if (percent >= 90 && !markedRef.current) {
+              console.log("[BunnyPlayer] 90% watched — marking complete");
+              markedRef.current = true;
+              markComplete();
+            }
           }
         });
       });
@@ -71,12 +81,12 @@ export default function BunnyPlayer({
     };
   }, [phase]);
 
-  async function markComplete() {
+  async function reportProgress(percent: number, completed: boolean) {
     try {
       const res = await fetch("/api/portal/progress", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ moduleId, completed: true }),
+        body: JSON.stringify({ moduleId, completed, percentWatched: Math.round(percent) }),
       });
       if (!res.ok) {
         console.error("[BunnyPlayer] Progress API returned", res.status);
@@ -85,9 +95,9 @@ export default function BunnyPlayer({
       const data = await res.json();
       console.log("[BunnyPlayer] Progress API response:", data);
 
-      // Trigger Moodle's native completion tracking by loading the signed
-      // autologin URL in a hidden iframe (server-side fetch lacks cookies).
-      if (data.moodleUrl && typeof data.moodleUrl === "string") {
+      if (completed && data.moodleUrl && typeof data.moodleUrl === "string") {
+        // Trigger Moodle's native completion tracking by loading the signed
+        // autologin URL in a hidden iframe (server-side fetch lacks user cookies).
         const iframe = document.createElement("iframe");
         iframe.src = data.moodleUrl;
         iframe.style.width = "0";
@@ -97,18 +107,20 @@ export default function BunnyPlayer({
         iframe.style.visibility = "hidden";
         iframe.setAttribute("aria-hidden", "true");
         document.body.appendChild(iframe);
-        // Clean up after 30 seconds — enough time for Moodle to log the view
         setTimeout(() => {
           if (iframe.parentNode) document.body.removeChild(iframe);
         }, 30000);
       }
 
-      onComplete?.();
+      if (completed) onComplete?.();
     } catch (err) {
-      console.error("[BunnyPlayer] Failed to mark complete:", err);
+      console.error("[BunnyPlayer] Failed to report progress:", err);
     }
   }
 
+  async function markComplete() {
+    await reportProgress(100, true);
+  }
   const embedUrl = `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?autoplay=false`;
 
   return (
