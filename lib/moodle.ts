@@ -28,6 +28,12 @@
  *    - core_completion_get_course_completion_status
  *    - core_course_get_contents
  *    - gradereport_user_get_grade_items
+ *    - mod_quiz_get_quizzes_by_courses   (native quiz player)
+ *    - mod_quiz_get_user_attempts        (native quiz player)
+ *    - mod_quiz_start_attempt            (native quiz player)
+ *    - mod_quiz_get_attempt_data         (native quiz player)
+ *    - mod_quiz_process_attempt          (native quiz player)
+ *    - mod_quiz_get_attempt_review       (native quiz player)
  *
  * 4. Add to .env.local:
  *    MOODLE_URL=https://your-moodle-domain.com
@@ -331,7 +337,14 @@ export async function moodleGetCourseModules(params: {
   }
   const modules: MoodleModule[] = [];
   for (const section of sections) {
-    for (const mod of section.modules ?? []) {
+    const sectionModules = (section.modules ?? []).slice().sort((a: any, b: any) => {
+      const aIsQuiz = (a.modname ?? "") === "quiz";
+      const bIsQuiz = (b.modname ?? "") === "quiz";
+      if (aIsQuiz && !bIsQuiz) return 1;
+      if (!aIsQuiz && bIsQuiz) return -1;
+      return 0;
+    });
+    for (const mod of sectionModules) {
       const rawFiles: unknown[] = mod.contents ?? [];
       const files: MoodleFile[] = rawFiles.map((content: any) => ({
         type: (content.type ?? "file") as string,
@@ -384,20 +397,222 @@ export async function moodleGetCourseModules(params: {
   return modules;
 }
 
-/**
- * MOODLE_STUB: Check if a driver has completed their course (for certificate generation).
- * Called by /api/portal/certificate to determine if certificate is ready.
- *
- * Moodle API: gradereport_user_get_grade_items
- * GET ?wsfunction=gradereport_user_get_grade_items&courseid={courseId}&userid={userId}
- */
-export async function moodleIsCourseComplete(params: {
-  moodleUserId: number;
-  programmeSlug: "professional-truck-driver" | "eco-driver";
-}): Promise<boolean> {
-  const progress = await moodleGetProgress(params);
-  return progress.completed;
+// ─── Quiz Support ─────────────────────────────────────────────────────────────
+
+export interface MoodleQuiz {
+  id: number;
+  coursemodule: number;
+  name: string;
+  intro?: string;
+  grade: number;
+  sumgrades: number;
+  attemptallowed: number;
 }
+
+export interface MoodleQuizAttempt {
+  id: number;
+  quiz: number;
+  userid: number;
+  attempt: number;
+  state: "inprogress" | "finished" | "overdue" | "abandoned";
+  sumgrades: number | null;
+  timestart: number;
+  timefinish: number | null;
+}
+
+export interface MoodleQuizQuestion {
+  slot: number;
+  type: string; // e.g. "multichoice", "truefalse", "shortanswer"
+  page: number;
+  html: string; // question text HTML
+  sequencecheck: number;
+  options?: {
+    answers?: { id: number; text: string; fraction: number }[];
+  };
+}
+
+export interface MoodleQuizAttemptData {
+  attempt: MoodleQuizAttempt;
+  questions: MoodleQuizQuestion[];
+}
+
+/**
+ * Fetch quiz metadata for a given course-module ID.
+ * Moodle API: mod_quiz_get_quizzes_by_courses
+ */
+export async function moodleGetQuizForModule(cmid: number): Promise<MoodleQuiz | null> {
+  const url = moodleUrl("mod_quiz_get_quizzes_by_courses", {});
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.exception) {
+    console.error(`[Moodle] mod_quiz_get_quizzes_by_courses failed: ${data.message}`);
+    return null;
+  }
+  const quizzes: MoodleQuiz[] = (data.quizzes ?? []);
+  return quizzes.find((q) => q.coursemodule === cmid) ?? null;
+}
+
+/**
+ * Get a user's attempts on a specific quiz.
+ * Moodle API: mod_quiz_get_user_attempts
+ */
+export async function moodleGetQuizAttempts(
+  quizId: number,
+  userId: number
+): Promise<MoodleQuizAttempt[]> {
+  const url = moodleUrl("mod_quiz_get_user_attempts", { quizid: quizId, userid: userId });
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.exception) {
+    console.error(`[Moodle] mod_quiz_get_user_attempts failed: ${data.message}`);
+    return [];
+  }
+  return (data.attempts ?? []) as MoodleQuizAttempt[];
+}
+
+/**
+ * Start a new quiz attempt for the current user.
+ * Moodle API: mod_quiz_start_attempt
+ */
+export async function moodleStartQuizAttempt(quizId: number): Promise<MoodleQuizAttempt | null> {
+  const body = new URLSearchParams({
+    wstoken: MOODLE_TOKEN,
+    wsfunction: "mod_quiz_start_attempt",
+    moodlewsrestformat: "json",
+    quizid: String(quizId),
+    forcenew: "1",
+  });
+  const res = await fetch(`${MOODLE_URL}/webservice/rest/server.php`, { method: "POST", body });
+  const data = await res.json();
+  if (data.exception) {
+    console.error(`[Moodle] mod_quiz_start_attempt failed: ${data.message}`);
+    return null;
+  }
+  const attempt = (data.attempt ?? null) as MoodleQuizAttempt | null;
+  return attempt;
+}
+
+/**
+ * Fetch questions for an in-progress attempt.
+ * Moodle API: mod_quiz_get_attempt_data
+ */
+export async function moodleGetAttemptData(
+  attemptId: number,
+  page = 0
+): Promise<MoodleQuizAttemptData | null> {
+  const url = moodleUrl("mod_quiz_get_attempt_data", { attemptid: attemptId, page });
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.exception) {
+    console.error(`[Moodle] mod_quiz_get_attempt_data failed: ${data.message}`);
+    return null;
+  }
+
+  const attempt = (data.attempt ?? null) as MoodleQuizAttempt | null;
+  if (!attempt) return null;
+
+  const rawQuestions: any[] = data.questions ?? [];
+  const questions: MoodleQuizQuestion[] = rawQuestions.map((q) => ({
+    slot: q.slot as number,
+    type: q.type as string,
+    page: q.page as number,
+    html: (q.html ?? "") as string,
+    sequencecheck: (q.sequencecheck ?? 0) as number,
+    options: q.type === "multichoice" || q.type === "truefalse"
+      ? {
+          answers: ((q.options?.answers ?? []) as any[]).map((a) => ({
+            id: a.id as number,
+            text: (a.text ?? "") as string,
+            fraction: (a.fraction ?? 0) as number,
+          })),
+        }
+      : undefined,
+  }));
+
+  return { attempt, questions };
+}
+
+/**
+ * Save answers for a quiz attempt.
+ * Moodle API: mod_quiz_process_attempt
+ */
+export async function moodleProcessQuizAttempt(
+  attemptId: number,
+  answers: Record<number, string | number>,
+  sequenceChecks: Record<number, number> = {}
+): Promise<void> {
+  const body = new URLSearchParams({
+    wstoken: MOODLE_TOKEN,
+    wsfunction: "mod_quiz_process_attempt",
+    moodlewsrestformat: "json",
+    attemptid: String(attemptId),
+  });
+
+  let idx = 0;
+  for (const [slot, value] of Object.entries(answers)) {
+    const slotNum = parseInt(slot, 10);
+    const seq = sequenceChecks[slotNum] ?? 1;
+    body.append(`data[${idx}][name]`, `q${attemptId}:${slot}_:sequencecheck`);
+    body.append(`data[${idx}][value]`, String(seq));
+    idx++;
+    body.append(`data[${idx}][name]`, `q${attemptId}:${slot}_answer`);
+    body.append(`data[${idx}][value]`, String(value));
+    idx++;
+  }
+
+  const res = await fetch(`${MOODLE_URL}/webservice/rest/server.php`, { method: "POST", body });
+  const data = await res.json();
+  if (data && data.exception) {
+    throw new Error(`[Moodle] mod_quiz_process_attempt failed: ${data.message}`);
+  }
+}
+
+/**
+ * Finish (submit) a quiz attempt.
+ * Moodle API: mod_quiz_process_attempt with finishattempt=1
+ */
+export async function moodleSubmitQuizAttempt(attemptId: number): Promise<MoodleQuizAttempt | null> {
+  const body = new URLSearchParams({
+    wstoken: MOODLE_TOKEN,
+    wsfunction: "mod_quiz_process_attempt",
+    moodlewsrestformat: "json",
+    attemptid: String(attemptId),
+    finishattempt: "1",
+  });
+
+  const res = await fetch(`${MOODLE_URL}/webservice/rest/server.php`, { method: "POST", body });
+  const data = await res.json();
+  if (data && data.exception) {
+    console.error(`[Moodle] mod_quiz_process_attempt (finish) failed: ${data.message}`);
+    return null;
+  }
+  // Moodle returns the updated attempt object directly or nested
+  const attempt = (data.attempt ?? data) as MoodleQuizAttempt | null;
+  return attempt;
+}
+
+/**
+ * Review a finished attempt to see score / feedback.
+ * Moodle API: mod_quiz_get_attempt_review
+ */
+export async function moodleGetAttemptReview(attemptId: number): Promise<{
+  attempt: MoodleQuizAttempt;
+  grade: number | null;
+} | null> {
+  const url = moodleUrl("mod_quiz_get_attempt_review", { attemptid: attemptId });
+  const res = await fetch(url);
+  const data = await res.json();
+  if (data.exception) {
+    console.error(`[Moodle] mod_quiz_get_attempt_review failed: ${data.message}`);
+    return null;
+  }
+  const attempt = (data.attempt ?? null) as MoodleQuizAttempt | null;
+  const grade = (data.grade ?? null) as number | null;
+  if (!attempt) return null;
+  return { attempt, grade };
+}
+
+// ─── CPD Modules ──────────────────────────────────────────────────────────────
 
 // ─── SSO / Deep Link ──────────────────────────────────────────────────────────
 

@@ -6,6 +6,7 @@ import { moodleGetCourseModules, normalizeProgrammeSlug, MOODLE_URL } from "@/li
 import { CheckCircle2, PlayCircle, ArrowRight, AlertCircle } from "lucide-react";
 import MoodleIframe from "./MoodleIframe";
 import BunnyPlayer from "./BunnyPlayer";
+import QuizPlayer from "./QuizPlayer";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,7 @@ export default async function ModuleLandingPage({
   let loadError = "";
   let bunnyVideoId = "";
   let bunnyLibraryId = "";
+  let modName = "";
 
   if (!session) {
     loadError = "Please sign in to view this module.";
@@ -93,6 +95,7 @@ export default async function ModuleLandingPage({
           } else {
             const mod = modules[modIndex];
             moduleName = mod.name;
+            modName = mod.modname;
             moduleIndex = modIndex;
             isComplete = mod.completionstate === 1 || mod.completionstate === 2;
             bunnyVideoId = mod.bunnyVideoId ?? "";
@@ -126,7 +129,7 @@ export default async function ModuleLandingPage({
     }
   }
 
-  const hasData = moduleIndex >= 0 && (moduleUrl || bunnyVideoId);
+  const hasData = moduleIndex >= 0 && (moduleUrl || bunnyVideoId || modName === "quiz");
 
   return (
     <div className="page-content">
@@ -237,8 +240,13 @@ export default async function ModuleLandingPage({
         />
       )}
 
+      {/* Native quiz player — when module is a Moodle quiz */}
+      {modName === "quiz" && !bunnyVideoId && (
+        <QuizPlayer moduleId={id} moduleName={moduleName || "Quiz"} />
+      )}
+
       {/* Moodle iframe fallback — when no Bunny video or as secondary option */}
-      {!bunnyVideoId && moduleUrl && (
+      {!bunnyVideoId && modName !== "quiz" && moduleUrl && (
         <MoodleIframe moduleUrl={moduleUrl} moduleName={moduleName || "Module"} />
       )}
 
