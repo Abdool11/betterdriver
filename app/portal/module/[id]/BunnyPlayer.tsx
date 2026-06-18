@@ -39,7 +39,9 @@ export default function BunnyPlayer({
       const player = new window.playerjs.Player(iframeRef.current);
 
       player.on("ready", () => {
+        console.log("[BunnyPlayer] Player ready");
         player.on("ended", () => {
+          console.log("[BunnyPlayer] Video ended");
           setPhase("ended");
           if (!markedRef.current) {
             markedRef.current = true;
@@ -56,6 +58,7 @@ export default function BunnyPlayer({
         player.on("timeupdate", (data: { seconds: number; duration: number }) => {
           const dur = data.duration || duration;
           if (dur > 0 && data.seconds / dur >= 0.9 && !markedRef.current) {
+            console.log("[BunnyPlayer] 90% watched — marking complete");
             markedRef.current = true;
             markComplete();
           }
@@ -70,11 +73,36 @@ export default function BunnyPlayer({
 
   async function markComplete() {
     try {
-      await fetch("/api/portal/progress", {
+      const res = await fetch("/api/portal/progress", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ moduleId, completed: true }),
       });
+      if (!res.ok) {
+        console.error("[BunnyPlayer] Progress API returned", res.status);
+        return;
+      }
+      const data = await res.json();
+      console.log("[BunnyPlayer] Progress API response:", data);
+
+      // Trigger Moodle's native completion tracking by loading the signed
+      // autologin URL in a hidden iframe (server-side fetch lacks cookies).
+      if (data.moodleUrl && typeof data.moodleUrl === "string") {
+        const iframe = document.createElement("iframe");
+        iframe.src = data.moodleUrl;
+        iframe.style.width = "0";
+        iframe.style.height = "0";
+        iframe.style.border = "none";
+        iframe.style.position = "absolute";
+        iframe.style.visibility = "hidden";
+        iframe.setAttribute("aria-hidden", "true");
+        document.body.appendChild(iframe);
+        // Clean up after 30 seconds — enough time for Moodle to log the view
+        setTimeout(() => {
+          if (iframe.parentNode) document.body.removeChild(iframe);
+        }, 30000);
+      }
+
       onComplete?.();
     } catch (err) {
       console.error("[BunnyPlayer] Failed to mark complete:", err);

@@ -5,6 +5,7 @@ import {
   moodleGetCourseModules,
   normalizeProgrammeSlug,
   MOODLE_URL,
+  generateMoodleAutoLoginUrl,
 } from "@/lib/moodle";
 
 export const dynamic = "force-dynamic";
@@ -116,15 +117,19 @@ export async function POST(req: NextRequest) {
     console.error("[PROGRESS] Failed to update enrolment:", err);
   }
 
-  // Trigger Moodle completion by simulating a page view
-  if (foundModule && moduleUrl) {
+  // Generate a signed autologin URL so the CLIENT can trigger Moodle's
+  // native completion tracking (server-side fetches lack user cookies).
+  let moodleAutoLoginUrl: string | null = null;
+  if (foundModule && moduleUrl && driver.moodle_user_id) {
     try {
-      // Fire-and-forget: visit the page server-side
-      await fetch(moduleUrl, { method: "HEAD", redirect: "follow" });
+      moodleAutoLoginUrl = await generateMoodleAutoLoginUrl({
+        moodleUserId: driver.moodle_user_id,
+        redirectUrl: moduleUrl,
+      });
     } catch (err) {
-      console.error("[PROGRESS] Moodle view simulation failed:", err);
+      console.error("[PROGRESS] Failed to generate autologin URL:", err);
     }
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({ success: true, moodleUrl: moodleAutoLoginUrl });
 }
