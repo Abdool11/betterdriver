@@ -103,4 +103,8 @@ if (!$user) {
 }
 
 complete_user_login($user);
-redirect($redirect);
+
+// Use a raw Location header instead of Moodle's redirect() to make sure the
+// query string (e.g. ?id=123) is preserved exactly.
+header('Location: ' . $redirect, true, 302);
+exit;
