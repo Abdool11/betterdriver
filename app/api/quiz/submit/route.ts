@@ -25,14 +25,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { attemptId?: number; answers?: Record<string, string | number>; cmid?: string };
+  let body: {
+    attemptId?: number;
+    answers?: Record<string, string | number>;
+    sequenceChecks?: Record<string, number>;
+    cmid?: string;
+  };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { attemptId, answers, cmid } = body;
+  const { attemptId, answers, cmid, sequenceChecks } = body;
   if (!attemptId || typeof attemptId !== "number" || !answers || typeof answers !== "object") {
     return NextResponse.json(
       { error: "attemptId and answers are required" },
@@ -40,6 +45,14 @@ export async function POST(req: NextRequest) {
     );
   }
   const moduleCmid = typeof cmid === "string" ? cmid : String(attemptId);
+
+  // Normalize sequenceChecks to numeric keys
+  const seqMap: Record<number, number> = {};
+  if (sequenceChecks && typeof sequenceChecks === "object") {
+    for (const [k, v] of Object.entries(sequenceChecks)) {
+      seqMap[parseInt(k, 10)] = v;
+    }
+  }
 
   // Fetch driver
   const { data: driver, error: driverErr } = await supabaseAdmin
@@ -54,7 +67,7 @@ export async function POST(req: NextRequest) {
 
   // Save answers
   try {
-    await moodleProcessQuizAttempt(attemptId, answers);
+    await moodleProcessQuizAttempt(attemptId, answers, seqMap);
   } catch (err: any) {
     console.error("[QUIZ_SUBMIT] Failed to process answers:", err.message);
     return NextResponse.json(

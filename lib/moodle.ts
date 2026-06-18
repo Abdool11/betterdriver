@@ -612,6 +612,21 @@ export async function moodleGetAttemptReview(attemptId: number): Promise<{
   return { attempt, grade };
 }
 
+/**
+ * MOODLE_STUB: Check if a driver has completed their course (for certificate generation).
+ * Called by /api/portal/certificate to determine if certificate is ready.
+ *
+ * Moodle API: gradereport_user_get_grade_items
+ * GET ?wsfunction=gradereport_user_get_grade_items&courseid={courseId}&userid={userId}
+ */
+export async function moodleIsCourseComplete(params: {
+  moodleUserId: number;
+  programmeSlug: "professional-truck-driver" | "eco-driver";
+}): Promise<boolean> {
+  const progress = await moodleGetProgress(params);
+  return progress.completed;
+}
+
 // ─── CPD Modules ──────────────────────────────────────────────────────────────
 
 // ─── SSO / Deep Link ──────────────────────────────────────────────────────────

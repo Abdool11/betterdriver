@@ -43,6 +43,7 @@ export default function QuizPlayer({ moduleId, moduleName, onComplete }: Props) 
   const [phase, setPhase] = useState<"loading" | "ready" | "review" | "error">("loading");
   const [quiz, setQuiz] = useState<QuizData | null>(null);
   const [answers, setAnswers] = useState<Record<number, string>>({});
+  const [sequenceChecks, setSequenceChecks] = useState<Record<number, number>>({});
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ passed: boolean; grade: number } | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
@@ -67,6 +68,14 @@ export default function QuizPlayer({ moduleId, moduleName, onComplete }: Props) 
         });
         setPhase("review");
       } else {
+        // Cache sequencecheck values from Moodle for each slot
+        const seqMap: Record<number, number> = {};
+        (data.questions ?? []).forEach((q: any) => {
+          if (typeof q.slot === "number" && typeof q.sequencecheck === "number") {
+            seqMap[q.slot] = q.sequencecheck;
+          }
+        });
+        setSequenceChecks(seqMap);
         setPhase("ready");
       }
     } catch (err) {
@@ -97,9 +106,13 @@ export default function QuizPlayer({ moduleId, moduleName, onComplete }: Props) 
 
     // Build numeric answers keyed by slot
     const payloadAnswers: Record<string, string | number> = {};
+    const payloadSeq: Record<string, number> = {};
     for (const [slot, value] of Object.entries(answers)) {
       const num = parseInt(slot, 10);
       payloadAnswers[num] = value;
+      if (sequenceChecks[num] !== undefined) {
+        payloadSeq[num] = sequenceChecks[num];
+      }
     }
 
     try {
@@ -109,6 +122,7 @@ export default function QuizPlayer({ moduleId, moduleName, onComplete }: Props) 
         body: JSON.stringify({
           attemptId: quiz.attempt.id,
           answers: payloadAnswers,
+          sequenceChecks: payloadSeq,
           cmid: moduleId,
         }),
       });
