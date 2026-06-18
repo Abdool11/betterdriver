@@ -39,14 +39,17 @@ export async function GET(
     .single();
 
   if (driverErr || !driver || !driver.moodle_user_id) {
+    console.error(`[QUIZ_API] Driver not linked. driverId=${session.driverId}`, driverErr);
     return NextResponse.json({ error: "Driver not linked to Moodle" }, { status: 404 });
   }
 
   // Get quiz metadata for this course module
   const quiz = await moodleGetQuizForModule(cmid);
   if (!quiz) {
+    console.error(`[QUIZ_API] Quiz not found for cmid=${cmid}`);
     return NextResponse.json({ error: "Quiz not found for this module" }, { status: 404 });
   }
+  console.log(`[QUIZ_API] Found quiz id=${quiz.id} name="${quiz.name}" for cmid=${cmid}`);
 
   const retry = req.nextUrl.searchParams.get("retry") === "1";
 

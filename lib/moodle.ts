@@ -449,7 +449,13 @@ export async function moodleGetQuizForModule(cmid: number): Promise<MoodleQuiz |
     return null;
   }
   const quizzes: MoodleQuiz[] = (data.quizzes ?? []);
-  return quizzes.find((q) => q.coursemodule === cmid) ?? null;
+  console.log(`[Moodle] mod_quiz_get_quizzes_by_courses returned ${quizzes.length} quizzes. Looking for cmid=${cmid}`);
+  // Moodle returns coursemodule as a string; coerce to number for comparison
+  const quiz = quizzes.find((q) => Number(q.coursemodule) === cmid) ?? null;
+  if (!quiz) {
+    console.warn(`[Moodle] No quiz found with coursemodule=${cmid}. Available coursemodules: ${quizzes.map((q) => q.coursemodule).join(", ")}`);
+  }
+  return quiz;
 }
 
 /**
