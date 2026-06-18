@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { moodleGetCourseModules, normalizeProgrammeSlug, MOODLE_URL } from "@/lib/moodle";
 import { CheckCircle2, PlayCircle, ArrowRight, AlertCircle } from "lucide-react";
 import MoodleIframe from "./MoodleIframe";
+import BunnyPlayer from "./BunnyPlayer";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,8 @@ export default async function ModuleLandingPage({
   let nextModuleId: string | null = null;
   let prevModuleId: string | null = null;
   let loadError = "";
+  let bunnyVideoId = "";
+  let bunnyLibraryId = "";
 
   if (!session) {
     loadError = "Please sign in to view this module.";
@@ -92,6 +95,8 @@ export default async function ModuleLandingPage({
             moduleName = mod.name;
             moduleIndex = modIndex;
             isComplete = mod.completionstate === 1 || mod.completionstate === 2;
+            bunnyVideoId = mod.bunnyVideoId ?? "";
+            bunnyLibraryId = mod.bunnyLibraryId ?? "";
             // Build a valid module URL:
             // 1. If Moodle provided a URL with an id= param, use it as-is
             // 2. If Moodle provided a URL WITHOUT id=, append ?id={cmid}
@@ -121,7 +126,7 @@ export default async function ModuleLandingPage({
     }
   }
 
-  const hasData = moduleIndex >= 0 && moduleUrl;
+  const hasData = moduleIndex >= 0 && (moduleUrl || bunnyVideoId);
 
   return (
     <div className="page-content">
@@ -222,9 +227,20 @@ export default async function ModuleLandingPage({
         </div>
       )}
 
-      {/* Moodle iframe — always render if we have a URL so the user sees either the
-          embedded content or the in-component fallback when Moodle blocks the iframe */}
-      {moduleUrl && <MoodleIframe moduleUrl={moduleUrl} moduleName={moduleName || "Module"} />}
+      {/* Bunny Stream player — preferred when video data exists */}
+      {bunnyVideoId && bunnyLibraryId && (
+        <BunnyPlayer
+          libraryId={bunnyLibraryId}
+          videoId={bunnyVideoId}
+          moduleId={id}
+          moduleName={moduleName || "Module"}
+        />
+      )}
+
+      {/* Moodle iframe fallback — when no Bunny video or as secondary option */}
+      {!bunnyVideoId && moduleUrl && (
+        <MoodleIframe moduleUrl={moduleUrl} moduleName={moduleName || "Module"} />
+      )}
 
       {/* Completion status — only when we successfully found the module */}
       {hasData && (
