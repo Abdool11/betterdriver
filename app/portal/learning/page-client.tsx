@@ -21,6 +21,9 @@ interface Module {
   status: "completed" | "in_progress" | "available";
   order: number;
   url?: string;
+  downloadable?: boolean;
+  downloadSize?: number;
+  downloadFilename?: string;
 }
 
 interface Programme {
@@ -85,14 +88,36 @@ export default function LearningPage() {
               <p style={{ fontWeight: 700, fontSize: "0.875rem", color: "var(--text-primary)", margin: "0 0 0.25rem" }}>Save data — download on WiFi</p>
               <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: "0 0 0.625rem", lineHeight: 1.5 }}>Download your course materials now while on WiFi so you can study without using mobile data.</p>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                {modules.map((mod: Module) => (
-                  <button key={mod.id} type="button"
-                    style={{ display: "inline-flex", alignItems: "center", gap: "0.375rem", padding: "0.375rem 0.625rem", background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.25)", borderRadius: "0.5rem", color: "#3B82F6", fontSize: "0.75rem", fontWeight: 600, cursor: "pointer" }}
-                    onClick={() => alert(`Downloading: ${mod.name}`)}
-                  >
-                    <Download size={11} /> Module {mod.order}
-                  </button>
-                ))}
+                {modules
+                  .filter((mod) => mod.downloadable)
+                  .map((mod: Module) => (
+                    <a
+                      key={mod.id}
+                      href={`/api/portal/download?moduleId=${mod.id}`}
+                      download={mod.downloadFilename}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.375rem",
+                        padding: "0.375rem 0.625rem",
+                        background: "rgba(59,130,246,0.12)",
+                        border: "1px solid rgba(59,130,246,0.25)",
+                        borderRadius: "0.5rem",
+                        color: "#3B82F6",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                        textDecoration: "none",
+                      }}
+                    >
+                      <Download size={11} /> Module {mod.order}
+                    </a>
+                  ))}
+                {!loading && modules.every((mod) => !mod.downloadable) && (
+                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                    No downloadable materials found in this programme.
+                  </span>
+                )}
               </div>
             </div>
             <button type="button" onClick={() => setShowDownloadBanner(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", padding: "0.25rem", flexShrink: 0 }}><X size={14} /></button>

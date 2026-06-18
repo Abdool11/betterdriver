@@ -108,13 +108,59 @@ export interface MoodleCompletionStatus {
   progressPercent: number;
 }
 
+export interface MoodleFile {
+  type: string; // e.g. "file" | "url"
+  filename: string;
+  fileurl?: string;
+  filesize?: number;
+  mimetype?: string;
+  content?: string;
+}
+
 export interface MoodleModule {
   id: number;
   name: string;
-  modname: string; // e.g. "scorm", "page", "url"
+  modname: string; // e.g. "scorm", "page", "url", "resource"
   instance: number;
   completionstate: number; // 0 = incomplete, 1 = complete
   url?: string;
+  files?: MoodleFile[];
+  bunnyVideoId?: string;
+  bunnyLibraryId?: string;
+}
+
+/** Return the best on-disk file for a module (prefer video, fallback to first file). */
+export function pickMoodleDownloadFile(files: MoodleFile[] | undefined): MoodleFile | undefined {
+  if (!files || files.length === 0) return undefined;
+  const onDisk = files.filter((f) => f.type === "file" && f.fileurl);
+  if (onDisk.length === 0) return undefined;
+  const video = onDisk.find(
+    (f) => f.mimetype?.startsWith("video/") || /\.(mp4|webm|mov|mkv|avi|m4v)(\?|$)/i.test(f.filename)
+  );
+  return video ?? onDisk[0];
+}
+
+/** Extract Bunny Stream iframe embed URL from Moodle page HTML. */
+export function extractBunnyEmbedUrl(html: string): { libraryId: string; videoId: string } | null {
+  const match = html.match(/iframe\.mediadelivery\.net\/embed\/(\d+)\/([a-f0-9-]+)/i);
+  if (!match) return null;
+  return { libraryId: match[1], videoId: match[2] };
+}
+
+/** Build the direct Bunny CDN MP4 URL from video metadata. */
+export function getBunnyVideoUrl(videoId: string): string {
+  const hostname = process.env.BUNNY_CDN_HOSTNAME ?? "vz-dbdd6b8d-c35.b-cdn.net";
+  return `https://${hostname}/${videoId}/play_720p.mp4`;
+}
+
+function ensureDownloadUrl(fileurl: string): string {
+  let absolute = fileurl;
+  if (absolute.startsWith("/")) {
+    absolute = `${MOODLE_URL.replace(/\/$/, "")}${absolute}`;
+  }
+  const url = new URL(absolute);
+  url.searchParams.set("forcedownload", "1");
+  return url.toString();
 }
 
 // ─── User Management ──────────────────────────────────────────────────────────
@@ -286,6 +332,18 @@ export async function moodleGetCourseModules(params: {
   const modules: MoodleModule[] = [];
   for (const section of sections) {
     for (const mod of section.modules ?? []) {
+      const rawFiles: unknown[] = mod.contents ?? [];
+      const files: MoodleFile[] = rawFiles.map((content: any) => ({
+        type: (content.type ?? "file") as string,
+        filename: (content.filename ?? "") as string,
+        fileurl: content.fileurl
+          ? ensureDownloadUrl(content.fileurl as string)
+          : undefined,
+        filesize: (content.filesize as number | undefined) ?? undefined,
+        mimetype: (content.mimetype as string | undefined) ?? undefined,
+        content: (content.content as string | undefined) ?? undefined,
+      }));
+
       modules.push({
         id: mod.id as number,
         name: mod.name as string,
@@ -293,9 +351,36 @@ export async function moodleGetCourseModules(params: {
         instance: (mod.instance ?? mod.id) as number,
         completionstate: (mod.completiondata?.state ?? 0) as number,
         url: (mod.url as string | undefined) || undefined,
+        files,
       });
     }
   }
+
+  // Fetch Bunny embed data for page modules in parallel
+  await Promise.all(
+    modules
+      .filter((m) => m.modname === "page")
+      .map(async (mod) => {
+        const htmlFile = (mod.files ?? []).find((f) => f.filename === "index.html" && f.fileurl);
+        if (!htmlFile?.fileurl) return;
+
+        const htmlUrl = htmlFile.fileurl + `&token=${MOODLE_TOKEN}`;
+        try {
+          const htmlRes = await fetch(htmlUrl);
+          if (htmlRes.ok) {
+            const html = await htmlRes.text();
+            const bunny = extractBunnyEmbedUrl(html);
+            if (bunny) {
+              mod.bunnyLibraryId = bunny.libraryId;
+              mod.bunnyVideoId = bunny.videoId;
+            }
+          }
+        } catch (err) {
+          console.error(`[Moodle] Failed to fetch HTML for module ${mod.id}:`, err);
+        }
+      })
+  );
+
   return modules;
 }
 

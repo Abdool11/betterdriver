@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import {
   moodleGetCourseModules,
   normalizeProgrammeSlug,
+  pickMoodleDownloadFile,
 } from "@/lib/moodle";
 
 /**
@@ -81,6 +82,10 @@ export async function GET(req: NextRequest) {
       status = "available";
     }
 
+    const downloadFile = pickMoodleDownloadFile(mod.files);
+    const hasBunnyVideo = Boolean(mod.bunnyVideoId);
+    const downloadable = Boolean(downloadFile) || hasBunnyVideo;
+
     return {
       id: String(mod.id),
       name: mod.name,
@@ -88,6 +93,9 @@ export async function GET(req: NextRequest) {
       completionstate: mod.completionstate,
       status,
       order: index + 1,
+      downloadable,
+      downloadSize: downloadFile?.filesize,
+      downloadFilename: downloadFile?.filename ?? (hasBunnyVideo ? `${mod.name.replace(/[^a-zA-Z0-9\s]/g, "").trim()}.mp4` : undefined),
     };
   });
 
