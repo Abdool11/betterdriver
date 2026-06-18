@@ -71,7 +71,14 @@ function bd_decode_jwt(string $token, string $secret, string $expectedAlg = 'HS2
 // ─── Main script ──────────────────────────────────────────────────────────────
 
 $token    = required_param('token',    PARAM_RAW);
-$redirect = required_param('redirect', PARAM_URL);
+$redirect = required_param('redirect', PARAM_RAW);  // PARAM_URL strips query params — use RAW and validate manually
+
+// Basic validation: must start with http(s)://
+if (strpos($redirect, 'http://') !== 0 && strpos($redirect, 'https://') !== 0) {
+    http_response_code(400);
+    echo 'Invalid redirect URL.';
+    exit;
+}
 
 try {
     $payload = bd_decode_jwt($token, $SHARED_SECRET, 'HS256');

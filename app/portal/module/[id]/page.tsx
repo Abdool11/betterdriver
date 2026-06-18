@@ -92,10 +92,20 @@ export default async function ModuleLandingPage({
             moduleName = mod.name;
             moduleIndex = modIndex;
             isComplete = mod.completionstate === 1 || mod.completionstate === 2;
-            // Use Moodle-provided URL, or construct fallback from modname + cmid
-            moduleUrl =
-              mod.url ||
-              `${MOODLE_URL}/mod/${mod.modname}/view.php?id=${mod.id}`;
+            // Build a valid module URL:
+            // 1. If Moodle provided a URL with an id= param, use it as-is
+            // 2. If Moodle provided a URL WITHOUT id=, append ?id={cmid}
+            // 3. If no URL at all, construct fallback: /mod/{modname}/view.php?id={cmid}
+            const fallbackUrl = `${MOODLE_URL}/mod/${mod.modname}/view.php?id=${mod.id}`;
+            if (mod.url && mod.url.includes("id=")) {
+              moduleUrl = mod.url;
+            } else if (mod.url) {
+              // Moodle gave a URL but without id — append it
+              const sep = mod.url.includes("?") ? "&" : "?";
+              moduleUrl = `${mod.url}${sep}id=${mod.id}`;
+            } else {
+              moduleUrl = fallbackUrl;
+            }
             if (modIndex + 1 < modules.length) {
               nextModuleId = String(modules[modIndex + 1].id);
             }
