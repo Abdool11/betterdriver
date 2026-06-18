@@ -1,7 +1,7 @@
 <?php
 /**
- * BetterDriver Auto-Login Endpoint
- * ================================
+ * BetterDriver Auto-Login Endpoint  (v3 — pure PHP, no external libs)
+ * ====================================================================
  * This file receives a signed JWT from BetterDriver, verifies it, logs the
  * user into Moodle, and redirects them to the requested course activity.
  *
@@ -26,12 +26,55 @@ if (empty($SHARED_SECRET)) {
     exit;
 }
 
+// ─── Pure-PHP JWT helpers (no external libraries needed) ──────────────────────
+
+function bd_base64url_decode(string $data): string {
+    $pad = 4 - (strlen($data) % 4);
+    if ($pad !== 4) {
+        $data .= str_repeat('=', $pad);
+    }
+    return base64_decode(strtr($data, '-_', '+/'), true);
+}
+
+function bd_decode_jwt(string $token, string $secret, string $expectedAlg = 'HS256'): object {
+    $parts = explode('.', $token);
+    if (count($parts) !== 3) {
+        throw new Exception('Invalid JWT format');
+    }
+
+    $headerJson  = bd_base64url_decode($parts[0]);
+    $payloadJson = bd_base64url_decode($parts[1]);
+    $signature   = bd_base64url_decode($parts[2]);
+
+    if ($headerJson === false || $payloadJson === false || $signature === false) {
+        throw new Exception('Invalid JWT encoding');
+    }
+
+    $header = json_decode($headerJson);
+    if (!isset($header->alg) || $header->alg !== $expectedAlg) {
+        throw new Exception('Unexpected algorithm');
+    }
+
+    $computed = hash_hmac('sha256', $parts[0] . '.' . $parts[1], $secret, true);
+    if (!hash_equals($computed, $signature)) {
+        throw new Exception('Invalid signature');
+    }
+
+    $payload = json_decode($payloadJson);
+    if (isset($payload->exp) && time() > $payload->exp) {
+        throw new Exception('Token expired');
+    }
+
+    return $payload;
+}
+
+// ─── Main script ──────────────────────────────────────────────────────────────
+
 $token    = required_param('token',    PARAM_RAW);
 $redirect = required_param('redirect', PARAM_URL);
 
-// Verify the JWT using Moodle's built-in helper
 try {
-    $payload = \core\jwt::decode($token, $SHARED_SECRET, 'HS256');
+    $payload = bd_decode_jwt($token, $SHARED_SECRET, 'HS256');
 } catch (Exception $e) {
     http_response_code(403);
     echo 'Link expired or invalid. Please go back to BetterDriver and try again.';
