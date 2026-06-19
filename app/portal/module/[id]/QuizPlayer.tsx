@@ -151,15 +151,39 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
     }
   }
 
-  // Remove interactive form elements from Moodle question HTML so we render
-  // our own controls and avoid dead inputs inside the question text.
+  /**
+   * Clean Moodle question HTML by removing status bars, grades, form inputs,
+   * and other Moodle UI chrome, keeping only the actual question content.
+   */
   function sanitizeQuestionHtml(html: string) {
-    return html
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-      .replace(/<input[^>]*>/gi, "")
-      .replace(/<select\b[^<]*(?:(?!<\/select>)<[^<]*)*<\/select>/gi, "")
-      .replace(/<button\b[^<]*(?:(?!<\/button>)<[^<]*)*<\/button>/gi, "")
-      .replace(/<textarea\b[^<]*(?:(?!<\/textarea>)<[^<]*)*<\/textarea>/gi, "");
+    if (typeof window === "undefined") return html;
+    const container = document.createElement("div");
+    container.innerHTML = html;
+
+    // Remove Moodle UI chrome elements by class name
+    const removeClasses = [
+      "info",           // status bar (Not yet answered, Marked out of X)
+      "grade",          // grade display
+      "state",          // state text
+      "ablock",         // Moodle's native answer block (we render our own)
+      "formulation",    // sometimes wraps the whole question with extra chrome
+      "qtype",          // question type label
+    ];
+    removeClasses.forEach((cls) => {
+      container.querySelectorAll(`.${cls}`).forEach((el) => el.remove());
+    });
+
+    // Remove any remaining input/select/textarea/button elements
+    container.querySelectorAll("input, select, textarea, button").forEach((el) => el.remove());
+    container.querySelectorAll("script").forEach((el) => el.remove());
+
+    // Extract just the .qtext if it exists (the actual question text)
+    const qtext = container.querySelector(".qtext");
+    if (qtext) {
+      return qtext.innerHTML;
+    }
+
+    return container.innerHTML;
   }
 
   // Strip HTML tags for a plain-text fallback
@@ -353,20 +377,63 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
                   padding: "1.25rem",
                 }}
               >
-                <div
-                  style={{
-                    fontFamily: "var(--font-dm-sans), sans-serif",
-                    fontWeight: 700,
-                    fontSize: "0.9375rem",
-                    color: "#F9FAFB",
-                    margin: "0 0 0.75rem",
-                    lineHeight: 1.4,
-                  }}
-                  dangerouslySetInnerHTML={{ __html: `${idx + 1}. ${sanitizeQuestionHtml(q.html) || "Question"}` }}
-                />
+                {/* Question number + text */}
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", marginBottom: "1rem" }}>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 28,
+                      height: 28,
+                      borderRadius: "0.5rem",
+                      background: "rgba(245,158,11,0.12)",
+                      border: "1px solid rgba(245,158,11,0.25)",
+                      color: "#F59E0B",
+                      fontSize: "0.8125rem",
+                      fontWeight: 700,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {idx + 1}
+                  </span>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-dm-sans), sans-serif",
+                      fontWeight: 600,
+                      fontSize: "0.9375rem",
+                      color: "#F9FAFB",
+                      lineHeight: 1.5,
+                      flex: 1,
+                    }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeQuestionHtml(q.html) || "Question" }}
+                  />
+                </div>
 
-                {choices.length > 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+                {/* Answer controls */}
+                {q.type === "essay" ? (
+                  <textarea
+                    value={answers[q.slot] ?? ""}
+                    onChange={(e) => handleSelect(q.slot, e.target.value)}
+                    placeholder="Type your answer here…"
+                    rows={5}
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 1rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid #2d3a4f",
+                      background: "#0B1221",
+                      color: "#E5E7EB",
+                      fontSize: "0.875rem",
+                      lineHeight: 1.6,
+                      resize: "vertical",
+                      outline: "none",
+                    }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(245,158,11,0.4)"; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = "#2d3a4f"; }}
+                  />
+                ) : choices.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", paddingLeft: "2.5rem" }}>
                     {choices.map((choice) => {
                       const isSelected = selected === String(choice.id);
                       return (
@@ -386,21 +453,38 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
                             transition: "all 0.15s ease",
                           }}
                         >
-                          <input
-                            type="radio"
-                            name={`q-${q.slot}`}
-                            value={String(choice.id)}
-                            checked={isSelected}
-                            onChange={() => handleSelect(q.slot, String(choice.id))}
-                            style={{ accentColor: "#F59E0B", cursor: "pointer" }}
-                          />
+                          <span
+                            style={{
+                              width: 18,
+                              height: 18,
+                              borderRadius: "50%",
+                              border: `2px solid ${isSelected ? "#F59E0B" : "#4B5563"}`,
+                              background: isSelected ? "#F59E0B" : "transparent",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              flexShrink: 0,
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            {isSelected && (
+                              <span
+                                style={{
+                                  width: 8,
+                                  height: 8,
+                                  borderRadius: "50%",
+                                  background: "#111827",
+                                }}
+                              />
+                            )}
+                          </span>
                           <span dangerouslySetInnerHTML={{ __html: choice.text }} />
                         </label>
                       );
                     })}
                   </div>
                 ) : (
-                  <p style={{ fontSize: "0.8125rem", color: "#6B7280" }}>
+                  <p style={{ fontSize: "0.8125rem", color: "#6B7280", paddingLeft: "2.5rem" }}>
                     This question type ({q.type}) is not supported in the simplified quiz view.
                   </p>
                 )}
