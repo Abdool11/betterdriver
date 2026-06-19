@@ -34,6 +34,7 @@
  *    - mod_quiz_get_attempt_data         (native quiz player)
  *    - mod_quiz_process_attempt          (native quiz player)
  *    - mod_quiz_get_attempt_review       (native quiz player)
+ *    - core_completion_update_activity_completion_status_manually
  *
  * 4. Add to .env.local:
  *    MOODLE_URL=https://your-moodle-domain.com
@@ -310,6 +311,39 @@ export async function moodleGetProgress(params: {
     totalmodules,
     progressPercent,
   };
+}
+
+/**
+ * MOODLE_STUB: Mark a course module as complete (or incomplete) for a user.
+ * Called from /api/portal/progress when the driver finishes a video or quiz.
+ *
+ * Moodle API: core_completion_update_activity_completion_status_manually
+ * POST body: cmid, userid, completed (1 or 0)
+ *
+ * NOTE: The activity in Moodle must have completion tracking enabled and
+ *       allow manual completion marking.
+ */
+export async function moodleUpdateModuleCompletion(params: {
+  moodleUserId: number;
+  cmid: number;
+  completed: boolean;
+}): Promise<boolean> {
+  checkMoodleConfig();
+  const body = new URLSearchParams({
+    wstoken: MOODLE_TOKEN,
+    wsfunction: "core_completion_update_activity_completion_status_manually",
+    moodlewsrestformat: "json",
+    cmid: String(params.cmid),
+    userid: String(params.moodleUserId),
+    completed: params.completed ? "1" : "0",
+  });
+  const res = await fetch(`${MOODLE_URL}/webservice/rest/server.php`, { method: "POST", body });
+  const data = await res.json();
+  if (data && data.exception) {
+    console.error(`[Moodle] moodleUpdateModuleCompletion failed: ${data.message}`);
+    return false;
+  }
+  return true;
 }
 
 /**

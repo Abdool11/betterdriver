@@ -6,6 +6,7 @@ import {
   normalizeProgrammeSlug,
   MOODLE_URL,
   generateMoodleAutoLoginUrl,
+  moodleUpdateModuleCompletion,
 } from "@/lib/moodle";
 
 export const dynamic = "force-dynamic";
@@ -134,6 +135,19 @@ export async function POST(req: NextRequest) {
         );
     } catch (err) {
       console.error("[PROGRESS] Failed to upsert module progress:", err);
+    }
+  }
+
+  // Push completion back to Moodle so badge/certificate rules fire there
+  if (completed && driver.moodle_user_id) {
+    try {
+      await moodleUpdateModuleCompletion({
+        moodleUserId: driver.moodle_user_id,
+        cmid: parseInt(moduleId, 10),
+        completed: true,
+      });
+    } catch (err) {
+      console.error("[PROGRESS] Failed to update Moodle completion:", err);
     }
   }
 
