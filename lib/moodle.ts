@@ -369,6 +369,9 @@ export async function moodleGetCourseModules(params: {
     }
   }
 
+  // Debug: log all modules with their types
+  console.log(`[Moodle] Course ${courseId} modules:`, modules.map((m) => ({ id: m.id, name: m.name, modname: m.modname, bunnyVideoId: m.bunnyVideoId })));
+
   // Fetch Bunny embed data for page modules in parallel
   await Promise.all(
     modules

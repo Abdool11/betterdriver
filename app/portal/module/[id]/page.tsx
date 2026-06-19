@@ -100,6 +100,7 @@ export default async function ModuleLandingPage({
             isComplete = mod.completionstate === 1 || mod.completionstate === 2;
             bunnyVideoId = mod.bunnyVideoId ?? "";
             bunnyLibraryId = mod.bunnyLibraryId ?? "";
+            console.log(`[MODULE_PAGE] cmid=${mod.id} name="${mod.name}" modname="${mod.modname}" bunnyVideoId="${bunnyVideoId}" bunnyLibraryId="${bunnyLibraryId}"`);
             // Build a valid module URL:
             // 1. If Moodle provided a URL with an id= param, use it as-is
             // 2. If Moodle provided a URL WITHOUT id=, append ?id={cmid}
