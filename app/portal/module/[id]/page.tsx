@@ -40,6 +40,7 @@ export default async function ModuleLandingPage({
   let bunnyVideoId = "";
   let bunnyLibraryId = "";
   let modName = "";
+  let quizId = 0;
 
   if (!session) {
     loadError = "Please sign in to view this module.";
@@ -100,6 +101,9 @@ export default async function ModuleLandingPage({
             isComplete = mod.completionstate === 1 || mod.completionstate === 2;
             bunnyVideoId = mod.bunnyVideoId ?? "";
             bunnyLibraryId = mod.bunnyLibraryId ?? "";
+            if (mod.modname === "quiz") {
+              quizId = mod.instance;
+            }
             console.log(`[MODULE_PAGE] cmid=${mod.id} name="${mod.name}" modname="${mod.modname}" bunnyVideoId="${bunnyVideoId}" bunnyLibraryId="${bunnyLibraryId}"`);
             // Build a valid module URL:
             // 1. If Moodle provided a URL with an id= param, use it as-is
@@ -243,7 +247,7 @@ export default async function ModuleLandingPage({
 
       {/* Native quiz player — when module is a Moodle quiz */}
       {modName === "quiz" && !bunnyVideoId && (
-        <QuizPlayer moduleId={id} moduleName={moduleName || "Quiz"} />
+        <QuizPlayer moduleId={id} quizId={quizId} moduleName={moduleName || "Quiz"} />
       )}
 
       {/* Moodle iframe fallback — when no Bunny video or as secondary option */}

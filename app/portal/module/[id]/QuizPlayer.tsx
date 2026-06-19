@@ -34,11 +34,12 @@ interface QuizData {
 
 interface Props {
   moduleId: string;
+  quizId?: number;
   moduleName: string;
   onComplete?: () => void;
 }
 
-export default function QuizPlayer({ moduleId, moduleName, onComplete }: Props) {
+export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }: Props) {
   const router = useRouter();
   const [phase, setPhase] = useState<"loading" | "ready" | "review" | "error">("loading");
   const [quiz, setQuiz] = useState<QuizData | null>(null);
@@ -52,7 +53,10 @@ export default function QuizPlayer({ moduleId, moduleName, onComplete }: Props) 
     setPhase("loading");
     setErrorMsg("");
     try {
-      const url = retry ? `/api/quiz/${moduleId}?retry=1` : `/api/quiz/${moduleId}`;
+      const params = new URLSearchParams();
+      if (retry) params.set("retry", "1");
+      if (quizId) params.set("quizId", String(quizId));
+      const url = `/api/quiz/${moduleId}${params.toString() ? "?" + params.toString() : ""}`;
       const res = await fetch(url);
       const data = await res.json();
       if (!res.ok) {

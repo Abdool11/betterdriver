@@ -43,24 +43,34 @@ export async function GET(
     return NextResponse.json({ error: "Driver not linked to Moodle" }, { status: 404 });
   }
 
-  // Get quiz metadata for this course module
-  const quiz = await moodleGetQuizForModule(cmid);
-  if (!quiz) {
-    console.error(`[QUIZ_API] Quiz not found for cmid=${cmid}`);
-    return NextResponse.json({ error: "Quiz not found for this module" }, { status: 404 });
+  // Get quiz metadata. Prefer direct quizId from the page (mod.instance) since
+  // moodleGetQuizForModule's lookup across all courses is fragile.
+  const quizIdParam = req.nextUrl.searchParams.get("quizId");
+  let quizId = quizIdParam ? parseInt(quizIdParam, 10) : 0;
+
+  let quiz = null;
+  if (quizId) {
+    console.log(`[QUIZ_API] Using direct quizId=${quizId} for cmid=${cmid}`);
+  } else {
+    quiz = await moodleGetQuizForModule(cmid);
+    if (!quiz) {
+      console.error(`[QUIZ_API] Quiz not found for cmid=${cmid}`);
+      return NextResponse.json({ error: "Quiz not found for this module" }, { status: 404 });
+    }
+    quizId = quiz.id;
+    console.log(`[QUIZ_API] Found quiz id=${quiz.id} name="${quiz.name}" for cmid=${cmid}`);
   }
-  console.log(`[QUIZ_API] Found quiz id=${quiz.id} name="${quiz.name}" for cmid=${cmid}`);
 
   const retry = req.nextUrl.searchParams.get("retry") === "1";
 
   // Check existing attempts
-  const attempts = await moodleGetQuizAttempts(quiz.id, driver.moodle_user_id);
+  const attempts = await moodleGetQuizAttempts(quizId, driver.moodle_user_id);
   const finishedAttempt = attempts.find((a) => a.state === "finished");
 
   if (finishedAttempt && !retry) {
     const review = await moodleGetAttemptReview(finishedAttempt.id);
     return NextResponse.json({
-      quiz: { id: quiz.id, name: quiz.name, intro: quiz.intro, grade: quiz.grade },
+      quiz: { id: quizId, name: quiz?.name ?? "Quiz", intro: quiz?.intro, grade: quiz?.grade ?? 0 },
       finished: true,
       attempt: finishedAttempt,
       grade: review?.grade ?? finishedAttempt.sumgrades,
@@ -72,7 +82,7 @@ export async function GET(
 
   // If no in-progress attempt, start a new one
   if (!attempt) {
-    attempt = await moodleStartQuizAttempt(quiz.id);
+    attempt = await moodleStartQuizAttempt(quizId);
     if (!attempt) {
       return NextResponse.json({ error: "Unable to start quiz attempt" }, { status: 500 });
     }
@@ -85,7 +95,7 @@ export async function GET(
   }
 
   return NextResponse.json({
-    quiz: { id: quiz.id, name: quiz.name, intro: quiz.intro, grade: quiz.grade },
+    quiz: { id: quizId, name: quiz?.name ?? "Quiz", intro: quiz?.intro, grade: quiz?.grade ?? 0 },
     finished: false,
     attempt: attemptData.attempt,
     questions: attemptData.questions.map((q) => ({
