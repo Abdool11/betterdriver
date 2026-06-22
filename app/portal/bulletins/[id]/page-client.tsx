@@ -74,6 +74,9 @@ export default function BulletinReadPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (id) {
+      fetch(`/api/portal/bulletins/${id}/read`, { method: "POST" }).catch(() => {});
+    }
     fetch(`/api/portal/bulletins/${id}`)
       .then((r) => r.json())
       .then((d) => {

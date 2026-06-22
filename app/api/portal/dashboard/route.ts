@@ -138,6 +138,61 @@ export async function GET(req: NextRequest) {
       ? "The Professional Truck Driver Programme"
       : "Eco-Driver Training";
 
+  // CPD stats
+  let cpdOverdueCount = 0;
+  let cpdUpcomingCount = 0;
+  try {
+    const now = new Date().toISOString();
+    const fourteenDays = new Date();
+    fourteenDays.setDate(fourteenDays.getDate() + 14);
+    const fourteenStr = fourteenDays.toISOString();
+
+    const { data: cpdRows } = await supabaseAdmin
+      .from("driver_cpd_participation")
+      .select("completed_at, cpd_modules(due_date)")
+      .eq("driver_id", session.driverId);
+
+    for (const row of cpdRows ?? []) {
+      if (row.completed_at) continue;
+      const mod = row.cpd_modules as unknown as { due_date?: string } | null;
+      const due = mod?.due_date ? new Date(mod.due_date) : null;
+      if (due) {
+        if (due.toISOString() < now) {
+          cpdOverdueCount++;
+        } else if (due.toISOString() <= fourteenStr) {
+          cpdUpcomingCount++;
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[DASHBOARD] CPD stats fetch failed:", err);
+  }
+
+  // Unread bulletins count
+  let unreadBulletins = 0;
+  try {
+    if (driver.company_id) {
+      const { data: bRows } = await supabaseAdmin
+        .from("bulletins")
+        .select("id")
+        .eq("company_id", driver.company_id)
+        .eq("status", "disseminated");
+      const bIds = (bRows ?? []).map((r) => r.id);
+      if (bIds.length > 0) {
+        const { data: readR } = await supabaseAdmin
+          .from("driver_bulletin_interactions")
+          .select("bulletin_id")
+          .eq("driver_id", session.driverId)
+          .not("read_at", "is", null)
+          .in("bulletin_id", bIds);
+        const readSet = new Set((readR ?? []).map((r) => r.bulletin_id));
+        unreadBulletins = bIds.filter((id) => !readSet.has(id)).length;
+      }
+    }
+  } catch (err) {
+    console.error("[DASHBOARD] Bulletins unread count failed:", err);
+  }
+
   return NextResponse.json({
     stats: {
       firstName: driver.first_name ?? session.firstName,
@@ -146,9 +201,11 @@ export async function GET(req: NextRequest) {
       progressPercent: progress.progressPercent,
       completedModules: progress.completedmodules,
       totalModules: progress.totalmodules,
-      cpdDue: false, // TODO: wire CPD once table is ready
+      cpdDue: cpdOverdueCount > 0 || cpdUpcomingCount > 0,
+      cpdOverdueCount,
+      cpdUpcomingCount,
       certificateReady: progress.completed,
-      unreadBulletins: 0, // TODO: wire bulletins
+      unreadBulletins,
     },
     nextModule: nextModule
       ? {

@@ -32,7 +32,7 @@ const NAV_LABELS: Record<Lang, {
   driverUniversity: string;
 }> = {
   en: {
-    tasks: "My Tasks",
+    tasks: "Dashboard",
     course: "My Course",
     progress: "My Progress",
     certificate: "My Certificate",
@@ -45,7 +45,7 @@ const NAV_LABELS: Record<Lang, {
     driverUniversity: "Driver University",
   },
   zu: {
-    tasks: "Imisebenzi Yami",
+    tasks: "I-Dashboard",
     course: "Ikhosi Yami",
     progress: "Inqubekela Phambili",
     certificate: "Isitifiketi Sami",
@@ -121,7 +121,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
 
   const NAV = [
     { href: "/portal", label: labels.tasks, icon: CheckSquare, exact: true },
-    { href: "/portal/course", label: labels.course, icon: BookOpen },
+    { href: "/portal/learning", label: labels.course, icon: BookOpen },
     { href: "/portal/progress", label: labels.progress, icon: TrendingUp },
     { href: "/portal/certificate", label: labels.certificate, icon: Award },
     { href: "/portal/cpd", label: labels.cpd, icon: RefreshCw },

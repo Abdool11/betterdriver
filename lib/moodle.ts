@@ -379,6 +379,14 @@ export async function moodleGetCourseModules(params: {
       return 0;
     });
     for (const mod of sectionModules) {
+      // Skip modules that are hidden, not visible to the user, not shown on the
+      // course page, or are internal Moodle types (e.g. question bank) that
+      // should not appear as learning activities in the BetterDriver portal.
+      if (mod.visible === 0) continue;
+      if (mod.uservisible === false) continue;
+      if (mod.visibleoncoursepage === 0) continue;
+      if ((mod.modname ?? "") === "qbank") continue;
+
       const rawFiles: unknown[] = mod.contents ?? [];
       const files: MoodleFile[] = rawFiles.map((content: any) => ({
         type: (content.type ?? "file") as string,

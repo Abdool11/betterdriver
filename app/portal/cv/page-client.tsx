@@ -58,19 +58,41 @@ interface CpdRecord {
   year: number;
 }
 
-const certs: Certification[] = [];
-const cpdRecords: CpdRecord[] = [];
-
 export default function CVPage() {
   const [profile, setProfile] = useState<DriverProfile | null>(null);
+  const [certs, setCerts] = useState<Certification[]>([]);
+  const [cpdRecords, setCpdRecords] = useState<CpdRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
-    fetch("/api/portal/profile")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.driver) setProfile(d.driver);
+    Promise.all([
+      fetch("/api/portal/profile").then((r) => r.json()),
+      fetch("/api/portal/cv?format=json", { method: "POST" }).then((r) => r.json()),
+    ])
+      .then(([profileData, cvData]) => {
+        if (profileData.driver) setProfile(profileData.driver);
+
+        const certList = cvData?.certifications ?? [];
+        setCerts(
+          certList.map((c: any, i: number) => ({
+            id: `cert-${i}`,
+            programme_title: c.programme ?? "Programme",
+            issued_at: c.date || new Date().toISOString(),
+            certificate_number: "",
+            status: "certified" as const,
+          }))
+        );
+
+        const cpdList = cvData?.cpdRecords ?? [];
+        setCpdRecords(
+          cpdList.map((r: any, i: number) => ({
+            id: `cpd-${i}`,
+            module_title: r.module ?? "CPD Module",
+            completed_at: r.date || new Date().toISOString(),
+            year: r.date ? new Date(r.date).getFullYear() : new Date().getFullYear(),
+          }))
+        );
       })
       .catch(() => {})
       .finally(() => setLoading(false));

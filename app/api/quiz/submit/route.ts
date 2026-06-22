@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
     answers?: Record<string, string | number>;
     sequenceChecks?: Record<string, number>;
     cmid?: string;
+    hasEssayQuestions?: boolean;
   };
   try {
     body = await req.json();
@@ -89,10 +90,10 @@ export async function POST(req: NextRequest) {
   const review = await moodleGetAttemptReview(attemptId);
   const grade = review?.grade ?? finishedAttempt.sumgrades ?? 0;
 
-  // Consider "passing" if grade > 0 (Moodle quizzes often require a minimum grade;
-  // we rely on Moodle's internal pass/fail logic and just check there is a positive grade.
-  // If the quiz is configured with no grade, any finish counts as completion.)
-  const passed = grade !== null && grade >= 0;
+  // Essay / free-form questions are not auto-graded by Moodle, so always pass
+  // if the quiz contains any essay questions. Otherwise, pass if grade >= 0.
+  const hasEssay = body.hasEssayQuestions === true;
+  const passed = hasEssay || (grade !== null && grade >= 0);
 
   if (passed) {
     // Mark module complete in BD — trigger via progress API

@@ -65,21 +65,26 @@ export async function GET(req: NextRequest) {
   // 3. Map Moodle completion states to UI statuses
   // 0 = incomplete, 1 = complete, 2 = complete (pass), 3 = complete (fail)
   // We derive "in-progress" / "available" from sequential ordering
+  // A module is "locked" if it is not completed AND there is an incomplete
+  // module before it — drivers can only access their current or next module.
   let foundIncomplete = false;
   const mappedModules = modules.map((mod, index) => {
     const isComplete = mod.completionstate === 1 || mod.completionstate === 2;
     const isFail = mod.completionstate === 3;
 
     let status: "completed" | "in_progress" | "available" = "available";
+    let locked = false;
     if (isComplete) {
       status = "completed";
     } else if (isFail) {
       status = "available"; // allow retry
+      if (foundIncomplete) locked = true;
     } else if (!foundIncomplete) {
       status = "in_progress";
       foundIncomplete = true;
     } else {
       status = "available";
+      locked = true;
     }
 
     const downloadFile = pickMoodleDownloadFile(mod.files);
@@ -92,6 +97,7 @@ export async function GET(req: NextRequest) {
       url: mod.url,
       completionstate: mod.completionstate,
       status,
+      locked,
       order: index + 1,
       downloadable,
       downloadSize: downloadFile?.filesize,

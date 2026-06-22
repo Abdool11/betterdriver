@@ -24,6 +24,7 @@ interface Module {
   downloadable?: boolean;
   downloadSize?: number;
   downloadFilename?: string;
+  locked?: boolean;
 }
 
 interface Programme {
@@ -178,22 +179,47 @@ export default function LearningPage() {
         </div>
       </div>
 
-      {/* Module list */}
+      {/* Current / Next module — the only module the driver can access */}
       <div>
         <div className="section-header">
-          <span className="section-title">Modules</span>
-          <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-            {prog.completedModules}/{prog.totalModules} done
+          <span className="section-title">
+            {modules.find((m) => m.status === "in_progress") ? "Current module" : "Next module"}
           </span>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          {modules.map((mod: Module) => {
-            const cfg = statusConfig[mod.status];
-            const Icon = cfg.icon;
+        {(() => {
+          const currentModule = modules.find((m) => m.status === "in_progress") ?? modules.find((m) => m.status === "available" && !m.locked);
+          const allDone = prog.completedModules === prog.totalModules && prog.totalModules > 0;
 
+          if (allDone) {
             return (
-              <Link key={mod.id} href={`/portal/module/${mod.id}`} style={{ textDecoration: "none" }}>
+              <div className="card" style={{ textAlign: "center", padding: "1.5rem" }}>
+                <CheckCircle2 size={28} style={{ color: "var(--success)", margin: "0 auto 0.75rem" }} />
+                <p style={{ fontWeight: 700, fontSize: "0.9375rem", color: "var(--text-primary)", margin: "0 0 0.25rem" }}>
+                  Programme complete!
+                </p>
+                <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
+                  You have completed all modules. Your certificate is ready.
+                </p>
+              </div>
+            );
+          }
+
+          if (!currentModule) {
+            return (
+              <div className="card" style={{ padding: "1.25rem" }}>
+                <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
+                  No module available right now.
+                </p>
+              </div>
+            );
+          }
+
+          const cfg = statusConfig[currentModule.status];
+          const Icon = cfg.icon;
+
+          return (
+            <Link key={currentModule.id} href={`/portal/module/${currentModule.id}`} style={{ textDecoration: "none" }}>
               <div
                 className="card"
                 style={{
@@ -202,14 +228,9 @@ export default function LearningPage() {
                   gap: "0.875rem",
                   cursor: "pointer",
                   transition: "border-color 0.15s",
-                  borderLeft: mod.status === "in_progress"
-                    ? "3px solid var(--amber)"
-                    : mod.status === "completed"
-                    ? "3px solid var(--success)"
-                    : "3px solid transparent",
+                  borderLeft: "3px solid var(--amber)",
                 }}
               >
-                {/* Unit number */}
                 <div
                   style={{
                     width: "1.75rem",
@@ -225,7 +246,6 @@ export default function LearningPage() {
                   <Icon size={14} style={{ color: cfg.color }} />
                 </div>
 
-                {/* Title */}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div
                     style={{
@@ -237,31 +257,63 @@ export default function LearningPage() {
                       whiteSpace: "nowrap",
                     }}
                   >
-                    {mod.order}. {mod.name}
+                    {currentModule.order}. {currentModule.name}
                   </div>
                   <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "flex", gap: "0.5rem", marginTop: "0.125rem" }}>
-                    {mod.status === "in_progress" && (
+                    {currentModule.status === "in_progress" && (
                       <span style={{ color: "var(--amber)", fontWeight: 600 }}>· In progress</span>
+                    )}
+                    {currentModule.status === "available" && (
+                      <span style={{ color: "var(--info)", fontWeight: 600 }}>· Ready to start</span>
                     )}
                   </div>
                 </div>
 
-                {/* Action */}
-                {mod.status === "in_progress" && (
+                {currentModule.status === "in_progress" && (
                   <span className="badge badge-amber">Continue</span>
                 )}
-                {mod.status === "available" && (
+                {currentModule.status === "available" && (
                   <span className="badge badge-info">Start</span>
                 )}
-                {mod.status === "completed" && (
-                  <CheckCircle2 size={16} style={{ color: "var(--success)", flexShrink: 0 }} />
-                )}
               </div>
-              </Link>
-            );
-          })}
-        </div>
+            </Link>
+          );
+        })()}
       </div>
+
+      {/* Completed modules — progress reference only, not clickable */}
+      {modules.filter((m) => m.status === "completed").length > 0 && (
+        <div>
+          <div className="section-header">
+            <span className="section-title">Completed modules</span>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+              {modules.filter((m) => m.status === "completed").length} done
+            </span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {modules.filter((m) => m.status === "completed").map((mod: Module) => (
+              <div
+                key={mod.id}
+                className="card"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.875rem",
+                  borderLeft: "3px solid var(--success)",
+                }}
+              >
+                <CheckCircle2 size={14} style={{ color: "var(--success)", flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {mod.order}. {mod.name}
+                  </div>
+                </div>
+                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Done</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Completion CTA */}
       {prog.progressPercent >= 100 && (

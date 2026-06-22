@@ -39,12 +39,29 @@ export default function BulletinsListPage() {
       .then((r) => r.json())
       .then((d) => {
         if (Array.isArray(d.bulletins)) {
-          setBulletins(d.bulletins);
+          setBulletins(d.bulletins.map((b: any) => ({
+            id: b.id,
+            title: b.title,
+            urgency: b.urgency,
+            created_at: b.created_at,
+            read: !!b.read,
+          })));
         }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  async function markRead(id: string) {
+    try {
+      await fetch(`/api/portal/bulletins/${id}/read`, { method: "POST" });
+      setBulletins((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, read: true } : b))
+      );
+    } catch {
+      // non-blocking
+    }
+  }
 
   const formatDate = (iso: string) => {
     const d = new Date(iso);
@@ -101,6 +118,7 @@ export default function BulletinsListPage() {
             <Link
               key={b.id}
               href={`/portal/bulletins/${b.id}`}
+              onClick={() => markRead(b.id)}
               style={{
                 display: "flex",
                 alignItems: "center",

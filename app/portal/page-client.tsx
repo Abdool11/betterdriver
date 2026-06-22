@@ -24,6 +24,8 @@ interface DriverStats {
   completedModules: number;
   totalModules: number;
   cpdDue: boolean;
+  cpdOverdueCount: number;
+  cpdUpcomingCount: number;
   certificateReady: boolean;
   unreadBulletins: number;
 }
@@ -36,6 +38,8 @@ const EMPTY_STATS: DriverStats = {
   completedModules: 0,
   totalModules: 0,
   cpdDue: false,
+  cpdOverdueCount: 0,
+  cpdUpcomingCount: 0,
   certificateReady: false,
   unreadBulletins: 0,
 };
@@ -49,6 +53,8 @@ const COPY: Record<Lang, {
   quickActions: string;
   continueTrain: string;
   continueTrainSub: string;
+  startTrain: string;
+  startTrainSub: string;
   cpdRefresh: string;
   cpdDue: string;
   cpdOk: string;
@@ -79,6 +85,8 @@ const COPY: Record<Lang, {
     quickActions: "Quick actions",
     continueTrain: "Continue Training",
     continueTrainSub: "Pick up where you left off",
+    startTrain: "Start Training",
+    startTrainSub: "Begin your first module",
     cpdRefresh: "CPD Refresh",
     cpdDue: "New module available",
     cpdOk: "Up to date",
@@ -109,6 +117,8 @@ const COPY: Record<Lang, {
     quickActions: "Izenzo ezisheshayo",
     continueTrain: "Qhubeka Ukuqeqesha",
     continueTrainSub: "Qhubeka lapho ushiye khona",
+    startTrain: "Qala Ukuqeqesha",
+    startTrainSub: "Qala isifundo sakho sokuqala",
     cpdRefresh: "Ukuqeqesha Okuqhubekayo",
     cpdDue: "Isifundo esisha sitholakala",
     cpdOk: "Kuhleli kahle",
@@ -282,10 +292,10 @@ export default function PortalHomePage() {
                   margin: "0 0 0.25rem",
                 }}
               >
-                {copy.continueTrain}
+                {stats.completedModules > 0 ? copy.continueTrain : copy.startTrain}
               </p>
               <p style={{ fontSize: "0.75rem", color: "#9CA3AF", margin: 0 }}>
-                {copy.continueTrainSub}
+                {stats.completedModules > 0 ? copy.continueTrainSub : copy.startTrainSub}
               </p>
             </div>
           </Link>
@@ -591,6 +601,80 @@ export default function PortalHomePage() {
             </p>
             <p style={{ fontSize: "0.8125rem", color: "#9CA3AF", margin: 0 }}>
               {copy.bulletinSub}
+            </p>
+          </div>
+          <ChevronRight size={16} color="#6B7280" />
+        </Link>
+      )}
+
+      {/* CPD due alert */}
+      {(stats.cpdOverdueCount > 0 || stats.cpdUpcomingCount > 0) && (
+        <Link
+          href="/portal/cpd"
+          style={{
+            background: stats.cpdOverdueCount > 0 ? "rgba(239,68,68,0.06)" : "rgba(59,130,246,0.06)",
+            border: `1px solid ${stats.cpdOverdueCount > 0 ? "rgba(239,68,68,0.2)" : "rgba(59,130,246,0.2)"}`,
+            borderRadius: "1rem",
+            padding: "1rem 1.25rem",
+            textDecoration: "none",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.875rem",
+          }}
+        >
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              background: stats.cpdOverdueCount > 0 ? "rgba(239,68,68,0.15)" : "rgba(59,130,246,0.15)",
+              borderRadius: "0.625rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+              position: "relative",
+            }}
+          >
+            <RefreshCw size={16} color={stats.cpdOverdueCount > 0 ? "#EF4444" : "#3B82F6"} />
+            {stats.cpdOverdueCount > 0 && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: -4,
+                  right: -4,
+                  width: 16,
+                  height: 16,
+                  background: "#EF4444",
+                  borderRadius: "9999px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "0.625rem",
+                  fontWeight: 700,
+                  color: "white",
+                }}
+              >
+                {stats.cpdOverdueCount}
+              </div>
+            )}
+          </div>
+          <div style={{ flex: 1 }}>
+            <p
+              style={{
+                fontWeight: 700,
+                fontSize: "0.875rem",
+                color: "#F9FAFB",
+                margin: "0 0 0.125rem",
+              }}
+            >
+              {stats.cpdOverdueCount > 0
+                ? `${stats.cpdOverdueCount} CPD module${stats.cpdOverdueCount > 1 ? "s" : ""} overdue`
+                : `${stats.cpdUpcomingCount} CPD module${stats.cpdUpcomingCount > 1 ? "s" : ""} due soon`}
+            </p>
+            <p style={{ fontSize: "0.8125rem", color: "#9CA3AF", margin: 0 }}>
+              {stats.cpdOverdueCount > 0
+                ? "Complete your overdue CPD modules to keep your certification valid."
+                : "Stay ahead — complete your upcoming CPD modules before the due date."}
             </p>
           </div>
           <ChevronRight size={16} color="#6B7280" />

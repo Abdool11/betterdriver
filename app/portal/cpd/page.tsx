@@ -15,32 +15,82 @@ export default async function CpdPage() {
   let completed: { id: string; title: string; completedAt: string }[] = [];
 
   if (session) {
+    const now = new Date();
+    const fourteenDays = new Date();
+    fourteenDays.setDate(now.getDate() + 14);
+
+    // Fetch assigned CPD modules via participation
     const { data: rows } = await supabaseAdmin
+      .from("driver_cpd_participation")
+      .select(
+        `id, completed_at,
+         cpd_modules(id, title, due_date)`
+      )
+      .eq("driver_id", session.driverId);
+
+    for (const row of rows ?? []) {
+      const mod = row.cpd_modules as unknown as { id: string; title?: string; due_date?: string } | null;
+      const title = mod?.title ?? "CPD Module";
+      const due = mod?.due_date ? new Date(mod.due_date) : null;
+
+      if (row.completed_at) {
+        completed.push({
+          id: row.id,
+          title,
+          completedAt: new Date(row.completed_at).toLocaleDateString("en-ZA", {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          }),
+        });
+        continue;
+      }
+
+      if (due) {
+        const dueStr = due.toLocaleDateString("en-ZA", {
+          day: "numeric",
+          month: "short",
+          year: "numeric",
+        });
+        if (due < now) {
+          urgent.push({ id: row.id, title, dueDate: dueStr });
+        } else if (due <= fourteenDays) {
+          upcoming.push({ id: row.id, title, dueDate: dueStr });
+        }
+      }
+    }
+
+    // Also fetch legacy cpd_records that may not have a participation row
+    const { data: legacy } = await supabaseAdmin
       .from("cpd_records")
       .select("id, module_title, completed_at")
       .eq("driver_id", session.driverId)
       .order("completed_at", { ascending: false });
 
-    if (rows) {
-      completed = rows.map((r) => ({
-        id: r.id,
-        title: r.module_title ?? "CPD Module",
-        completedAt: r.completed_at
-          ? new Date(r.completed_at).toLocaleDateString("en-ZA", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            })
-          : "",
-      }));
+    for (const r of legacy ?? []) {
+      if (!completed.find((c) => c.title === (r.module_title ?? "CPD Module"))) {
+        completed.push({
+          id: r.id,
+          title: r.module_title ?? "CPD Module",
+          completedAt: r.completed_at
+            ? new Date(r.completed_at).toLocaleDateString("en-ZA", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+              })
+            : "",
+        });
+      }
     }
   }
+
+  const hasAny = urgent.length > 0 || upcoming.length > 0 || completed.length > 0;
 
   return (
     <div className="page-content">
       <TranslatedPageHeader pageKey="cpd" />
 
-      {urgent.length === 0 && upcoming.length === 0 && completed.length === 0 && (
+      {!hasAny && (
         <div
           style={{
             background: "#1C2333",
@@ -51,7 +101,7 @@ export default async function CpdPage() {
           }}
         >
           <p style={{ fontSize: "0.9375rem", color: "#9CA3AF", margin: "0 0 0.5rem" }}>
-            No CPD records yet.
+            No CPD modules assigned yet.
           </p>
           <p style={{ fontSize: "0.8125rem", color: "#6B7280", margin: 0 }}>
             Complete your programme to unlock CPD tracking.

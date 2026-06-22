@@ -1,9 +1,10 @@
 import { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { moodleGetCourseModules, normalizeProgrammeSlug, MOODLE_URL } from "@/lib/moodle";
-import { CheckCircle2, PlayCircle, ArrowRight, AlertCircle } from "lucide-react";
+import { CheckCircle2, PlayCircle, ArrowRight, AlertCircle, Lock } from "lucide-react";
 import MoodleIframe from "./MoodleIframe";
 import BunnyPlayer from "./BunnyPlayer";
 import QuizPlayer from "./QuizPlayer";
@@ -41,6 +42,7 @@ export default async function ModuleLandingPage({
   let bunnyLibraryId = "";
   let modName = "";
   let quizId = 0;
+  let isLocked = false;
 
   if (!session) {
     loadError = "Please sign in to view this module.";
@@ -95,10 +97,26 @@ export default async function ModuleLandingPage({
             loadError = `Module ID "${id}" was not found in your programme.`;
           } else {
             const mod = modules[modIndex];
+            const modComplete = mod.completionstate === 1 || mod.completionstate === 2;
+
+            // Check if this module is locked — i.e. there is an incomplete
+            // module before it that the driver hasn't finished yet.
+            // The driver can only access: completed modules, the current
+            // (first incomplete) module, or the next available one.
+            if (!modComplete) {
+              const firstIncompleteIndex = modules.findIndex(
+                (m) => m.completionstate !== 1 && m.completionstate !== 2
+              );
+              // If this module is after the first incomplete one, it's locked
+              if (firstIncompleteIndex !== -1 && modIndex > firstIncompleteIndex) {
+                isLocked = true;
+              }
+            }
+
             moduleName = mod.name;
             modName = mod.modname;
             moduleIndex = modIndex;
-            isComplete = mod.completionstate === 1 || mod.completionstate === 2;
+            isComplete = modComplete;
             bunnyVideoId = mod.bunnyVideoId ?? "";
             bunnyLibraryId = mod.bunnyLibraryId ?? "";
             if (mod.modname === "quiz") {
@@ -120,11 +138,13 @@ export default async function ModuleLandingPage({
               moduleUrl = fallbackUrl;
             }
             if (modIndex + 1 < modules.length) {
-              nextModuleId = String(modules[modIndex + 1].id);
+              // Only show next module link if current module is completed
+              if (modComplete) {
+                nextModuleId = String(modules[modIndex + 1].id);
+              }
             }
-            if (modIndex > 0) {
-              prevModuleId = String(modules[modIndex - 1].id);
-            }
+            // Previous module navigation removed — drivers should use the
+            // course/learning page to navigate, and only to the current module.
           }
         }
       } catch (err) {
@@ -136,11 +156,78 @@ export default async function ModuleLandingPage({
 
   const hasData = moduleIndex >= 0 && (moduleUrl || bunnyVideoId || modName === "quiz");
 
+  // If the module is locked, show a locked message instead of the content
+  if (isLocked) {
+    // Find the first incomplete module to redirect the driver to
+    return (
+      <div className="page-content">
+        <Link
+          href="/portal/course"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.375rem",
+            color: "#9CA3AF",
+            fontSize: "0.875rem",
+            textDecoration: "none",
+            marginBottom: "1.5rem",
+          }}
+        >
+          ← Back to programme
+        </Link>
+        <div
+          style={{
+            background: "rgba(239,68,68,0.08)",
+            border: "1px solid rgba(239,68,68,0.25)",
+            borderRadius: "1rem",
+            padding: "2rem",
+            textAlign: "center",
+          }}
+        >
+          <Lock size={32} style={{ color: "#EF4444", margin: "0 auto 1rem" }} />
+          <h1
+            style={{
+              fontFamily: "var(--font-dm-sans), sans-serif",
+              fontWeight: 800,
+              fontSize: "1.25rem",
+              color: "#F9FAFB",
+              margin: "0 0 0.5rem",
+            }}
+          >
+            Module locked
+          </h1>
+          <p style={{ fontSize: "0.875rem", color: "#9CA3AF", margin: "0 0 1.5rem", lineHeight: 1.5 }}>
+            You need to complete the previous modules before you can access this one.
+            Continue with your current module to unlock this content.
+          </p>
+          <Link
+            href="/portal/course"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              background: "#F59E0B",
+              color: "#111827",
+              fontFamily: "var(--font-dm-sans), sans-serif",
+              fontWeight: 700,
+              fontSize: "0.9375rem",
+              padding: "0.75rem 1.5rem",
+              borderRadius: "0.75rem",
+              textDecoration: "none",
+            }}
+          >
+            Go to current module <ArrowRight size={16} />
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page-content">
       {/* Back link */}
       <Link
-        href="/portal/course"
+        href="/portal/learning"
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -312,26 +399,22 @@ export default async function ModuleLandingPage({
         </div>
       )}
 
-      {/* Navigation between modules */}
+      {/* Navigation — only show next module if current is completed */}
       <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
-        {prevModuleId ? (
-          <Link
-            href={`/portal/module/${prevModuleId}`}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              color: "#9CA3AF",
-              fontSize: "0.9375rem",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            ← Previous module
-          </Link>
-        ) : (
-          <div />
-        )}
+        <Link
+          href="/portal/course"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            color: "#9CA3AF",
+            fontSize: "0.9375rem",
+            fontWeight: 600,
+            textDecoration: "none",
+          }}
+        >
+          ← Back to programme
+        </Link>
         {nextModuleId && (
           <Link
             href={`/portal/module/${nextModuleId}`}

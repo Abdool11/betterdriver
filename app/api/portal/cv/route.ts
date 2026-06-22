@@ -1,9 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 
 // POST /api/portal/cv — generate a basic CV PDF (HTML-to-text for now, PDF library optional)
-export async function POST() {
+export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -33,23 +33,50 @@ export async function POST() {
     .eq("driver_id", session.driverId)
     .order("completed_at", { ascending: false });
 
+  const certList = (certs ?? []).map((c: Record<string, unknown>) => {
+    const course = c.courses as unknown as Record<string, string> | null;
+    return {
+      programme: course?.name ?? "Programme",
+      status: "Certified",
+      date: c.enrolled_at
+        ? new Date(String(c.enrolled_at ?? "")).toLocaleDateString("en-ZA")
+        : "—",
+    };
+  });
+
+  const cpdList = (cpd ?? []).map((r: Record<string, unknown>) => ({
+    module: r.module_title,
+    date: r.completed_at
+      ? new Date(String(r.completed_at ?? "")).toLocaleDateString("en-ZA")
+      : "—",
+  }));
+
+  // Return JSON if requested
+  const url = new URL(req.url);
+  if (url.searchParams.get("format") === "json") {
+    return NextResponse.json({
+      driver,
+      certifications: certList,
+      cpdRecords: cpdList,
+    });
+  }
+
   // Generate HTML CV (browser can print-to-PDF)
-  const certRows = (certs ?? [])
-    .map((c: Record<string, unknown>) => {
-      const course = c.courses as unknown as Record<string, string> | null;
-      return `<tr>
-        <td>${course?.name ?? "Programme"}</td>
-        <td>Certified</td>
-        <td>${c.enrolled_at ? new Date(String(c.enrolled_at ?? "")).toLocaleDateString("en-ZA") : "—"}</td>
-      </tr>`;
-    })
+  const certRows = certList
+    .map(
+      (c) => `<tr>
+        <td>${c.programme}</td>
+        <td>${c.status}</td>
+        <td>${c.date}</td>
+      </tr>`
+    )
     .join("");
 
-  const cpdRows = (cpd ?? [])
+  const cpdRows = cpdList
     .map(
-      (r: Record<string, unknown>) => `<tr>
-        <td>${r.module_title}</td>
-        <td>${r.completed_at ? new Date(String(r.completed_at ?? "")).toLocaleDateString("en-ZA") : "—"}</td>
+      (r) => `<tr>
+        <td>${r.module}</td>
+        <td>${r.date}</td>
       </tr>`
     )
     .join("");

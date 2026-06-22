@@ -9,7 +9,7 @@ import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "My Tasks",
+  title: "Dashboard",
 };
 
 export default async function TasksPage() {
@@ -19,11 +19,12 @@ export default async function TasksPage() {
   let inProgressTasks: { id: string; title: string; description: string; progressPercent?: number; actionHref: string; actionLabel: string }[] = [];
   let urgentTasks: { id: string; title: string; description: string; actionHref: string; actionLabel: string; dueLabel: string }[] = [];
   let upcomingTasks: { id: string; title: string; description: string; dueLabel?: string }[] = [];
+  let overdueTasks: typeof urgentTasks = [];
 
   if (session) {
     const { data: driver } = await supabaseAdmin
       .from("drivers")
-      .select("id, first_name, last_name, moodle_user_id, profile_complete")
+      .select("id, first_name, last_name, moodle_user_id, profile_complete, licence_expiry")
       .eq("id", session.driverId)
       .single();
 
@@ -75,9 +76,70 @@ export default async function TasksPage() {
         // ignore
       }
     }
-  }
 
-  const overdueTasks: typeof urgentTasks = [];
+    // CPD overdue tasks
+    const now = new Date();
+    const { data: cpdRows } = await supabaseAdmin
+      .from("driver_cpd_participation")
+      .select(
+        `id, completed_at,
+         cpd_modules(id, title, due_date)`
+      )
+      .eq("driver_id", session.driverId);
+
+    for (const row of cpdRows ?? []) {
+      if (row.completed_at) continue;
+      const mod = row.cpd_modules as unknown as { title?: string; due_date?: string } | null;
+      const due = mod?.due_date ? new Date(mod.due_date) : null;
+      if (due && due < now) {
+        overdueTasks.push({
+          id: `cpd-${row.id}`,
+          title: `CPD overdue: ${mod?.title ?? "CPD Module"}`,
+          description: "Your CPD module is past its due date.",
+          actionHref: "/portal/cpd",
+          actionLabel: "View CPD",
+          dueLabel: due.toLocaleDateString("en-ZA", { day: "numeric", month: "short" }),
+        });
+      } else if (due) {
+        const days = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        urgentTasks.push({
+          id: `cpd-${row.id}`,
+          title: `CPD due: ${mod?.title ?? "CPD Module"}`,
+          description: `Complete this CPD module before the due date.`,
+          actionHref: "/portal/cpd",
+          actionLabel: "Start CPD",
+          dueLabel: `${days} day${days > 1 ? "s" : ""}`,
+        });
+      }
+    }
+
+    // Licence expiry approaching
+    if (driver?.licence_expiry) {
+      const expiry = new Date(driver.licence_expiry);
+      const thirtyDays = new Date();
+      thirtyDays.setDate(thirtyDays.getDate() + 30);
+      if (expiry <= thirtyDays && expiry >= now) {
+        const days = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        urgentTasks.push({
+          id: "licence-expiry",
+          title: "Licence expiry approaching",
+          description: "Your driving licence is expiring soon.",
+          actionHref: "/portal/profile",
+          actionLabel: "Update licence",
+          dueLabel: `${days} day${days > 1 ? "s" : ""}`,
+        });
+      } else if (expiry < now) {
+        overdueTasks.push({
+          id: "licence-expired",
+          title: "Licence expired",
+          description: "Your driving licence has expired. Please renew it immediately.",
+          actionHref: "/portal/profile",
+          actionLabel: "Update licence",
+          dueLabel: "Expired",
+        });
+      }
+    }
+  }
 
   return (
     <div className="page-content">

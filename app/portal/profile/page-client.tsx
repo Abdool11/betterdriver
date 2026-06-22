@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { User, Truck, Briefcase, ChevronDown } from "lucide-react";
+import { User, Truck, Briefcase, ChevronDown, CheckCircle2 } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
 
 interface DriverProfile {
@@ -23,12 +23,27 @@ export default function ProfilePage() {
   const [driver, setDriver] = useState<DriverProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [openSection, setOpenSection] = useState<string | null>("personal");
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
+
+  const [form, setForm] = useState<Partial<DriverProfile>>({});
 
   useEffect(() => {
     fetch("/api/portal/profile")
       .then((r) => r.json())
       .then((d) => {
-        if (d.driver) setDriver(d.driver);
+        if (d.driver) {
+          setDriver(d.driver);
+          setForm({
+            mobile: d.driver.mobile,
+            id_number: d.driver.id_number,
+            licence_number: d.driver.licence_number,
+            licence_class: d.driver.licence_class,
+            licence_expiry: d.driver.licence_expiry,
+            years_experience: d.driver.years_experience,
+            vehicle_types: d.driver.vehicle_types,
+          });
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -160,34 +175,93 @@ export default function ProfilePage() {
           </button>
           {openSection === section.id && (
             <div style={{ padding: "0 1.25rem 1.25rem", borderTop: "1px solid #2d3a4f" }}>
-              {/* TODO: Asif — wire each field to a Server Action for profile update */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem", marginTop: "1rem" }}>
-                {section.fields.map((field) => (
-                  <div key={field.label}>
-                    <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#6B7280", marginBottom: "0.375rem" }}>
-                      {field.label}
-                    </label>
-                    <input
-                      type={field.type}
-                      defaultValue={(field as any).value}
-                      readOnly={(field as any).readOnly}
-                      style={{
-                        width: "100%",
-                        background: (field as any).readOnly ? "#1a2230" : "#243044",
-                        border: "1px solid #2d3a4f",
-                        borderRadius: "0.625rem",
-                        padding: "0.625rem 0.875rem",
-                        color: (field as any).readOnly ? "#6B7280" : "#F9FAFB",
-                        fontSize: "0.875rem",
-                        outline: "none",
-                        boxSizing: "border-box",
-                      }}
-                    />
-                  </div>
-                ))}
+                {section.fields.map((field) => {
+                  const keyMap: Record<string, keyof DriverProfile> = {
+                    "ID number": "id_number",
+                    "Mobile": "mobile",
+                    "Licence number": "licence_number",
+                    "Licence class": "licence_class",
+                    "Licence expiry": "licence_expiry",
+                    "Years driving": "years_experience",
+                    "Vehicle types driven": "vehicle_types",
+                  };
+                  const fieldKey = keyMap[field.label];
+                  const isReadOnly = (field as any).readOnly;
+                  return (
+                    <div key={field.label}>
+                      <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#6B7280", marginBottom: "0.375rem" }}>
+                        {field.label}
+                      </label>
+                      <input
+                        type={field.type}
+                        value={
+                          fieldKey
+                            ? (form[fieldKey] as string | number | undefined) ?? ""
+                            : (field as any).value
+                        }
+                        readOnly={isReadOnly}
+                        onChange={(e) => {
+                          if (!fieldKey || isReadOnly) return;
+                          let val: string | number | string[] | null = e.target.value;
+                          if (field.label === "Years driving") {
+                            val = e.target.value === "" ? null : Number(e.target.value);
+                          }
+                          if (field.label === "Vehicle types driven") {
+                            val = e.target.value.split(",").map((s) => s.trim()).filter(Boolean);
+                          }
+                          setForm((prev) => ({ ...prev, [fieldKey]: val }));
+                        }}
+                        style={{
+                          width: "100%",
+                          background: isReadOnly ? "#1a2230" : "#243044",
+                          border: "1px solid #2d3a4f",
+                          borderRadius: "0.625rem",
+                          padding: "0.625rem 0.875rem",
+                          color: isReadOnly ? "#6B7280" : "#F9FAFB",
+                          fontSize: "0.875rem",
+                          outline: "none",
+                          boxSizing: "border-box",
+                        }}
+                      />
+                    </div>
+                  );
+                })}
               </div>
-              <button className="btn-primary" style={{ marginTop: "1.25rem", fontSize: "0.875rem", padding: "0.625rem 1.25rem" }}>
-                Save changes
+              {saveMsg && (
+                <div style={{ marginTop: "0.75rem", display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.8125rem", color: "#10B981" }}>
+                  <CheckCircle2 size={14} /> {saveMsg}
+                </div>
+              )}
+              <button
+                className="btn-primary"
+                style={{ marginTop: "1.25rem", fontSize: "0.875rem", padding: "0.625rem 1.25rem" }}
+                disabled={saving}
+                onClick={async () => {
+                  setSaving(true);
+                  setSaveMsg("");
+                  try {
+                    const res = await fetch("/api/portal/profile", {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify(form),
+                    });
+                    const d = await res.json();
+                    if (d.ok) {
+                      setSaveMsg("Profile updated successfully");
+                      const refreshed = await fetch("/api/portal/profile").then((r) => r.json());
+                      if (refreshed.driver) setDriver(refreshed.driver);
+                    } else {
+                      setSaveMsg(d.error || "Update failed");
+                    }
+                  } catch {
+                    setSaveMsg("Network error — please try again");
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                {saving ? "Saving…" : "Save changes"}
               </button>
             </div>
           )}

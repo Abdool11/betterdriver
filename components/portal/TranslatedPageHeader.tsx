@@ -25,11 +25,11 @@ type PageKey =
 const PAGE_COPY: Record<PageKey, Record<Lang, { title: string; sub: string | ((name: string) => string) }>> = {
   tasks: {
     en: {
-      title: "My Tasks",
+      title: "Dashboard",
       sub: (name: string) => `Good morning, ${name}. Here is what needs your attention today.`,
     },
     zu: {
-      title: "Imisebenzi Yami",
+      title: "I-Dashboard",
       sub: (name: string) => `Sawubona, ${name}. Nansi imisebenzi edinga ukunakwa kwakho namuhla.`,
     },
   },

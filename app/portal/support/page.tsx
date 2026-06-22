@@ -1,16 +1,8 @@
-import { Metadata } from "next";
-import { MessageCircle, Phone, Mail, HelpCircle } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import { MessageCircle, Phone, Mail, HelpCircle, CheckCircle2 } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
-import { getConfigs } from "@/lib/supabase";
-
-export const dynamic = "force-dynamic";
-
-// DATA REQUIREMENTS:
-// - support contact details: from site_config table (bd_support_email, bd_support_phone, bd_whatsapp_number)
-// - Contact form submission: POST to /api/support-ticket
-// TODO: Asif — implement support ticket submission Server Action
-
-export const metadata: Metadata = { title: "Support" };
 
 const FAQS = [
   {
@@ -35,12 +27,37 @@ const FAQS = [
   },
 ];
 
-export default async function SupportPage() {
-  const config = await getConfigs(["bd_support_email", "bd_support_phone", "bd_whatsapp_number"]);
+export default function SupportPage() {
+  const [category, setCategory] = useState("");
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent] = useState(false);
 
-  const supportEmail = config["bd_support_email"] || process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@betterdriver.co.za";
-  const supportPhone = config["bd_support_phone"] || process.env.NEXT_PUBLIC_SUPPORT_PHONE || "+27 000 000 0000";
-  const whatsappNumber = config["bd_whatsapp_number"] || "27000000000";
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!category || !message.trim() || message.trim().length < 5) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/portal/support-ticket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category, message: message.trim() }),
+      });
+      if (res.ok) {
+        setSent(true);
+        setCategory("");
+        setMessage("");
+      }
+    } catch {
+      // ignore
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const supportEmail = "support@betterdriver.co.za";
+  const supportPhone = "+27 000 000 0000";
+  const whatsappNumber = "27000000000";
 
   return (
     <div className="page-content">
@@ -54,7 +71,6 @@ export default async function SupportPage() {
             label: "Chat with us",
             value: "Available Mon–Fri, 8am–5pm",
             href: `https://wa.me/${whatsappNumber}`,
-            // TODO: Asif — wire to live chat integration
           },
           {
             icon: <Phone size={20} style={{ color: "#10B981" }} />,
@@ -144,58 +160,70 @@ export default async function SupportPage() {
         <h2 style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 700, fontSize: "1.0625rem", color: "#F9FAFB", marginBottom: "1.25rem" }}>
           Send us a message
         </h2>
-        {/* TODO: Asif — implement Server Action for support ticket submission, POST to /api/support-ticket */}
-        <form style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <div>
-            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#6B7280", marginBottom: "0.375rem" }}>
-              What do you need help with?
-            </label>
-            <select
-              style={{
-                width: "100%",
-                background: "#243044",
-                border: "1px solid #2d3a4f",
-                borderRadius: "0.625rem",
-                padding: "0.625rem 0.875rem",
-                color: "#F9FAFB",
-                fontSize: "0.875rem",
-                outline: "none",
-              }}
-            >
-              <option value="">Select a topic</option>
-              <option value="login">Login or access problem</option>
-              <option value="training">Training or course issue</option>
-              <option value="certificate">Certificate not showing</option>
-              <option value="cpd">CPD question</option>
-              <option value="other">Other</option>
-            </select>
+        {sent ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", color: "#10B981", fontSize: "0.9375rem" }}>
+            <CheckCircle2 size={18} /> Your message has been sent. We will get back to you soon.
           </div>
-          <div>
-            <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#6B7280", marginBottom: "0.375rem" }}>
-              Message
-            </label>
-            <textarea
-              rows={4}
-              placeholder="Describe your issue..."
-              style={{
-                width: "100%",
-                background: "#243044",
-                border: "1px solid #2d3a4f",
-                borderRadius: "0.625rem",
-                padding: "0.625rem 0.875rem",
-                color: "#F9FAFB",
-                fontSize: "0.875rem",
-                outline: "none",
-                resize: "vertical",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
-          <button type="submit" className="btn-primary" style={{ alignSelf: "flex-start" }}>
-            Send message
-          </button>
-        </form>
-    </div>
+        ) : (
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <div>
+              <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#6B7280", marginBottom: "0.375rem" }}>
+                What do you need help with?
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                required
+                style={{
+                  width: "100%",
+                  background: "#243044",
+                  border: "1px solid #2d3a4f",
+                  borderRadius: "0.625rem",
+                  padding: "0.625rem 0.875rem",
+                  color: "#F9FAFB",
+                  fontSize: "0.875rem",
+                  outline: "none",
+                }}
+              >
+                <option value="">Select a topic</option>
+                <option value="login">Login or access problem</option>
+                <option value="training">Training or course issue</option>
+                <option value="certificate">Certificate not showing</option>
+                <option value="cpd">CPD question</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 600, color: "#6B7280", marginBottom: "0.375rem" }}>
+                Message
+              </label>
+              <textarea
+                rows={4}
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Describe your issue..."
+                required
+                minLength={5}
+                style={{
+                  width: "100%",
+                  background: "#243044",
+                  border: "1px solid #2d3a4f",
+                  borderRadius: "0.625rem",
+                  padding: "0.625rem 0.875rem",
+                  color: "#F9FAFB",
+                  fontSize: "0.875rem",
+                  outline: "none",
+                  resize: "vertical",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+            <button type="submit" className="btn-primary" disabled={submitting} style={{ alignSelf: "flex-start" }}>
+              {submitting ? "Sending…" : "Send message"}
+            </button>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,80 +1,62 @@
-import { Metadata } from "next";
-import { getSession } from "@/lib/auth";
-import { supabaseAdmin } from "@/lib/supabase";
-import { moodleIsCourseComplete, normalizeProgrammeSlug } from "@/lib/moodle";
+"use client";
+
+import { useEffect, useState } from "react";
 import { Award, Download, Share2, CheckCircle2 } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
 
-export const dynamic = "force-dynamic";
+interface CertData {
+  driverName: string;
+  programmeName: string;
+  certNumber: string;
+  issuedDate: string;
+  isComplete: boolean;
+}
 
-export const metadata: Metadata = { title: "My Certificate" };
+export default function PortalCertificatePage() {
+  const [data, setData] = useState<CertData | null>(null);
+  const [loading, setLoading] = useState(true);
 
-export default async function PortalCertificatePage() {
-  const session = await getSession();
-
-  let driverName = "Driver";
-  let programmeName = "The Professional Truck Driver Programme";
-  let certNumber = "";
-  let issuedDate = "";
-  let isComplete = false;
-
-  if (session) {
-    const { data: driver } = await supabaseAdmin
-      .from("drivers")
-      .select("id, first_name, last_name, moodle_user_id")
-      .eq("id", session.driverId)
-      .single();
-
-    const { data: enrolment } = await supabaseAdmin
-      .from("enrolments")
-      .select("programme_slug")
-      .eq("driver_id", session.driverId)
-      .eq("status", "active")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    driverName = driver?.first_name ?? session.firstName ?? "Driver";
-
-    if (driver?.moodle_user_id && enrolment?.programme_slug) {
-      const canonicalSlug = normalizeProgrammeSlug(enrolment.programme_slug);
-      programmeName =
-        canonicalSlug === "professional-truck-driver"
-          ? "The Professional Truck Driver Programme"
-          : "Eco-Driver Training";
-
-      try {
-        isComplete = await moodleIsCourseComplete({
-          moodleUserId: driver.moodle_user_id,
-          programmeSlug: canonicalSlug,
+  useEffect(() => {
+    fetch("/api/portal/dashboard")
+      .then((r) => r.json())
+      .then((d) => {
+        const stats = d?.stats;
+        const isComplete = stats?.certificateReady ?? false;
+        setData({
+          driverName: `${stats?.firstName ?? ""} ${stats?.lastName ?? ""}`.trim() || "Driver",
+          programmeName: stats?.programmeTitle || "The Professional Truck Driver Programme",
+          certNumber: "",
+          issuedDate: "",
+          isComplete,
         });
-      } catch {
-        // ignore
-      }
-    }
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
 
-    if (isComplete) {
-      const { data: cert } = await supabaseAdmin
-        .from("certifications")
-        .select("certificate_number, issued_at")
-        .eq("driver_id", session.driverId)
-        .eq("status", "active")
-        .order("issued_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+  async function handleDownload() {
+    window.open("/api/portal/certificate/download", "_blank");
+  }
 
-      if (cert) {
-        certNumber = cert.certificate_number;
-        issuedDate = cert.issued_at
-          ? new Date(cert.issued_at).toLocaleDateString("en-ZA", {
-              day: "numeric",
-              month: "long",
-              year: "numeric",
-            })
-          : "";
-      }
+  function handleShare() {
+    const url = `${window.location.origin}/verify/${data?.certNumber ?? ""}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => alert("Public link copied to clipboard"));
+    } else {
+      alert(`Share this link: ${url}`);
     }
   }
+
+  if (loading || !data) {
+    return (
+      <div className="page-content">
+        <TranslatedPageHeader pageKey="certificate" />
+        <p style={{ color: "#6B7280", fontSize: "0.875rem" }}>Loading certificate…</p>
+      </div>
+    );
+  }
+
+  const { driverName, programmeName, certNumber, issuedDate, isComplete } = data;
 
   return (
     <div className="page-content">
@@ -162,20 +144,23 @@ export default async function PortalCertificatePage() {
 
       {/* Actions */}
       <div style={{ display: "flex", gap: "0.875rem", flexWrap: "wrap" }}>
-        {/* TODO: Asif — implement PDF download via /api/certificate/download?id= */}
         <button
           className="btn-primary"
           style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+          onClick={handleDownload}
+          disabled={!isComplete}
         >
           <Download size={16} /> Download PDF
         </button>
         <button
           className="btn-secondary"
           style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+          onClick={handleShare}
+          disabled={!isComplete}
         >
           <Share2 size={16} /> Share certificate
         </button>
-    </div>
+      </div>
     </div>
   );
 }

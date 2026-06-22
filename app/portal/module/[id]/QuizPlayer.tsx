@@ -99,7 +99,10 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
 
   async function handleSubmit() {
     if (!quiz || !quiz.questions) return;
-    const unanswered = quiz.questions.filter((q) => !answers[q.slot]);
+    // Essay / free-form questions always pass — don't block submission if empty
+    const unanswered = quiz.questions.filter(
+      (q) => q.type !== "essay" && !answers[q.slot]
+    );
     if (unanswered.length > 0) {
       setErrorMsg(`Please answer all ${unanswered.length} remaining question(s).`);
       return;
@@ -108,14 +111,21 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
     setSubmitting(true);
     setErrorMsg("");
 
-    // Build numeric answers keyed by slot
+    const hasEssay = quiz.questions.some((q) => q.type === "essay");
+
+    // Build answers keyed by slot — essay questions get a default if left blank
     const payloadAnswers: Record<string, string | number> = {};
     const payloadSeq: Record<string, number> = {};
-    for (const [slot, value] of Object.entries(answers)) {
-      const num = parseInt(slot, 10);
-      payloadAnswers[num] = value;
-      if (sequenceChecks[num] !== undefined) {
-        payloadSeq[num] = sequenceChecks[num];
+    for (const q of quiz.questions) {
+      const slot = q.slot;
+      const userAnswer = answers[slot];
+      if (q.type === "essay") {
+        payloadAnswers[slot] = userAnswer?.trim() ? userAnswer : "No response provided.";
+      } else if (userAnswer) {
+        payloadAnswers[slot] = userAnswer;
+      }
+      if (sequenceChecks[slot] !== undefined) {
+        payloadSeq[slot] = sequenceChecks[slot];
       }
     }
 
@@ -128,6 +138,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
           answers: payloadAnswers,
           sequenceChecks: payloadSeq,
           cmid: moduleId,
+          hasEssayQuestions: hasEssay,
         }),
       });
       const data = await res.json();
