@@ -381,11 +381,11 @@ export default async function ModuleLandingPage({
                 fontFamily: "var(--font-dm-sans), sans-serif",
                 fontWeight: 700,
                 fontSize: "0.9375rem",
-                color: "#F9FAFB",
+                color: isComplete ? "#10B981" : "#F59E0B",
                 margin: "0 0 0.125rem",
               }}
             >
-              {isComplete ? "Module complete" : "Module in progress"}
+              {isComplete ? "Module completed" : "Module in progress"}
             </p>
             <p style={{ fontSize: "0.8125rem", color: "#6B7280", margin: 0 }}>
               {isComplete
