@@ -396,6 +396,27 @@ export default async function ModuleLandingPage({
           {isComplete && (
             <span className="pill pill-green" style={{ fontSize: "0.6875rem" }}>Done</span>
           )}
+          {isComplete && nextModuleId && (
+            <Link
+              href={`/portal/module/${nextModuleId}`}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.375rem",
+                background: "var(--amber)",
+                color: "#111827",
+                fontFamily: "var(--font-dm-sans), sans-serif",
+                fontWeight: 700,
+                fontSize: "0.8125rem",
+                padding: "0.5rem 0.875rem",
+                borderRadius: "0.625rem",
+                textDecoration: "none",
+                flexShrink: 0,
+              }}
+            >
+              Next module <ArrowRight size={14} />
+            </Link>
+          )}
         </div>
       )}
 
@@ -415,22 +436,6 @@ export default async function ModuleLandingPage({
         >
           ← Back to programme
         </Link>
-        {nextModuleId && (
-          <Link
-            href={`/portal/module/${nextModuleId}`}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              color: "#14b8a6",
-              fontSize: "0.9375rem",
-              fontWeight: 600,
-              textDecoration: "none",
-            }}
-          >
-            Next module <ArrowRight size={16} />
-          </Link>
-        )}
       </div>
     </div>
   );
