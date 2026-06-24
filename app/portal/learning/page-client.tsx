@@ -89,13 +89,14 @@ export default function LearningPage() {
               <p style={{ fontWeight: 700, fontSize: "0.875rem", color: "var(--text-primary)", margin: "0 0 0.25rem" }}>Save data — download on WiFi</p>
               <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: "0 0 0.625rem", lineHeight: 1.5 }}>Download your course materials now while on WiFi so you can study without using mobile data.</p>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                {modules
-                  .filter((mod) => mod.downloadable)
-                  .map((mod: Module) => (
+                {(() => {
+                  const currentModule = modules.find((m) => m.status === "in_progress") ?? modules.find((m) => m.status === "available" && !m.locked);
+                  if (!currentModule || !currentModule.downloadable) return null;
+                  return (
                     <a
-                      key={mod.id}
-                      href={`/api/portal/download?moduleId=${mod.id}`}
-                      download={mod.downloadFilename}
+                      key={currentModule.id}
+                      href={`/api/portal/download?moduleId=${currentModule.id}`}
+                      download={currentModule.downloadFilename}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -111,9 +112,10 @@ export default function LearningPage() {
                         textDecoration: "none",
                       }}
                     >
-                      <Download size={11} /> Module {mod.order}
+                      <Download size={11} /> Module {currentModule.order}
                     </a>
-                  ))}
+                  );
+                })()}
                 {!loading && modules.every((mod) => !mod.downloadable) && (
                   <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
                     No downloadable materials found in this programme.
@@ -152,17 +154,51 @@ export default function LearningPage() {
         </div>
 
         {/* Progress */}
-        <div style={{ marginBottom: "0.75rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+        <div style={{ marginBottom: "1rem" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "0.625rem",
+            }}
+          >
             <span style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", fontWeight: 600 }}>
               {prog.completedModules} of {prog.totalModules} modules complete
             </span>
-            <span style={{ fontSize: "0.8125rem", fontWeight: 700, color: "var(--amber)" }}>
+            <span
+              style={{
+                fontSize: "0.8125rem",
+                fontWeight: 700,
+                color: "var(--amber)",
+                background: "var(--amber-subtle)",
+                padding: "0.125rem 0.5rem",
+                borderRadius: "9999px",
+                minWidth: "2.5rem",
+                textAlign: "center",
+              }}
+            >
               {prog.progressPercent}%
             </span>
           </div>
-          <div className="progress-track">
-            <div className="progress-fill" style={{ width: `${prog.progressPercent}%` }} />
+          <div
+            style={{
+              height: "0.625rem",
+              background: "var(--amber-subtle)",
+              borderRadius: "9999px",
+              overflow: "hidden",
+              border: "1px solid rgba(245, 158, 11, 0.15)",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${prog.progressPercent}%`,
+                background: "var(--amber)",
+                borderRadius: "9999px",
+                transition: "width 0.6s ease",
+              }}
+            />
           </div>
         </div>
 
@@ -270,7 +306,7 @@ export default function LearningPage() {
                 </div>
 
                 {currentModule.status === "in_progress" && (
-                  <span className="badge badge-amber">Continue</span>
+                  <span className="badge badge-amber pulse-amber">Continue</span>
                 )}
                 {currentModule.status === "available" && (
                   <span className="badge badge-info">Start</span>
@@ -281,39 +317,15 @@ export default function LearningPage() {
         })()}
       </div>
 
-      {/* Completed modules — progress reference only, not clickable */}
-      {modules.filter((m) => m.status === "completed").length > 0 && (
-        <div>
-          <div className="section-header">
-            <span className="section-title">Completed modules</span>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-              {modules.filter((m) => m.status === "completed").length} done
-            </span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-            {modules.filter((m) => m.status === "completed").map((mod: Module) => (
-              <div
-                key={mod.id}
-                className="card"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.875rem",
-                  borderLeft: "3px solid var(--success)",
-                }}
-              >
-                <CheckCircle2 size={14} style={{ color: "var(--success)", flexShrink: 0 }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {mod.order}. {mod.name}
-                  </div>
-                </div>
-                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Done</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <style>{`
+        @keyframes pulse-amber {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
+          50% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
+        }
+        .pulse-amber {
+          animation: pulse-amber 2s infinite;
+        }
+      `}</style>
 
       {/* Completion CTA */}
       {prog.progressPercent >= 100 && (
