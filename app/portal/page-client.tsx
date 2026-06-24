@@ -149,7 +149,7 @@ export default function PortalHomePage() {
   const copy = COPY[lang];
 
   useEffect(() => {
-    fetch("/api/portal/dashboard")
+    fetch("/api/portal/dashboard", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
         if (d.stats) setStats(d.stats);

@@ -116,20 +116,28 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 5. Sync progress back to Supabase if it changed
-  if (enrolment && (progress.progressPercent !== enrolment.progress_percent || progress.completedmodules !== enrolment.modules_completed)) {
+  // 5. Use the most up-to-date completed count. The progress API updates
+  // Supabase immediately when a video finishes, while Moodle may lag.
+  const supabaseCompleted = enrolment?.modules_completed ?? 0;
+  const completedModules = Math.max(progress.completedmodules, supabaseCompleted);
+  const totalModules = moodleModules.length > 0 ? moodleModules.length : progress.totalmodules;
+  const progressPercent = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
+  const courseCompleted = completedModules >= totalModules && totalModules > 0;
+
+  // 6. Sync the latest progress back to Supabase
+  if (enrolment && (progressPercent !== enrolment.progress_percent || completedModules !== enrolment.modules_completed || courseCompleted !== !!enrolment.completed_at)) {
     await supabaseAdmin
       .from("enrolments")
       .update({
-        progress_percent: progress.progressPercent,
-        modules_completed: progress.completedmodules,
-        completed_at: progress.completed && !enrolment.completed_at ? new Date().toISOString() : enrolment.completed_at,
+        progress_percent: progressPercent,
+        modules_completed: completedModules,
+        completed_at: courseCompleted && !enrolment.completed_at ? new Date().toISOString() : enrolment.completed_at,
         last_activity_at: new Date().toISOString(),
       })
       .eq("id", enrolment.id);
   }
 
-  // 6. Determine next module (first incomplete module in order)
+  // 7. Determine next module (first incomplete module in order)
   const nextModule = moodleModules.find((m) => m.completionstate === 0) ?? null;
 
   // 7. Build dashboard response
@@ -198,13 +206,13 @@ export async function GET(req: NextRequest) {
       firstName: driver.first_name ?? session.firstName,
       lastName: driver.last_name ?? session.lastName,
       programmeTitle,
-      progressPercent: progress.progressPercent,
-      completedModules: progress.completedmodules,
-      totalModules: progress.totalmodules,
+      progressPercent,
+      completedModules,
+      totalModules,
       cpdDue: cpdOverdueCount > 0 || cpdUpcomingCount > 0,
       cpdOverdueCount,
       cpdUpcomingCount,
-      certificateReady: progress.completed,
+      certificateReady: courseCompleted,
       unreadBulletins,
     },
     nextModule: nextModule

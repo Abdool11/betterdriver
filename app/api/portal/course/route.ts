@@ -67,10 +67,14 @@ export async function GET(req: NextRequest) {
   // We derive "in-progress" / "available" from sequential ordering
   // A module is "locked" if it is not completed AND there is an incomplete
   // module before it — drivers can only access their current or next module.
+  const supabaseCompleted = enrolment?.modules_completed ?? 0;
   let foundIncomplete = false;
   const mappedModules = modules.map((mod, index) => {
-    const isComplete = mod.completionstate === 1 || mod.completionstate === 2;
+    const moodleComplete = mod.completionstate === 1 || mod.completionstate === 2;
     const isFail = mod.completionstate === 3;
+    // Trust the Supabase completed count as a fallback when Moodle lags
+    // (the progress API updates Supabase immediately on video finish).
+    const isComplete = moodleComplete || index < supabaseCompleted;
 
     let status: "completed" | "in_progress" | "available" = "available";
     let locked = false;
@@ -105,7 +109,10 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  const completedCount = mappedModules.filter((m) => m.status === "completed").length;
+  const completedCount = Math.max(
+    mappedModules.filter((m) => m.status === "completed").length,
+    supabaseCompleted
+  );
   const progressPercent = modules.length > 0 ? Math.round((completedCount / modules.length) * 100) : 0;
 
   return NextResponse.json({

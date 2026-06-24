@@ -48,7 +48,7 @@ export default function LearningPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/portal/course")
+    fetch("/api/portal/course", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
         if (d.programme) setProgramme(d.programme);
