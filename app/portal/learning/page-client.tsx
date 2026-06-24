@@ -78,6 +78,108 @@ export default function LearningPage() {
         </p>
       </div>
 
+      {/* Current / Next module — the only module the driver can access */}
+      <div>
+        <div className="section-header">
+          <span className="section-title">
+            {modules.find((m) => m.status === "in_progress") ? "Current module" : "Next module"}
+          </span>
+        </div>
+
+        {(() => {
+          const currentModule = modules.find((m) => m.status === "in_progress") ?? modules.find((m) => m.status === "available" && !m.locked);
+          const allDone = prog.completedModules === prog.totalModules && prog.totalModules > 0;
+
+          if (allDone) {
+            return (
+              <div className="card" style={{ textAlign: "center", padding: "1.5rem" }}>
+                <CheckCircle2 size={28} style={{ color: "var(--success)", margin: "0 auto 0.75rem" }} />
+                <p style={{ fontWeight: 700, fontSize: "0.9375rem", color: "var(--text-primary)", margin: "0 0 0.25rem" }}>
+                  Programme complete!
+                </p>
+                <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
+                  You have completed all modules. Your certificate is ready.
+                </p>
+              </div>
+            );
+          }
+
+          if (!currentModule) {
+            return (
+              <div className="card" style={{ padding: "1.25rem" }}>
+                <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
+                  No module available right now.
+                </p>
+              </div>
+            );
+          }
+
+          const cfg = statusConfig[currentModule.status];
+          const Icon = cfg.icon;
+
+          return (
+            <Link key={currentModule.id} href={`/portal/module/${currentModule.id}`} style={{ textDecoration: "none" }}>
+              <div
+                className="card"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.875rem",
+                  cursor: "pointer",
+                  transition: "border-color 0.15s",
+                  borderLeft: "3px solid var(--amber)",
+                }}
+              >
+                <div
+                  style={{
+                    width: "1.75rem",
+                    height: "1.75rem",
+                    borderRadius: "50%",
+                    background: cfg.bg,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Icon size={14} style={{ color: cfg.color }} />
+                </div>
+
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontWeight: 600,
+                      fontSize: "0.9rem",
+                      color: "var(--text-primary)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {currentModule.order}. {currentModule.name}
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "flex", gap: "0.5rem", marginTop: "0.125rem" }}>
+                    {currentModule.status === "in_progress" && (
+                      <span style={{ color: "var(--amber)", fontWeight: 600 }}>· In progress</span>
+                    )}
+                    {currentModule.status === "available" && (
+                      <span style={{ color: "var(--info)", fontWeight: 600 }}>· Ready to start</span>
+                    )}
+                  </div>
+                </div>
+
+                {currentModule.status === "in_progress" && (
+                  <span className="badge badge-amber pulse-amber">Continue</span>
+                )}
+                {currentModule.status === "available" && (
+                  <span className="badge badge-info">Start</span>
+                )}
+              </div>
+            </Link>
+          );
+        })()}
+      </div>
+
       {/* WiFi download banner */}
       {showDownloadBanner && (
         <div style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: "0.875rem", padding: "1rem" }}>
@@ -213,108 +315,6 @@ export default function LearningPage() {
             <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Certificate on completion</span>
           </div>
         </div>
-      </div>
-
-      {/* Current / Next module — the only module the driver can access */}
-      <div>
-        <div className="section-header">
-          <span className="section-title">
-            {modules.find((m) => m.status === "in_progress") ? "Current module" : "Next module"}
-          </span>
-        </div>
-
-        {(() => {
-          const currentModule = modules.find((m) => m.status === "in_progress") ?? modules.find((m) => m.status === "available" && !m.locked);
-          const allDone = prog.completedModules === prog.totalModules && prog.totalModules > 0;
-
-          if (allDone) {
-            return (
-              <div className="card" style={{ textAlign: "center", padding: "1.5rem" }}>
-                <CheckCircle2 size={28} style={{ color: "var(--success)", margin: "0 auto 0.75rem" }} />
-                <p style={{ fontWeight: 700, fontSize: "0.9375rem", color: "var(--text-primary)", margin: "0 0 0.25rem" }}>
-                  Programme complete!
-                </p>
-                <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
-                  You have completed all modules. Your certificate is ready.
-                </p>
-              </div>
-            );
-          }
-
-          if (!currentModule) {
-            return (
-              <div className="card" style={{ padding: "1.25rem" }}>
-                <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
-                  No module available right now.
-                </p>
-              </div>
-            );
-          }
-
-          const cfg = statusConfig[currentModule.status];
-          const Icon = cfg.icon;
-
-          return (
-            <Link key={currentModule.id} href={`/portal/module/${currentModule.id}`} style={{ textDecoration: "none" }}>
-              <div
-                className="card"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.875rem",
-                  cursor: "pointer",
-                  transition: "border-color 0.15s",
-                  borderLeft: "3px solid var(--amber)",
-                }}
-              >
-                <div
-                  style={{
-                    width: "1.75rem",
-                    height: "1.75rem",
-                    borderRadius: "50%",
-                    background: cfg.bg,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Icon size={14} style={{ color: cfg.color }} />
-                </div>
-
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontWeight: 600,
-                      fontSize: "0.9rem",
-                      color: "var(--text-primary)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {currentModule.order}. {currentModule.name}
-                  </div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "flex", gap: "0.5rem", marginTop: "0.125rem" }}>
-                    {currentModule.status === "in_progress" && (
-                      <span style={{ color: "var(--amber)", fontWeight: 600 }}>· In progress</span>
-                    )}
-                    {currentModule.status === "available" && (
-                      <span style={{ color: "var(--info)", fontWeight: 600 }}>· Ready to start</span>
-                    )}
-                  </div>
-                </div>
-
-                {currentModule.status === "in_progress" && (
-                  <span className="badge badge-amber pulse-amber">Continue</span>
-                )}
-                {currentModule.status === "available" && (
-                  <span className="badge badge-info">Start</span>
-                )}
-              </div>
-            </Link>
-          );
-        })()}
       </div>
 
       <style>{`

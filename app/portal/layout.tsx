@@ -178,6 +178,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
     <>
       <style>{`
         .pwa-sidebar { display: none; }
+        .pwa-main { padding-bottom: calc(5rem + env(safe-area-inset-bottom)); }
         @media (min-width: 768px) {
           .pwa-sidebar { display: flex !important; flex-direction: column; width: 240px; min-height: 100vh; background: var(--bg-card); border-right: 1px solid var(--border); position: sticky; top: 0; height: 100vh; overflow-y: auto; flex-shrink: 0; }
           .mobile-app-bar { display: none !important; }
