@@ -41,7 +41,6 @@ const statusConfig = {
 };
 
 export default function LearningPage() {
-  const [expanded, setExpanded] = useState<string | null>("prog-1");
   const [showDownloadBanner, setShowDownloadBanner] = useState(true);
   const [programme, setProgramme] = useState<Programme | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
@@ -59,7 +58,7 @@ export default function LearningPage() {
   }, []);
 
   const prog = programme ?? {
-    title: "Driver University Programme",
+    title: "Your Programme",
     progressPercent: 0,
     totalModules: 0,
     completedModules: 0,
@@ -67,16 +66,8 @@ export default function LearningPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-      {/* Header */}
-      <div>
-        <div className="section-label" style={{ marginBottom: "0.75rem" }}>
-          <BookOpen size={12} /> Driver University
-        </div>
-        <h2 style={{ marginBottom: "0.25rem" }}>Driver University</h2>
-        <p style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>
-          Work through each module at your own pace. Complete all units to earn your certificate.
-        </p>
-      </div>
+      {/* Programme title */}
+      <h2 style={{ margin: 0, fontSize: "1.25rem" }}>{prog.title}</h2>
 
       {/* Current / Next module — the only module the driver can access */}
       <div>
@@ -248,9 +239,8 @@ export default function LearningPage() {
             <BookOpen size={22} style={{ color: "var(--amber)" }} />
           </div>
           <div style={{ flex: 1 }}>
-            <h3 style={{ marginBottom: "0.25rem", fontSize: "1rem" }}>{prog.title}</h3>
-            <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
-              Build the skills, knowledge, and professional standing that make you a safer, more valuable driver on South African roads.
+            <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "var(--text-primary)" }}>
+              Programme progress
             </p>
           </div>
         </div>

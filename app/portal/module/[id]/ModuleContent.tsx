@@ -11,6 +11,7 @@ import {
 import BunnyPlayer from "./BunnyPlayer";
 import QuizPlayer from "./QuizPlayer";
 import MoodleIframe from "./MoodleIframe";
+import VideoPlayer from "./VideoPlayer";
 
 interface ModuleContentProps {
   id: string;
@@ -19,6 +20,7 @@ interface ModuleContentProps {
   totalModules: number;
   isComplete: boolean;
   moduleUrl: string;
+  videoUrl: string;
   nextModuleId: string | null;
   loadError: string;
   bunnyVideoId: string;
@@ -35,6 +37,7 @@ export default function ModuleContent({
   totalModules,
   isComplete,
   moduleUrl,
+  videoUrl,
   nextModuleId,
   loadError,
   bunnyVideoId,
@@ -159,89 +162,66 @@ export default function ModuleContent({
         />
       )}
 
+      {/* Native video player — direct video files uploaded to Moodle */}
+      {videoUrl && !bunnyVideoId && (
+        <VideoPlayer
+          videoUrl={videoUrl}
+          moduleId={id}
+          moduleName={moduleName || "Module"}
+          onComplete={handleComplete}
+        />
+      )}
+
       {/* Native quiz player — when module is a Moodle quiz */}
-      {modName === "quiz" && !bunnyVideoId && (
+      {modName === "quiz" && !bunnyVideoId && !videoUrl && (
         <QuizPlayer moduleId={id} quizId={quizId} moduleName={moduleName || "Quiz"} />
       )}
 
-      {/* Moodle iframe fallback — when no Bunny video or as secondary option */}
-      {!bunnyVideoId && modName !== "quiz" && moduleUrl && (
+      {/* Moodle iframe fallback — when no Bunny video, direct video, or quiz */}
+      {!bunnyVideoId && !videoUrl && modName !== "quiz" && moduleUrl && (
         <MoodleIframe moduleUrl={moduleUrl} moduleName={moduleName || "Module"} />
       )}
 
       {/* Completion status — only when we successfully found the module */}
       {hasData && (
         <div
-          style={{
-            background: "#1C2333",
-            border: `1px solid ${complete ? "rgba(16,185,129,0.3)" : "rgba(245,158,11,0.3)"}`,
-            borderRadius: "1rem",
-            padding: "1.25rem 1.5rem",
-            marginBottom: "2rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "1rem",
-          }}
+          className={`flex flex-col sm:flex-row items-start sm:items-center gap-4 p-5 rounded-2xl mb-8 ${
+            complete ? "border border-emerald-500/30 bg-emerald-500/[0.06]" : "border border-amber-500/30 bg-[#1C2333]"
+          }`}
         >
           <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: "0.625rem",
-              background: complete ? "rgba(16,185,129,0.12)" : "rgba(245,158,11,0.12)",
-              border: `1px solid ${complete ? "rgba(16,185,129,0.25)" : "rgba(245,158,11,0.25)"}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
+            className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${
+              complete ? "bg-emerald-500/15 border border-emerald-500/25" : "bg-amber-500/15 border border-amber-500/25"
+            }`}
           >
             {complete ? (
-              <CheckCircle2 size={18} style={{ color: "#10B981" }} />
+              <CheckCircle2 size={20} className="text-emerald-500" />
             ) : (
-              <PlayCircle size={18} style={{ color: "#F59E0B" }} />
+              <PlayCircle size={20} className="text-amber-500" />
             )}
           </div>
-          <div style={{ flex: 1 }}>
+          <div className="flex-1 min-w-0">
             <p
-              style={{
-                fontFamily: "var(--font-dm-sans), sans-serif",
-                fontWeight: 700,
-                fontSize: "0.9375rem",
-                color: complete ? "#10B981" : "#F59E0B",
-                margin: "0 0 0.125rem",
-              }}
+              className={`font-bold text-[0.9375rem] mb-0.5 ${
+                complete ? "text-emerald-500" : "text-amber-500"
+              }`}
+              style={{ fontFamily: "var(--font-dm-sans), sans-serif" }}
             >
               {complete ? "Module completed" : "Module in progress"}
             </p>
-            <p style={{ fontSize: "0.8125rem", color: "#6B7280", margin: 0 }}>
+            <p className="text-[0.8125rem] text-gray-500 m-0">
               {complete
                 ? "You have completed this module. Great work!"
                 : "Finish the activity above to mark this module complete."}
             </p>
           </div>
-          {complete && (
-            <span className="pill pill-green" style={{ fontSize: "0.6875rem" }}>Done</span>
-          )}
           {complete && nextModuleId && (
             <Link
               href={`/portal/module/${nextModuleId}`}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.375rem",
-                background: "var(--amber)",
-                color: "#111827",
-                fontFamily: "var(--font-dm-sans), sans-serif",
-                fontWeight: 700,
-                fontSize: "0.8125rem",
-                padding: "0.5rem 0.875rem",
-                borderRadius: "0.625rem",
-                textDecoration: "none",
-                flexShrink: 0,
-              }}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white font-bold text-[0.9375rem] shadow-lg shadow-amber-500/25 hover:from-amber-400 hover:to-amber-500 transition-colors shrink-0"
+              style={{ fontFamily: "var(--font-dm-sans), sans-serif", textDecoration: "none" }}
             >
-              Next module <ArrowRight size={14} />
+              Next module <ArrowRight size={18} />
             </Link>
           )}
         </div>
