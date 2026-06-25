@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import {
   moodleGetProgress,
   moodleGetCourseModules,
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
     .from("enrolments")
     .select("id, programme_slug, status, progress_percent, modules_completed, completed_at, cpd_completions")
     .eq("driver_id", session.driverId)
-    .eq("status", "active")
+    .in("status", ACTIVE_ENROLMENT_STATUSES)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -83,7 +84,7 @@ export async function GET(req: NextRequest) {
   }
 
   // 3. Enrol in course if not yet enrolled
-  if (moodleUserId && enrolment?.status === "active") {
+  if (moodleUserId && enrolment) {
     try {
       await moodleEnrolUser({ moodleUserId, programmeSlug: canonicalSlug });
     } catch {

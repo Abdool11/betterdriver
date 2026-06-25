@@ -12,6 +12,11 @@ export const SITE_DESCRIPTION =
 export const LOGO_URL = process.env.NEXT_PUBLIC_LOGO_URL ?? "/logo-betterdriver.png";
 export const LOGO_ALT = "BetterDriver";
 
+// ─── Enrolment Status ──────────────────────────────────────────────────────────
+// Active enrolments in the database have status 'enrolled' or 'in_progress'.
+// The codebase previously looked for 'active', which is not a valid status.
+export const ACTIVE_ENROLMENT_STATUSES = ["enrolled", "in_progress"];
+
 // ─── Navigation ───────────────────────────────────────────────────────────────
 export const NAV_LINKS = [
   { label: "How it works", href: "/start" },

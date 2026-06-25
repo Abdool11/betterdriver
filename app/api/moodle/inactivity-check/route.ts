@@ -28,6 +28,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
 // Lazy initialize to avoid build-time errors when env vars are missing
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
         language_preference
       )
     `)
-    .eq("status", "active")
+    .in("status", ACTIVE_ENROLMENT_STATUSES)
     .is("completed_at", null)
     .lt("last_activity_at", sevenDaysAgo);
 

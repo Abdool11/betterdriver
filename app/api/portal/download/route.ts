@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import {
   moodleGetCourseModules,
   normalizeProgrammeSlug,
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest) {
     .from("enrolments")
     .select("programme_slug, status")
     .eq("driver_id", session.driverId)
-    .eq("status", "active")
+    .in("status", ACTIVE_ENROLMENT_STATUSES)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

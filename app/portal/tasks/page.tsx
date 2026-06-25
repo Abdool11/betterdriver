@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import { moodleGetCourseModules, normalizeProgrammeSlug } from "@/lib/moodle";
 import { AlertTriangle, Clock, BookOpen, RefreshCw, ArrowRight, CheckCircle2 } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
@@ -41,9 +42,9 @@ export default async function TasksPage() {
 
     const { data: enrolment } = await supabaseAdmin
       .from("enrolments")
-      .select("programme_slug, progress_percent")
+      .select("programme_slug, progress_percent, modules_completed")
       .eq("driver_id", session.driverId)
-      .eq("status", "active")
+      .in("status", ACTIVE_ENROLMENT_STATUSES)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -56,10 +57,11 @@ export default async function TasksPage() {
           programmeSlug: canonicalSlug,
         });
 
+        const supabaseCompleted = enrolment?.modules_completed ?? 0;
         let foundIncomplete = false;
         for (let i = 0; i < modules.length; i++) {
           const mod = modules[i];
-          const isComplete = mod.completionstate === 1 || mod.completionstate === 2;
+          const isComplete = mod.completionstate === 1 || mod.completionstate === 2 || i < supabaseCompleted;
           if (!isComplete && !foundIncomplete) {
             foundIncomplete = true;
             inProgressTasks.push({

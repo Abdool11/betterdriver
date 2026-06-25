@@ -32,6 +32,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import { moodleGetProgress, MOODLE_COURSE_IDS } from "@/lib/moodle";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
@@ -107,8 +108,10 @@ export async function POST(req: NextRequest) {
     .select("id, completed_at, modules_completed")
     .eq("driver_id", driver.id)
     .eq("programme_slug", programmeSlug)
-    .eq("status", "active")
-    .single();
+    .in("status", ACTIVE_ENROLMENT_STATUSES)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   if (enrolment) {
     const isNowComplete = progress.completed && !enrolment.completed_at;

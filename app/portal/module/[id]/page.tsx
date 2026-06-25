@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import { moodleGetCourseModules, normalizeProgrammeSlug, MOODLE_URL } from "@/lib/moodle";
 import { ArrowRight, Lock } from "lucide-react";
 import ModuleContent from "./ModuleContent";
@@ -54,9 +55,9 @@ export default async function ModuleLandingPage({
     // Try active enrolment first, then any enrolment, then fall back to ptdp
     let { data: enrolment } = await supabaseAdmin
       .from("enrolments")
-      .select("programme_slug")
+      .select("programme_slug, modules_completed")
       .eq("driver_id", session.driverId)
-      .eq("status", "active")
+      .in("status", ACTIVE_ENROLMENT_STATUSES)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -64,7 +65,7 @@ export default async function ModuleLandingPage({
     if (!enrolment?.programme_slug) {
       const { data: anyEnrolment } = await supabaseAdmin
         .from("enrolments")
-        .select("programme_slug")
+        .select("programme_slug, modules_completed")
         .eq("driver_id", session.driverId)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -95,7 +96,13 @@ export default async function ModuleLandingPage({
             loadError = `Module ID "${id}" was not found in your programme.`;
           } else {
             const mod = modules[modIndex];
-            const modComplete = mod.completionstate === 1 || mod.completionstate === 2;
+            const supabaseCompleted = enrolment?.modules_completed ?? 0;
+            const isModuleComplete = (index: number) =>
+              modules[index].completionstate === 1 ||
+              modules[index].completionstate === 2 ||
+              index < supabaseCompleted;
+
+            const modComplete = isModuleComplete(modIndex);
 
             // Check if this module is locked — i.e. there is an incomplete
             // module before it that the driver hasn't finished yet.
@@ -103,7 +110,7 @@ export default async function ModuleLandingPage({
             // (first incomplete) module, or the next available one.
             if (!modComplete) {
               const firstIncompleteIndex = modules.findIndex(
-                (m) => m.completionstate !== 1 && m.completionstate !== 2
+                (_, i) => !isModuleComplete(i)
               );
               // If this module is after the first incomplete one, it's locked
               if (firstIncompleteIndex !== -1 && modIndex > firstIncompleteIndex) {

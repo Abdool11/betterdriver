@@ -1,5 +1,6 @@
 import { requireBDAdminSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ async function getStats() {
   ] = await Promise.all([
     supabaseAdmin.from("drivers").select("*", { count: "exact", head: true }),
     supabaseAdmin.from("drivers").select("*", { count: "exact", head: true }).eq("activation_status", "activated"),
-    supabaseAdmin.from("enrolments").select("*", { count: "exact", head: true }).eq("status", "active"),
+    supabaseAdmin.from("enrolments").select("*", { count: "exact", head: true }).in("status", ACTIVE_ENROLMENT_STATUSES),
     supabaseAdmin.from("enrolments").select("*", { count: "exact", head: true }).eq("status", "completed"),
     supabaseAdmin.from("certifications").select("*", { count: "exact", head: true }).eq("status", "active"),
     supabaseAdmin.from("driver_invitations").select("*", { count: "exact", head: true }).eq("status", "pending"),

@@ -26,6 +26,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import { moodleGetProgress } from "@/lib/moodle";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
         moodle_user_id
       )
     `)
-    .eq("status", "active")
+    .in("status", ACTIVE_ENROLMENT_STATUSES)
     .not("drivers.moodle_user_id", "is", null);
 
   if (error) {
@@ -164,7 +165,7 @@ export async function GET(req: NextRequest) {
   const { count } = await supabase
     .from("enrolments")
     .select("id", { count: "exact", head: true })
-    .eq("status", "active");
+    .in("status", ACTIVE_ENROLMENT_STATUSES);
 
   return NextResponse.json({ ok: true, active_enrolments: count ?? 0 });
 }

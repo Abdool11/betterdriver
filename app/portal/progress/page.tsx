@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import { moodleGetCourseModules, normalizeProgrammeSlug } from "@/lib/moodle";
 import { CheckCircle2, TrendingUp, Calendar } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
@@ -33,7 +34,7 @@ export default async function ProgressPage() {
       .from("enrolments")
       .select("programme_slug, progress_percent, modules_completed")
       .eq("driver_id", session.driverId)
-      .eq("status", "active")
+      .in("status", ACTIVE_ENROLMENT_STATUSES)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -51,9 +52,10 @@ export default async function ProgressPage() {
           programmeSlug: canonicalSlug,
         });
 
+        const supabaseCompleted = enrolment?.modules_completed ?? 0;
         let foundIncomplete = false;
-        modules = moodleModules.map((mod) => {
-          const isComplete = mod.completionstate === 1 || mod.completionstate === 2;
+        modules = moodleModules.map((mod, index) => {
+          const isComplete = mod.completionstate === 1 || mod.completionstate === 2 || index < supabaseCompleted;
           const isFail = mod.completionstate === 3;
 
           let status: "completed" | "in_progress" | "available" = "available";

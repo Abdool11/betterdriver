@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import {
   moodleGetCourseModules,
   normalizeProgrammeSlug,
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
     .from("enrolments")
     .select("programme_slug, status")
     .eq("driver_id", session.driverId)
-    .eq("status", "active")
+    .in("status", ACTIVE_ENROLMENT_STATUSES)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -65,8 +66,9 @@ export async function POST(req: NextRequest) {
   // Find the module in Moodle
   let moduleUrl = "";
   let foundModule = false;
+  let modules: Awaited<ReturnType<typeof moodleGetCourseModules>> = [];
   try {
-    const modules = await moodleGetCourseModules({
+    modules = await moodleGetCourseModules({
       moodleUserId: driver.moodle_user_id ?? 0,
       programmeSlug: canonicalSlug,
     });
@@ -91,28 +93,33 @@ export async function POST(req: NextRequest) {
   try {
     const { data: currentEnrolment } = await supabaseAdmin
       .from("enrolments")
-      .select("modules_completed, progress_percent")
+      .select("id, modules_completed, progress_percent")
       .eq("driver_id", session.driverId)
-      .eq("status", "active")
+      .in("status", ACTIVE_ENROLMENT_STATUSES)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     if (currentEnrolment && completed) {
-      const newCompleted = Math.max(
-        currentEnrolment.modules_completed ?? 0,
-        (currentEnrolment.modules_completed ?? 0) + 1
-      );
-      // We can't easily know total from here, so just increment if not already counted
-      await supabaseAdmin
-        .from("enrolments")
-        .update({
-          modules_completed: newCompleted,
-          progress_percent: currentEnrolment.progress_percent, // will recalc on next dashboard load
-          updated_at: new Date().toISOString(),
-        })
-        .eq("driver_id", session.driverId)
-        .eq("status", "active");
+      const moduleIndex = modules.findIndex((m) => String(m.id) === moduleId);
+      const alreadyCounted =
+        moduleIndex >= 0 && moduleIndex < (currentEnrolment.modules_completed ?? 0);
+      if (!alreadyCounted) {
+        const newCompleted = Math.max(
+          currentEnrolment.modules_completed ?? 0,
+          (currentEnrolment.modules_completed ?? 0) + 1
+        );
+        // We can't easily know total from here, so just increment if not already counted
+        await supabaseAdmin
+          .from("enrolments")
+          .update({
+            modules_completed: newCompleted,
+            progress_percent: currentEnrolment.progress_percent, // will recalc on next dashboard load
+            status: "in_progress",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", currentEnrolment.id);
+      }
     }
   } catch (err) {
     console.error("[PROGRESS] Failed to update enrolment:", err);
