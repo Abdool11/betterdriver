@@ -11,6 +11,35 @@ import {
 
 export const dynamic = "force-dynamic";
 
+function sanitizeFilename(name: string): string {
+  // Remove characters that break Content-Disposition parsing
+  return name.replace(/[\\"]/g, "");
+}
+
+function setAttachmentHeaders(
+  headers: Headers,
+  upstreamContentType: string | null,
+  contentLength: string | null,
+  filename: string
+) {
+  // Browsers sometimes display text/html or text/plain inline even when the
+  // anchor has a download attribute. Force binary content type for renderable
+  // text types so the file is saved rather than shown as code.
+  const renderable = upstreamContentType
+    ? /\/(html|xhtml|xml|javascript|ecmascript|json|plain|css)$/i.test(upstreamContentType) ||
+      upstreamContentType.startsWith("text/")
+    : false;
+  headers.set(
+    "Content-Type",
+    renderable ? "application/octet-stream" : (upstreamContentType ?? "application/octet-stream")
+  );
+  headers.set("X-Content-Type-Options", "nosniff");
+  if (contentLength) {
+    headers.set("Content-Length", contentLength);
+  }
+  headers.set("Content-Disposition", `attachment; filename="${sanitizeFilename(filename)}"`);
+}
+
 /**
  * GET /api/portal/download?moduleId={id}
  * Proxies a Moodle course file for the authenticated driver so the browser can
@@ -105,17 +134,11 @@ export async function GET(req: NextRequest) {
       }
 
       const headers = new Headers();
-      const contentType = fileRes.headers.get("content-type");
-      if (contentType) {
-        headers.set("Content-Type", contentType);
-      }
-      const contentLength = fileRes.headers.get("content-length");
-      if (contentLength) {
-        headers.set("Content-Length", contentLength);
-      }
-      headers.set(
-        "Content-Disposition",
-        `attachment; filename="${file.filename}"`
+      setAttachmentHeaders(
+        headers,
+        fileRes.headers.get("content-type"),
+        fileRes.headers.get("content-length"),
+        file.filename
       );
 
       return new Response(fileRes.body, {
@@ -154,17 +177,11 @@ export async function GET(req: NextRequest) {
       }
 
       const headers = new Headers();
-      const contentType = bunnyRes.headers.get("content-type");
-      if (contentType) {
-        headers.set("Content-Type", contentType);
-      }
-      const contentLength = bunnyRes.headers.get("content-length");
-      if (contentLength) {
-        headers.set("Content-Length", contentLength);
-      }
-      headers.set(
-        "Content-Disposition",
-        `attachment; filename="${filename}"`
+      setAttachmentHeaders(
+        headers,
+        bunnyRes.headers.get("content-type"),
+        bunnyRes.headers.get("content-length"),
+        filename
       );
 
       return new Response(bunnyRes.body, {

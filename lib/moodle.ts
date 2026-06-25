@@ -134,6 +134,7 @@ export interface MoodleModule {
   files?: MoodleFile[];
   bunnyVideoId?: string;
   bunnyLibraryId?: string;
+  videoUrl?: string; // direct video file URL (not Bunny) for native playback
 }
 
 /** Return the best on-disk file for a module (prefer video, fallback to first file). */
@@ -145,6 +146,15 @@ export function pickMoodleDownloadFile(files: MoodleFile[] | undefined): MoodleF
     (f) => f.mimetype?.startsWith("video/") || /\.(mp4|webm|mov|mkv|avi|m4v)(\?|$)/i.test(f.filename)
   );
   return video ?? onDisk[0];
+}
+
+/** Check whether a URL points to a video file we can play natively. */
+export function isVideoFileUrl(url: string): boolean {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  const hasVideoExtension = /\.(mp4|webm|mov|mkv|avi|m4v|ogv)(\?|#|$)/i.test(lower);
+  const hasVideoMimeHint = /[?&](mime=video|format=video)/i.test(url);
+  return hasVideoExtension || hasVideoMimeHint;
 }
 
 /** Extract Bunny Stream iframe embed URL from Moodle page HTML. */
@@ -399,6 +409,11 @@ export async function moodleGetCourseModules(params: {
         content: (content.content as string | undefined) ?? undefined,
       }));
 
+      // Detect direct video files for native playback
+      const videoFile = files.find(
+        (f) => f.type === "file" && f.fileurl && isVideoFileUrl(f.fileurl)
+      );
+
       modules.push({
         id: mod.id as number,
         name: mod.name as string,
@@ -407,18 +422,34 @@ export async function moodleGetCourseModules(params: {
         completionstate: (mod.completiondata?.state ?? 0) as number,
         url: (mod.url as string | undefined) || undefined,
         files,
+        videoUrl: videoFile?.fileurl,
       });
     }
   }
 
   // Debug: log all modules with their types
-  console.log(`[Moodle] Course ${courseId} modules:`, modules.map((m) => ({ id: m.id, name: m.name, modname: m.modname, bunnyVideoId: m.bunnyVideoId })));
+  console.log(`[Moodle] Course ${courseId} modules:`, modules.map((m) => ({ id: m.id, name: m.name, modname: m.modname, bunnyVideoId: m.bunnyVideoId, videoUrl: m.videoUrl })));
 
-  // Fetch Bunny embed data for page modules in parallel
+  // Fetch Bunny embed data for page modules in parallel and detect Bunny URLs in url modules
   await Promise.all(
     modules
-      .filter((m) => m.modname === "page")
+      .filter((m) => m.modname === "page" || m.modname === "url")
       .map(async (mod) => {
+        // For URL modules, the external URL itself may be a Bunny embed or direct video
+        if (mod.modname === "url" && mod.url) {
+          const urlLower = mod.url.toLowerCase();
+          if (urlLower.includes("iframe.mediadelivery.net")) {
+            const bunny = extractBunnyEmbedUrl(mod.url);
+            if (bunny) {
+              mod.bunnyLibraryId = bunny.libraryId;
+              mod.bunnyVideoId = bunny.videoId;
+            }
+          } else if (isVideoFileUrl(mod.url)) {
+            mod.videoUrl = mod.url;
+          }
+          return;
+        }
+
         const htmlFile = (mod.files ?? []).find((f) => f.filename === "index.html" && f.fileurl);
         if (!htmlFile?.fileurl) return;
 

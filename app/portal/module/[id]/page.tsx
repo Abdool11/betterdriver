@@ -34,6 +34,7 @@ export default async function ModuleLandingPage({
   let totalModules = 0;
   let isComplete = false;
   let moduleUrl = "";
+  let videoUrl = "";
   let nextModuleId: string | null = null;
   let prevModuleId: string | null = null;
   let loadError = "";
@@ -124,18 +125,18 @@ export default async function ModuleLandingPage({
             isComplete = modComplete;
             bunnyVideoId = mod.bunnyVideoId ?? "";
             bunnyLibraryId = mod.bunnyLibraryId ?? "";
+            videoUrl = mod.videoUrl ?? "";
             if (mod.modname === "quiz") {
               quizId = mod.instance;
             }
-            console.log(`[MODULE_PAGE] cmid=${mod.id} name="${mod.name}" modname="${mod.modname}" bunnyVideoId="${bunnyVideoId}" bunnyLibraryId="${bunnyLibraryId}"`);
-            // Build a valid module URL:
-            // 1. If Moodle provided a URL with an id= param, use it as-is
-            // 2. If Moodle provided a URL WITHOUT id=, append ?id={cmid}
-            // 3. If no URL at all, construct fallback: /mod/{modname}/view.php?id={cmid}
+            console.log(`[MODULE_PAGE] cmid=${mod.id} name="${mod.name}" modname="${mod.modname}" bunnyVideoId="${bunnyVideoId}" bunnyLibraryId="${bunnyLibraryId}" videoUrl="${videoUrl}"`);
+            // Build a valid module URL for the iframe fallback. Never use a direct file URL
+            // (e.g. pluginfile.php) as the iframe src — that would render raw file bytes/code.
             const fallbackUrl = `${MOODLE_URL}/mod/${mod.modname}/view.php?id=${mod.id}`;
-            if (mod.url && mod.url.includes("id=")) {
+            const isFileUrl = (url: string) => /pluginfile\.php|file\.php|forcedownload=1/i.test(url);
+            if (mod.url && mod.url.includes("id=") && !isFileUrl(mod.url)) {
               moduleUrl = mod.url;
-            } else if (mod.url) {
+            } else if (mod.url && !isFileUrl(mod.url)) {
               // Moodle gave a URL but without id — append it
               const sep = mod.url.includes("?") ? "&" : "?";
               moduleUrl = `${mod.url}${sep}id=${mod.id}`;
@@ -158,7 +159,7 @@ export default async function ModuleLandingPage({
     }
   }
 
-  const hasData = Boolean(moduleIndex >= 0 && (moduleUrl || bunnyVideoId || modName === "quiz"));
+  const hasData = Boolean(moduleIndex >= 0 && (moduleUrl || videoUrl || bunnyVideoId || modName === "quiz"));
 
   // If the module is locked, show a locked message instead of the content
   if (isLocked) {
@@ -235,6 +236,7 @@ export default async function ModuleLandingPage({
       totalModules={totalModules}
       isComplete={isComplete}
       moduleUrl={moduleUrl}
+      videoUrl={videoUrl}
       nextModuleId={nextModuleId}
       loadError={loadError}
       bunnyVideoId={bunnyVideoId}
