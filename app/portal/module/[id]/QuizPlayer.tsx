@@ -205,7 +205,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
           style={{
             position: "relative",
             width: "100%",
-            minHeight: 300,
+            minHeight: "clamp(200px, 50vw, 300px)",
             background: "#0d1526",
             borderRadius: "1rem",
             overflow: "hidden",
@@ -232,7 +232,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
             background: "rgba(239,68,68,0.08)",
             border: "1px solid rgba(239,68,68,0.25)",
             borderRadius: "1rem",
-            padding: "1.25rem 1.5rem",
+            padding: "clamp(0.875rem, 3vw, 1.25rem) clamp(1rem, 4vw, 1.5rem)",
             display: "flex",
             alignItems: "flex-start",
             gap: "0.875rem",
@@ -267,7 +267,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
             background: passed ? "rgba(16,185,129,0.08)" : "rgba(245,158,11,0.08)",
             border: `1px solid ${passed ? "rgba(16,185,129,0.3)" : "rgba(245,158,11,0.3)"}`,
             borderRadius: "1rem",
-            padding: "2rem",
+            padding: "clamp(1.25rem, 5vw, 2rem)",
             textAlign: "center",
             display: "flex",
             flexDirection: "column",
@@ -298,7 +298,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
               style={{
                 fontFamily: "var(--font-dm-sans), sans-serif",
                 fontWeight: 800,
-                fontSize: "1.25rem",
+                fontSize: "clamp(1rem, 4vw, 1.25rem)",
                 color: "#F9FAFB",
                 margin: "0 0 0.25rem",
               }}
@@ -326,7 +326,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
               fontFamily: "var(--font-dm-sans), sans-serif",
               fontWeight: 700,
               fontSize: "0.9375rem",
-              padding: "0.75rem 1.5rem",
+              padding: "0.75rem clamp(1.25rem, 4vw, 1.5rem)",
               borderRadius: "0.75rem",
               border: "none",
               cursor: "pointer",
@@ -354,16 +354,16 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
           background: "#1C2333",
           border: "1px solid #2d3a4f",
           borderRadius: "1rem",
-          padding: "1.5rem",
+          padding: "clamp(1rem, 4vw, 1.5rem)",
         }}
       >
         {/* Quiz header */}
-        <div style={{ marginBottom: "1.5rem" }}>
+        <div style={{ marginBottom: "clamp(1rem, 3vw, 1.5rem)" }}>
           <h3
             style={{
               fontFamily: "var(--font-dm-sans), sans-serif",
               fontWeight: 800,
-              fontSize: "1.125rem",
+              fontSize: "clamp(1rem, 3.5vw, 1.125rem)",
               color: "#F9FAFB",
               margin: "0 0 0.5rem",
             }}
@@ -429,7 +429,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
         )}
 
         {/* Questions */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "clamp(0.875rem, 3vw, 1.5rem)" }}>
           {quiz.questions.map((q, idx) => {
             const choices = q.options?.answers ?? [];
             const selected = answers[q.slot];
@@ -442,24 +442,24 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
                   background: "#0d1526",
                   border: `1px solid ${isAnswered ? "rgba(16,185,129,0.2)" : "#2d3a4f"}`,
                   borderRadius: "0.75rem",
-                  padding: "1.25rem",
+                  padding: "clamp(0.875rem, 3vw, 1.25rem)",
                   transition: "border-color 0.2s ease",
                 }}
               >
                 {/* Question number + text */}
-                <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", marginBottom: "1rem" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: "0.625rem", marginBottom: "clamp(0.75rem, 2vw, 1rem)" }}>
                   <span
                     style={{
                       display: "inline-flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      width: 28,
-                      height: 28,
+                      width: "clamp(24px, 7vw, 28px)",
+                      height: "clamp(24px, 7vw, 28px)",
                       borderRadius: "0.5rem",
                       background: isAnswered ? "rgba(16,185,129,0.12)" : "rgba(245,158,11,0.12)",
                       border: isAnswered ? "1px solid rgba(16,185,129,0.25)" : "1px solid rgba(245,158,11,0.25)",
                       color: isAnswered ? "#10B981" : "#F59E0B",
-                      fontSize: "0.8125rem",
+                      fontSize: "clamp(0.75rem, 2.5vw, 0.8125rem)",
                       fontWeight: 700,
                       flexShrink: 0,
                     }}
@@ -470,7 +470,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
                     style={{
                       fontFamily: "var(--font-dm-sans), sans-serif",
                       fontWeight: 600,
-                      fontSize: "0.9375rem",
+                      fontSize: "clamp(0.875rem, 3vw, 0.9375rem)",
                       color: "#F9FAFB",
                       lineHeight: 1.5,
                       flex: 1,
@@ -485,15 +485,15 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
                     value={answers[q.slot] ?? ""}
                     onChange={(e) => handleSelect(q.slot, e.target.value)}
                     placeholder="Type your answer here…"
-                    rows={5}
+                    rows={4}
                     style={{
                       width: "100%",
-                      padding: "0.75rem 1rem",
+                      padding: "0.625rem 0.875rem",
                       borderRadius: "0.5rem",
                       border: "1px solid #2d3a4f",
                       background: "#0B1221",
                       color: "#E5E7EB",
-                      fontSize: "0.875rem",
+                      fontSize: "16px",
                       lineHeight: 1.6,
                       resize: "vertical",
                       outline: "none",
@@ -505,7 +505,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
                   <div
                     role="radiogroup"
                     aria-label={`Question ${idx + 1}`}
-                    style={{ display: "flex", flexDirection: "column", gap: "0.5rem", paddingLeft: "2.5rem" }}
+                    style={{ display: "flex", flexDirection: "column", gap: "0.5rem", paddingLeft: "clamp(0.5rem, 6vw, 2.5rem)" }}
                   >
                     {choices.map((choice) => {
                       const isSelected = selected === String(choice.id);
@@ -526,7 +526,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
                             display: "flex",
                             alignItems: "center",
                             gap: "0.625rem",
-                            padding: "0.625rem 0.875rem",
+                            padding: "0.625rem 0.75rem",
                             borderRadius: "0.5rem",
                             border: `1px solid ${isSelected ? "rgba(245,158,11,0.4)" : "#2d3a4f"}`,
                             background: isSelected ? "rgba(245,158,11,0.08)" : "transparent",
@@ -574,7 +574,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
                     })}
                   </div>
                 ) : (
-                  <p style={{ fontSize: "0.8125rem", color: "#6B7280", paddingLeft: "2.5rem" }}>
+                  <p style={{ fontSize: "0.8125rem", color: "#6B7280", paddingLeft: "clamp(0.5rem, 6vw, 2.5rem)" }}>
                     This question type ({q.type}) is not supported in the simplified quiz view.
                   </p>
                 )}
@@ -618,8 +618,8 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
             color: "#111827",
             fontFamily: "var(--font-dm-sans), sans-serif",
             fontWeight: 700,
-            fontSize: "0.9375rem",
-            padding: "0.875rem 1.5rem",
+            fontSize: "clamp(0.875rem, 3vw, 0.9375rem)",
+            padding: "0.875rem clamp(1.25rem, 4vw, 1.5rem)",
             borderRadius: "0.75rem",
             border: "none",
             cursor: submitting ? "not-allowed" : "pointer",

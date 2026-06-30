@@ -62,7 +62,7 @@ export default function ModuleContent({
           alignItems: "center",
           gap: "0.375rem",
           color: "#9CA3AF",
-          fontSize: "0.875rem",
+          fontSize: "clamp(0.8125rem, 2.5vw, 0.875rem)",
           textDecoration: "none",
           marginBottom: "1.5rem",
         }}
@@ -94,7 +94,7 @@ export default function ModuleContent({
           style={{
             fontFamily: "var(--font-dm-sans), sans-serif",
             fontWeight: 800,
-            fontSize: "1.75rem",
+            fontSize: "clamp(1.25rem, 5vw, 1.75rem)",
             color: "#F9FAFB",
             margin: "0 0 0.75rem",
             lineHeight: 1.2,
@@ -103,7 +103,7 @@ export default function ModuleContent({
           {moduleName || "Module"}
         </h1>
         {hasData && (
-          <div style={{ display: "flex", gap: "1.25rem", flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "clamp(0.75rem, 3vw, 1.25rem)", flexWrap: "wrap", alignItems: "center" }}>
             {complete ? (
               <span style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.8125rem", color: "#10B981" }}>
                 <CheckCircle2 size={13} /> Completed
@@ -124,7 +124,7 @@ export default function ModuleContent({
             background: "rgba(239,68,68,0.08)",
             border: "1px solid rgba(239,68,68,0.25)",
             borderRadius: "1rem",
-            padding: "1.25rem 1.5rem",
+            padding: "clamp(0.875rem, 3vw, 1.25rem) clamp(1rem, 4vw, 1.5rem)",
             marginBottom: "2rem",
             display: "flex",
             alignItems: "flex-start",
@@ -228,7 +228,7 @@ export default function ModuleContent({
       )}
 
       {/* Navigation */}
-      <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
         <Link
           href="/portal/course"
           style={{
@@ -236,7 +236,7 @@ export default function ModuleContent({
             alignItems: "center",
             gap: "0.5rem",
             color: "#9CA3AF",
-            fontSize: "0.9375rem",
+            fontSize: "clamp(0.875rem, 3vw, 0.9375rem)",
             fontWeight: 600,
             textDecoration: "none",
           }}
