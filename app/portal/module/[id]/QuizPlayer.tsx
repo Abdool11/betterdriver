@@ -14,6 +14,7 @@ interface QuizQuestion {
   slot: number;
   type: string;
   html: string;
+  sequencecheck?: number;
   options?: {
     answers?: QuizOption[];
   };
@@ -171,6 +172,12 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
     const container = document.createElement("div");
     container.innerHTML = html;
 
+    // Extract .qtext FIRST — it lives inside .formulation which we remove below
+    const qtext = container.querySelector(".qtext");
+    if (qtext) {
+      return qtext.innerHTML;
+    }
+
     // Remove Moodle UI chrome elements by class name
     const removeClasses = [
       "info",           // status bar (Not yet answered, Marked out of X)
@@ -188,21 +195,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
     container.querySelectorAll("input, select, textarea, button").forEach((el) => el.remove());
     container.querySelectorAll("script").forEach((el) => el.remove());
 
-    // Extract just the .qtext if it exists (the actual question text)
-    const qtext = container.querySelector(".qtext");
-    if (qtext) {
-      return qtext.innerHTML;
-    }
-
     return container.innerHTML;
-  }
-
-  // Strip HTML tags for a plain-text fallback
-  function stripHtml(html: string) {
-    if (typeof window === "undefined") return html;
-    const tmp = document.createElement("div");
-    tmp.innerHTML = html;
-    return tmp.textContent || tmp.innerText || "";
   }
 
   if (phase === "loading") {
@@ -348,6 +341,11 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
 
   if (phase !== "ready" || !quiz || !quiz.questions) return null;
 
+  const totalQuestions = quiz.questions.length;
+  const answeredCount = quiz.questions.filter(
+    (q) => q.type === "essay" || answers[q.slot]
+  ).length;
+
   return (
     <div style={{ marginBottom: "2rem" }}>
       {/* Quiz card */}
@@ -359,6 +357,64 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
           padding: "1.5rem",
         }}
       >
+        {/* Quiz header */}
+        <div style={{ marginBottom: "1.5rem" }}>
+          <h3
+            style={{
+              fontFamily: "var(--font-dm-sans), sans-serif",
+              fontWeight: 800,
+              fontSize: "1.125rem",
+              color: "#F9FAFB",
+              margin: "0 0 0.5rem",
+            }}
+          >
+            {quiz.quiz.name && quiz.quiz.name !== "Quiz" ? quiz.quiz.name : moduleName}
+          </h3>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <span
+              style={{
+                fontSize: "0.75rem",
+                color: "#9CA3AF",
+                background: "rgba(59,130,246,0.1)",
+                border: "1px solid rgba(59,130,246,0.2)",
+                borderRadius: "2rem",
+                padding: "0.125rem 0.625rem",
+              }}
+            >
+              {totalQuestions} question{totalQuestions !== 1 ? "s" : ""}
+            </span>
+            <span
+              style={{
+                fontSize: "0.75rem",
+                color: answeredCount === totalQuestions ? "#10B981" : "#F59E0B",
+                fontWeight: 600,
+              }}
+            >
+              {answeredCount} of {totalQuestions} answered
+            </span>
+          </div>
+          {/* Progress bar */}
+          <div
+            style={{
+              marginTop: "0.625rem",
+              height: "0.375rem",
+              background: "#0d1526",
+              borderRadius: "9999px",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${(answeredCount / totalQuestions) * 100}%`,
+                background: "linear-gradient(90deg, #F59E0B, #D97706)",
+                borderRadius: "9999px",
+                transition: "width 0.3s ease",
+              }}
+            />
+          </div>
+        </div>
+
         {/* Intro */}
         {quiz.quiz.intro && (
           <div
@@ -377,15 +433,17 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
           {quiz.questions.map((q, idx) => {
             const choices = q.options?.answers ?? [];
             const selected = answers[q.slot];
+            const isAnswered = q.type === "essay" || !!selected;
 
             return (
               <div
                 key={q.slot}
                 style={{
                   background: "#0d1526",
-                  border: "1px solid #2d3a4f",
+                  border: `1px solid ${isAnswered ? "rgba(16,185,129,0.2)" : "#2d3a4f"}`,
                   borderRadius: "0.75rem",
                   padding: "1.25rem",
+                  transition: "border-color 0.2s ease",
                 }}
               >
                 {/* Question number + text */}
@@ -398,15 +456,15 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
                       width: 28,
                       height: 28,
                       borderRadius: "0.5rem",
-                      background: "rgba(245,158,11,0.12)",
-                      border: "1px solid rgba(245,158,11,0.25)",
-                      color: "#F59E0B",
+                      background: isAnswered ? "rgba(16,185,129,0.12)" : "rgba(245,158,11,0.12)",
+                      border: isAnswered ? "1px solid rgba(16,185,129,0.25)" : "1px solid rgba(245,158,11,0.25)",
+                      color: isAnswered ? "#10B981" : "#F59E0B",
                       fontSize: "0.8125rem",
                       fontWeight: 700,
                       flexShrink: 0,
                     }}
                   >
-                    {idx + 1}
+                    {isAnswered ? "✓" : idx + 1}
                   </span>
                   <div
                     style={{
@@ -444,12 +502,26 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
                     onBlur={(e) => { e.currentTarget.style.borderColor = "#2d3a4f"; }}
                   />
                 ) : choices.length > 0 ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", paddingLeft: "2.5rem" }}>
+                  <div
+                    role="radiogroup"
+                    aria-label={`Question ${idx + 1}`}
+                    style={{ display: "flex", flexDirection: "column", gap: "0.5rem", paddingLeft: "2.5rem" }}
+                  >
                     {choices.map((choice) => {
                       const isSelected = selected === String(choice.id);
                       return (
                         <label
                           key={choice.id}
+                          onClick={() => handleSelect(q.slot, String(choice.id))}
+                          role="radio"
+                          aria-checked={isSelected}
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              handleSelect(q.slot, String(choice.id));
+                            }
+                          }}
                           style={{
                             display: "flex",
                             alignItems: "center",
@@ -462,6 +534,13 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
                             fontSize: "0.875rem",
                             color: "#E5E7EB",
                             transition: "all 0.15s ease",
+                            userSelect: "none",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isSelected) e.currentTarget.style.borderColor = "rgba(245,158,11,0.2)";
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!isSelected) e.currentTarget.style.borderColor = "#2d3a4f";
                           }}
                         >
                           <span

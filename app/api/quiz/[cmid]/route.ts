@@ -102,6 +102,7 @@ export async function GET(
       slot: q.slot,
       type: q.type,
       html: q.html,
+      sequencecheck: q.sequencecheck,
       options: q.options,
     })),
   });
