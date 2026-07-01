@@ -123,6 +123,44 @@ export async function POST(req: NextRequest) {
       })
       .eq("id", enrolment.id);
 
+    // ── 5b. Auto-create certification record on first completion ────────────
+    if (isNowComplete) {
+      // Check if a certification already exists for this enrolment
+      const { data: existingCert } = await supabase
+        .from("certifications")
+        .select("id")
+        .eq("driver_id", driver.id)
+        .eq("enrolment_id", enrolment.id)
+        .maybeSingle();
+
+      if (!existingCert) {
+        // Generate unique certificate number: BD-YYYY-NNNNN
+        const year = new Date().getFullYear();
+        const { count: certCount } = await supabase
+          .from("certifications")
+          .select("id", { count: "exact", head: true });
+        const seqNum = String((certCount ?? 0) + 1).padStart(5, "0");
+        const certificateNumber = `BD-${year}-${seqNum}`;
+
+        const programmeShort = programmeSlug === "eco-driver" ? "p2" : "p1";
+
+        await supabase.from("certifications").insert({
+          driver_id: driver.id,
+          enrolment_id: enrolment.id,
+          certificate_number: certificateNumber,
+          programme: programmeShort,
+          issued_at: new Date().toISOString(),
+          status: "active",
+        });
+
+        // Mark enrolment as certified
+        await supabase
+          .from("enrolments")
+          .update({ status: "certified", certified: true, certified_at: new Date().toISOString() })
+          .eq("id", enrolment.id);
+      }
+    }
+
     // ── 6. Fire WhatsApp notifications ─────────────────────────────────────
     if (driver.mobile) {
       const lang = (driver.language_preference ?? "en") as "en" | "zu";
