@@ -22,11 +22,20 @@ export default function PortalCertificatePage() {
       .then((d) => {
         const stats = d?.stats;
         const isComplete = stats?.certificateReady ?? false;
+        const issuedDateRaw = stats?.certificateIssuedAt;
+        const issuedDate = issuedDateRaw
+          ? new Date(issuedDateRaw).toLocaleDateString("en-ZA", {
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            })
+          : "";
+
         setData({
           driverName: `${stats?.firstName ?? ""} ${stats?.lastName ?? ""}`.trim() || "Driver",
           programmeName: stats?.programmeTitle || "The Professional Truck Driver Programme",
-          certNumber: "",
-          issuedDate: "",
+          certNumber: stats?.certificateNumber ?? "",
+          issuedDate,
           isComplete,
         });
       })

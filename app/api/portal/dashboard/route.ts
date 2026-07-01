@@ -10,6 +10,7 @@ import {
   moodleGetUserByEmail,
   normalizeProgrammeSlug,
 } from "@/lib/moodle";
+import { ensureCertificate } from "@/lib/certificate";
 
 /**
  * GET /api/portal/dashboard
@@ -126,16 +127,34 @@ export async function GET(req: NextRequest) {
   const courseCompleted = completedModules >= totalModules && totalModules > 0;
 
   // 6. Sync the latest progress back to Supabase
+  const justCompleted = courseCompleted && !enrolment?.completed_at;
   if (enrolment && (progressPercent !== enrolment.progress_percent || completedModules !== enrolment.modules_completed || courseCompleted !== !!enrolment.completed_at)) {
     await supabaseAdmin
       .from("enrolments")
       .update({
         progress_percent: progressPercent,
         modules_completed: completedModules,
-        completed_at: courseCompleted && !enrolment.completed_at ? new Date().toISOString() : enrolment.completed_at,
+        completed_at: justCompleted ? new Date().toISOString() : enrolment.completed_at,
         last_activity_at: new Date().toISOString(),
       })
       .eq("id", enrolment.id);
+  }
+
+  // 6b. Auto-create certificate when the course is first detected as complete
+  let certificateNumber: string | null = null;
+  let certificateIssuedAt: string | null = null;
+  if (courseCompleted && enrolment) {
+    const cert = await ensureCertificate({
+      driverId: session.driverId,
+      enrolmentId: enrolment.id,
+      companyId: driver.company_id ?? null,
+      programme: canonicalSlug === "professional-truck-driver" ? "p1" : "p2",
+      enrolmentSlug: canonicalSlug,
+    });
+    if (cert) {
+      certificateNumber = cert.certificate_number;
+      certificateIssuedAt = cert.issued_at;
+    }
   }
 
   // 7. Determine next module (first incomplete module in order)
@@ -214,6 +233,8 @@ export async function GET(req: NextRequest) {
       cpdOverdueCount,
       cpdUpcomingCount,
       certificateReady: courseCompleted,
+      certificateNumber,
+      certificateIssuedAt,
       unreadBulletins,
     },
     nextModule: nextModule

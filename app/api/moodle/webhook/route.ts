@@ -35,6 +35,7 @@ import { createClient } from "@supabase/supabase-js";
 import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import { moodleGetProgress, MOODLE_COURSE_IDS } from "@/lib/moodle";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
+import { ensureCertificate } from "@/lib/certificate";
 
 // Lazy initialize to avoid build-time errors when env vars are missing
 const getSupabase = () => createClient(
@@ -131,6 +132,14 @@ export async function POST(req: NextRequest) {
       const lang = (driver.language_preference ?? "en") as "en" | "zu";
 
       if (isNowComplete) {
+        // Auto-create certificate record
+        await ensureCertificate({
+          driverId: driver.id,
+          enrolmentId: enrolment.id,
+          programme: programmeSlug === "professional-truck-driver" ? "p1" : "p2",
+          enrolmentSlug: programmeSlug,
+        });
+
         // TRIGGER 6 — Programme complete
         // Template: bd_programme_complete
         //   {{1}} = driver first name

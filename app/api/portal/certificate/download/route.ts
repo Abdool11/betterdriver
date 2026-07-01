@@ -128,6 +128,25 @@ export async function GET() {
   }
   .meta div { text-align: left; }
   .meta .num { font-family: monospace; color: #334155; }
+  .print-btn {
+    display: inline-block;
+    margin-top: 1.5rem;
+    padding: 0.625rem 1.5rem;
+    background: #0a1628;
+    color: #fff;
+    border: none;
+    border-radius: 0.5rem;
+    font-family: Arial, sans-serif;
+    font-size: 0.875rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .print-btn:hover { background: #1a3050; }
+  @media print {
+    .print-btn { display: none; }
+    body { padding: 0; background: #fff; }
+    .certificate { box-shadow: none; border-width: 4px; }
+  }
 </style>
 </head>
 <body>
@@ -148,6 +167,7 @@ export async function GET() {
       <div class="num">${issuedDate}</div>
     </div>
   </div>
+  <button class="print-btn" onclick="window.print()">Save as PDF</button>
 </div>
 </body>
 </html>`;
@@ -155,7 +175,7 @@ export async function GET() {
   return new NextResponse(html, {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
-      "Content-Disposition": `attachment; filename="BetterDriver_Certificate_${driverName.replace(/\s+/g, "_")}.html"`,
+      "Content-Disposition": `inline; filename="BetterDriver_Certificate_${driverName.replace(/\s+/g, "_")}.html"`,
     },
   });
 }
