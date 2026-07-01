@@ -180,6 +180,13 @@ function ensureDownloadUrl(fileurl: string): string {
   return url.toString();
 }
 
+/** Append the Moodle web service token to a pluginfile URL for server-side fetches. */
+export function withMoodleToken(fileurl: string): string {
+  const url = new URL(fileurl);
+  url.searchParams.set("token", MOODLE_TOKEN);
+  return url.toString();
+}
+
 // ─── User Management ──────────────────────────────────────────────────────────
 
 /**
@@ -575,6 +582,59 @@ export async function moodleStartQuizAttempt(quizId: number): Promise<MoodleQuiz
 }
 
 /**
+ * Parse answer choices from Moodle question HTML.
+ * Moodle embeds radio/checkbox inputs with labels in the question HTML.
+ * This is a fallback for when the API doesn't return structured options.
+ */
+function parseChoicesFromHtml(html: string): { id: number; text: string; fraction: number }[] {
+  const answers: { id: number; text: string; fraction: number }[] = [];
+
+  // Match all radio/checkbox inputs whose name contains "_answer"
+  // Moodle format: <input type="radio" name="q123:1_answer" value="0" id="q123:1_answer0" ... />
+  //               <label for="q123:1_answer0">Option text</label>
+  // OR:            <label ...><input type="radio" ... value="0" ... /> Option text</label>
+  const inputRegex = /<input[^>]*type=["'](?:radio|checkbox)["'][^>]*name=["'][^"']*_answer["'][^>]*>/gi;
+  const inputs = html.match(inputRegex) || [];
+
+  for (const inputTag of inputs) {
+    const valueMatch = inputTag.match(/value=["'](\d+)["']/i);
+    if (!valueMatch) continue;
+    const value = parseInt(valueMatch[1], 10);
+
+    let labelText = "";
+
+    // Try to find a <label for="inputId">...</label>
+    const idMatch = inputTag.match(/id=["']([^"']+)["']/i);
+    if (idMatch) {
+      const labelRegex = new RegExp(
+        `<label[^>]*for=["']${idMatch[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'][^>]*>(.*?)</label>`,
+        "is"
+      );
+      const labelMatch = html.match(labelRegex);
+      if (labelMatch) {
+        labelText = labelMatch[1].replace(/<[^>]*>/g, "").trim();
+      }
+    }
+
+    // Fallback: check if input is wrapped inside a <label>...</label>
+    if (!labelText) {
+      const escapedInput = inputTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const wrapRegex = new RegExp(`<label[^>]*>\\s*${escapedInput}(.*?)</label>`, "is");
+      const wrapMatch = html.match(wrapRegex);
+      if (wrapMatch) {
+        labelText = wrapMatch[1].replace(/<[^>]*>/g, "").trim();
+      }
+    }
+
+    if (labelText) {
+      answers.push({ id: value, text: labelText, fraction: 0 });
+    }
+  }
+
+  return answers;
+}
+
+/**
  * Fetch questions for an in-progress attempt.
  * Moodle API: mod_quiz_get_attempt_data
  */
@@ -594,22 +654,84 @@ export async function moodleGetAttemptData(
   if (!attempt) return null;
 
   const rawQuestions: any[] = data.questions ?? [];
-  const questions: MoodleQuizQuestion[] = rawQuestions.map((q) => ({
-    slot: q.slot as number,
-    type: q.type as string,
-    page: q.page as number,
-    html: (q.html ?? "") as string,
-    sequencecheck: (q.sequencecheck ?? 0) as number,
-    options: q.type === "multichoice" || q.type === "truefalse"
-      ? {
-          answers: ((q.options?.answers ?? []) as any[]).map((a) => ({
-            id: a.id as number,
-            text: (a.text ?? "") as string,
-            fraction: (a.fraction ?? 0) as number,
-          })),
-        }
-      : undefined,
-  }));
+
+  // Debug: log raw question data from Moodle so we can see actual types and options
+  console.log(`[Moodle] mod_quiz_get_attempt_data returned ${rawQuestions.length} questions:`,
+    rawQuestions.map((q) => ({
+      slot: q.slot,
+      type: q.type,
+      qtype: q.qtype,
+      hasOptions: !!q.options,
+      optionsKeys: q.options ? Object.keys(q.options) : [],
+      answersCount: q.options?.answers?.length ?? 0,
+      firstAnswerKeys: q.options?.answers?.[0] ? Object.keys(q.options.answers[0]) : [],
+    }))
+  );
+
+  const questions: MoodleQuizQuestion[] = rawQuestions.map((q) => {
+    // Moodle may return the question type under "type" or "qtype" depending on version
+    let type = (q.type ?? q.qtype ?? "") as string;
+    const html = (q.html ?? "") as string;
+
+    // If type is missing or empty, try to infer from HTML content
+    if (!type) {
+      if (/<textarea[^>]*name=["'][^"']*_answer["']/i.test(html)) {
+        type = "essay";
+      } else if (/<input[^>]*type=["'](?:radio|checkbox)["'][^>]*name=["'][^"']*_answer["']/i.test(html)) {
+        type = "multichoice";
+      } else if (/<select[^>]*name=["'][^"']*_answer["']/i.test(html)) {
+        type = "multichoice";
+      }
+    }
+
+    // Parse options from the Moodle API response.
+    // Some Moodle versions return options as a JSON-encoded string.
+    let rawOptions = q.options;
+    if (typeof rawOptions === "string") {
+      try {
+        rawOptions = JSON.parse(rawOptions);
+      } catch {
+        rawOptions = undefined;
+      }
+    }
+
+    // Question types that have selectable choices (radio buttons / checkboxes)
+    const isChoiceType = type === "multichoice" || type === "truefalse";
+
+    if (isChoiceType) {
+      // Try to extract answers from the API options first.
+      // Moodle uses "answer" as the field name for answer text, not "text".
+      let answers = ((rawOptions?.answers ?? []) as any[]).map((a, idx) => ({
+        id: (a.id ?? a.choice ?? idx) as number,
+        text: (a.answer ?? a.text ?? "") as string,
+        fraction: (a.fraction ?? 0) as number,
+      }));
+
+      // Fallback: if no answers came from the API, parse them from the HTML.
+      // Moodle embeds radio/checkbox inputs with labels in the question HTML.
+      if (answers.length === 0) {
+        answers = parseChoicesFromHtml(html);
+      }
+
+      return {
+        slot: q.slot as number,
+        type,
+        page: q.page as number,
+        html,
+        sequencecheck: (q.sequencecheck ?? 0) as number,
+        options: answers.length > 0 ? { answers } : undefined,
+      };
+    }
+
+    return {
+      slot: q.slot as number,
+      type,
+      page: q.page as number,
+      html,
+      sequencecheck: (q.sequencecheck ?? 0) as number,
+      options: undefined,
+    };
+  });
 
   return { attempt, questions };
 }

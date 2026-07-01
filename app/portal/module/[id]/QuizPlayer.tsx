@@ -100,9 +100,10 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
 
   async function handleSubmit() {
     if (!quiz || !quiz.questions) return;
-    // Essay / free-form questions always pass — don't block submission if empty
+    // Essay / short-answer / numerical questions don't have selectable options
+    const freeTextTypes = ["essay", "shortanswer", "numerical"];
     const unanswered = quiz.questions.filter(
-      (q) => q.type !== "essay" && !answers[q.slot]
+      (q) => !freeTextTypes.includes(q.type) && !answers[q.slot]
     );
     if (unanswered.length > 0) {
       setErrorMsg(`Please answer all ${unanswered.length} remaining question(s).`);
@@ -112,15 +113,15 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
     setSubmitting(true);
     setErrorMsg("");
 
-    const hasEssay = quiz.questions.some((q) => q.type === "essay");
+    const hasEssay = quiz.questions.some((q) => freeTextTypes.includes(q.type));
 
-    // Build answers keyed by slot — essay questions get a default if left blank
+    // Build answers keyed by slot — free-text questions get a default if left blank
     const payloadAnswers: Record<string, string | number> = {};
     const payloadSeq: Record<string, number> = {};
     for (const q of quiz.questions) {
       const slot = q.slot;
       const userAnswer = answers[slot];
-      if (q.type === "essay") {
+      if (freeTextTypes.includes(q.type)) {
         payloadAnswers[slot] = userAnswer?.trim() ? userAnswer : "No response provided.";
       } else if (userAnswer) {
         payloadAnswers[slot] = userAnswer;
@@ -342,8 +343,9 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
   if (phase !== "ready" || !quiz || !quiz.questions) return null;
 
   const totalQuestions = quiz.questions.length;
+  const freeTextTypes = ["essay", "shortanswer", "numerical"];
   const answeredCount = quiz.questions.filter(
-    (q) => q.type === "essay" || answers[q.slot]
+    (q) => freeTextTypes.includes(q.type) || answers[q.slot]
   ).length;
 
   return (
@@ -433,7 +435,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
           {quiz.questions.map((q, idx) => {
             const choices = q.options?.answers ?? [];
             const selected = answers[q.slot];
-            const isAnswered = q.type === "essay" || !!selected;
+            const isAnswered = freeTextTypes.includes(q.type) || !!selected;
 
             return (
               <div
@@ -496,6 +498,26 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
                       fontSize: "16px",
                       lineHeight: 1.6,
                       resize: "vertical",
+                      outline: "none",
+                    }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(245,158,11,0.4)"; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = "#2d3a4f"; }}
+                  />
+                ) : q.type === "shortanswer" || q.type === "numerical" ? (
+                  <input
+                    type="text"
+                    value={answers[q.slot] ?? ""}
+                    onChange={(e) => handleSelect(q.slot, e.target.value)}
+                    placeholder={q.type === "numerical" ? "Enter a number…" : "Type your answer…"}
+                    style={{
+                      width: "100%",
+                      padding: "0.625rem 0.875rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid #2d3a4f",
+                      background: "#0B1221",
+                      color: "#E5E7EB",
+                      fontSize: "16px",
+                      lineHeight: 1.6,
                       outline: "none",
                     }}
                     onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(245,158,11,0.4)"; }}
@@ -574,9 +596,25 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
                     })}
                   </div>
                 ) : (
-                  <p style={{ fontSize: "0.8125rem", color: "#6B7280", paddingLeft: "clamp(0.5rem, 6vw, 2.5rem)" }}>
-                    This question type ({q.type}) is not supported in the simplified quiz view.
-                  </p>
+                  <input
+                    type="text"
+                    value={answers[q.slot] ?? ""}
+                    onChange={(e) => handleSelect(q.slot, e.target.value)}
+                    placeholder="Type your answer…"
+                    style={{
+                      width: "100%",
+                      padding: "0.625rem 0.875rem",
+                      borderRadius: "0.5rem",
+                      border: "1px solid #2d3a4f",
+                      background: "#0B1221",
+                      color: "#E5E7EB",
+                      fontSize: "16px",
+                      lineHeight: 1.6,
+                      outline: "none",
+                    }}
+                    onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(245,158,11,0.4)"; }}
+                    onBlur={(e) => { e.currentTarget.style.borderColor = "#2d3a4f"; }}
+                  />
                 )}
               </div>
             );
