@@ -7,6 +7,7 @@ import {
   normalizeProgrammeSlug,
   pickMoodleDownloadFile,
   getBunnyVideoUrl,
+  withMoodleToken,
 } from "@/lib/moodle";
 
 export const dynamic = "force-dynamic";
@@ -119,7 +120,7 @@ export async function GET(req: NextRequest) {
   // ── Option A: Moodle-attached file ────────────────────────────────────────
   if (file?.fileurl) {
     try {
-      const fileRes = await fetch(file.fileurl);
+      const fileRes = await fetch(withMoodleToken(file.fileurl));
       if (!fileRes.ok) {
         console.error(
           "[DOWNLOAD] Moodle file fetch failed:",
