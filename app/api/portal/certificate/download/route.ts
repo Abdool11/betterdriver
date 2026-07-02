@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { moodleGetProgress, moodleGetCourseModules, normalizeProgrammeSlug } from "@/lib/moodle";
+import { ensureCertificate } from "@/lib/certificate";
 
 /**
  * GET /api/portal/certificate/download
@@ -14,7 +16,7 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: cert } = await supabaseAdmin
+  let { data: cert } = await supabaseAdmin
     .from("certifications")
     .select("certificate_number, pdf_url, issued_at, programme, driver_id")
     .eq("driver_id", session.driverId)
@@ -22,6 +24,71 @@ export async function GET() {
     .order("issued_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  // If no certificate exists yet, try to create one on demand
+  if (!cert) {
+    console.log("[DOWNLOAD] No certificate found, attempting to create one for driver", session.driverId);
+
+    const { data: driver } = await supabaseAdmin
+      .from("drivers")
+      .select("id, company_id, moodle_user_id")
+      .eq("id", session.driverId)
+      .single();
+
+    const { data: enrolment } = await supabaseAdmin
+      .from("enrolments")
+      .select("id, programme_slug, completed_at, modules_completed")
+      .eq("driver_id", session.driverId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    let courseCompleted = !!enrolment?.completed_at;
+
+    if (driver?.moodle_user_id && enrolment) {
+      try {
+        const canonicalSlug = normalizeProgrammeSlug(enrolment.programme_slug ?? "ptdp");
+        const progress = await moodleGetProgress({
+          moodleUserId: driver.moodle_user_id,
+          programmeSlug: canonicalSlug,
+        });
+        const moodleModules = await moodleGetCourseModules({
+          moodleUserId: driver.moodle_user_id,
+          programmeSlug: canonicalSlug,
+        });
+        const completedModules = Math.max(
+          progress.completedmodules,
+          enrolment.modules_completed ?? 0
+        );
+        const totalModules = moodleModules.length > 0 ? moodleModules.length : progress.totalmodules;
+        courseCompleted =
+          courseCompleted || progress.completed || (totalModules > 0 && completedModules >= totalModules);
+      } catch (err) {
+        console.error("[DOWNLOAD] Moodle completion check failed:", err);
+      }
+    }
+
+    if (courseCompleted && enrolment) {
+      const canonicalSlug = normalizeProgrammeSlug(enrolment.programme_slug ?? "ptdp");
+      const newCert = await ensureCertificate({
+        driverId: session.driverId,
+        enrolmentId: enrolment.id,
+        companyId: driver?.company_id ?? null,
+        programme: canonicalSlug === "professional-truck-driver" ? "p1" : "p2",
+        enrolmentSlug: canonicalSlug,
+      });
+
+      if (newCert) {
+        cert = {
+          certificate_number: newCert.certificate_number,
+          pdf_url: null,
+          issued_at: newCert.issued_at,
+          programme: canonicalSlug === "professional-truck-driver" ? "p1" : "p2",
+          driver_id: session.driverId,
+        };
+      }
+    }
+  }
 
   if (!cert) {
     return NextResponse.json({ error: "No certificate found" }, { status: 404 });

@@ -17,12 +17,11 @@ export default function PortalCertificatePage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/portal/dashboard")
+    fetch("/api/portal/certificate")
       .then((r) => r.json())
       .then((d) => {
-        const stats = d?.stats;
-        const isComplete = stats?.certificateReady ?? false;
-        const issuedDateRaw = stats?.certificateIssuedAt;
+        const isComplete = d?.isComplete ?? false;
+        const issuedDateRaw = d?.certificateIssuedAt;
         const issuedDate = issuedDateRaw
           ? new Date(issuedDateRaw).toLocaleDateString("en-ZA", {
               day: "numeric",
@@ -32,9 +31,9 @@ export default function PortalCertificatePage() {
           : "";
 
         setData({
-          driverName: `${stats?.firstName ?? ""} ${stats?.lastName ?? ""}`.trim() || "Driver",
-          programmeName: stats?.programmeTitle || "The Professional Truck Driver Programme",
-          certNumber: stats?.certificateNumber ?? "",
+          driverName: `${d?.driverName ?? ""}`.trim() || "Driver",
+          programmeName: d?.programmeTitle || "The Professional Truck Driver Programme",
+          certNumber: d?.certificateNumber ?? "",
           issuedDate,
           isComplete,
         });

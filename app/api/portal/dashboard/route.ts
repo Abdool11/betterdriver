@@ -154,6 +154,8 @@ export async function GET(req: NextRequest) {
     if (cert) {
       certificateNumber = cert.certificate_number;
       certificateIssuedAt = cert.issued_at;
+    } else {
+      console.error("[DASHBOARD] ensureCertificate returned null for driver", session.driverId);
     }
   }
 

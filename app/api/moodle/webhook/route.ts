@@ -133,12 +133,18 @@ export async function POST(req: NextRequest) {
 
       if (isNowComplete) {
         // Auto-create certificate record
-        await ensureCertificate({
+        const cert = await ensureCertificate({
           driverId: driver.id,
           enrolmentId: enrolment.id,
           programme: programmeSlug === "professional-truck-driver" ? "p1" : "p2",
           enrolmentSlug: programmeSlug,
         });
+
+        if (cert) {
+          console.log("[MOODLE_WEBHOOK] Certificate ensured:", cert.certificate_number, "created:", cert.created);
+        } else {
+          console.error("[MOODLE_WEBHOOK] ensureCertificate returned null for driver", driver.id);
+        }
 
         // TRIGGER 6 — Programme complete
         // Template: bd_programme_complete
