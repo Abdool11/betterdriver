@@ -43,7 +43,12 @@ export default function PortalCertificatePage() {
   }, []);
 
   async function handleDownload() {
-    window.open("/api/portal/certificate/download", "_blank");
+    const link = document.createElement("a");
+    link.href = "/api/portal/certificate/download";
+    link.download = "";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 
   function handleShare() {

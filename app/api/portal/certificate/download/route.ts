@@ -3,12 +3,13 @@ import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { moodleGetProgress, moodleGetCourseModules, normalizeProgrammeSlug } from "@/lib/moodle";
 import { ensureCertificate } from "@/lib/certificate";
+import PDFDocument from "pdfkit";
 
 /**
  * GET /api/portal/certificate/download
- * Returns the driver's certificate PDF.
- * If pdf_url exists, redirects to it.
- * Otherwise generates a branded HTML certificate the browser can print-to-PDF.
+ * Returns the driver's certificate as a downloadable PDF.
+ * If pdf_url exists in the DB, redirects to it.
+ * Otherwise generates a branded PDF certificate on the fly.
  */
 export async function GET() {
   const session = await getSession();
@@ -37,13 +38,13 @@ export async function GET() {
 
     const { data: enrolment } = await supabaseAdmin
       .from("enrolments")
-      .select("id, programme_slug, completed_at, modules_completed")
+      .select("id, programme_slug, completed_at, modules_completed, progress_percent")
       .eq("driver_id", session.driverId)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    let courseCompleted = !!enrolment?.completed_at;
+    let courseCompleted = !!enrolment?.completed_at || (enrolment?.progress_percent ?? 0) >= 100;
 
     if (driver?.moodle_user_id && enrolment) {
       try {
@@ -119,130 +120,87 @@ export async function GET() {
       })
     : "";
 
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Certificate — ${driverName}</title>
-<style>
-  @media print {
-    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  }
-  body {
-    font-family: Georgia, 'Times New Roman', serif;
-    background: #0a1628;
-    color: #1a1a2e;
-    margin: 0;
-    padding: 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 100vh;
-    box-sizing: border-box;
-  }
-  .certificate {
-    background: #fff;
-    border: 8px solid #f59e0b;
-    padding: 3rem 2.5rem;
-    max-width: 800px;
-    width: 100%;
-    text-align: center;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-  }
-  .logo {
-    font-family: Arial, sans-serif;
-    font-weight: 800;
-    font-size: 1.25rem;
-    color: #f59e0b;
-    letter-spacing: 0.05em;
-    margin-bottom: 1.5rem;
-  }
-  .label {
-    font-family: Arial, sans-serif;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.15em;
-    color: #64748b;
-    margin-bottom: 0.5rem;
-  }
-  h1 {
-    font-size: 2rem;
-    font-weight: 700;
-    margin: 0 0 1rem;
-    color: #0a1628;
-  }
-  .recipient {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #f59e0b;
-    margin: 1rem 0;
-  }
-  .programme {
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: #334155;
-    margin: 1rem 0 2rem;
-  }
-  .meta {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 2rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid #e2e8f0;
-    font-family: Arial, sans-serif;
-    font-size: 0.875rem;
-    color: #64748b;
-  }
-  .meta div { text-align: left; }
-  .meta .num { font-family: monospace; color: #334155; }
-  .print-btn {
-    display: inline-block;
-    margin-top: 1.5rem;
-    padding: 0.625rem 1.5rem;
-    background: #0a1628;
-    color: #fff;
-    border: none;
-    border-radius: 0.5rem;
-    font-family: Arial, sans-serif;
-    font-size: 0.875rem;
-    font-weight: 600;
-    cursor: pointer;
-  }
-  .print-btn:hover { background: #1a3050; }
-  @media print {
-    .print-btn { display: none; }
-    body { padding: 0; background: #fff; }
-    .certificate { box-shadow: none; border-width: 4px; }
-  }
-</style>
-</head>
-<body>
-<div class="certificate">
-  <div class="logo">BetterDriver</div>
-  <div class="label">Certificate of Completion</div>
-  <h1>${programmeName}</h1>
-  <p style="font-size:0.9375rem;color:#64748b;margin:0;">This certifies that</p>
-  <div class="recipient">${driverName}</div>
-  <p style="font-size:0.9375rem;color:#64748b;margin:0;">has successfully completed all requirements</p>
-  <div class="meta">
-    <div>
-      <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.25rem;">Certificate number</div>
-      <div class="num">${cert.certificate_number}</div>
-    </div>
-    <div style="text-align:right;">
-      <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.25rem;">Issued</div>
-      <div class="num">${issuedDate}</div>
-    </div>
-  </div>
-  <button class="print-btn" onclick="window.print()">Save as PDF</button>
-</div>
-</body>
-</html>`;
+  // Generate PDF using pdfkit
+  const doc = new PDFDocument({
+    layout: "landscape",
+    size: "A4",
+    margin: 0,
+  });
 
-  return new NextResponse(html, {
+  const chunks: Buffer[] = [];
+  doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+
+  const pdfPromise = new Promise<Buffer>((resolve) => {
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+  });
+
+  const pageW = doc.page.width;
+  const pageH = doc.page.height;
+
+  // Background — white with amber border
+  doc.rect(0, 0, pageW, pageH).fillColor("#ffffff").fill();
+  doc.rect(20, 20, pageW - 40, pageH - 40).fillColor("#ffffff").fill();
+  doc.rect(20, 20, pageW - 40, pageH - 40).lineWidth(6).strokeColor("#f59e0b").stroke();
+  doc.rect(30, 30, pageW - 60, pageH - 60).lineWidth(1).strokeColor("#f59e0b").stroke();
+
+  // Logo / brand name
+  doc.fontSize(24).fillColor("#f59e0b").font("Helvetica-Bold");
+  doc.text("BetterDriver", 0, 60, { align: "center" });
+
+  // Label
+  doc.fontSize(11).fillColor("#64748b").font("Helvetica");
+  doc.text("CERTIFICATE OF COMPLETION", 0, 95, { align: "center" });
+
+  // Programme name
+  doc.fontSize(28).fillColor("#0a1628").font("Helvetica-Bold");
+  doc.text(programmeName, 0, 130, { align: "center", width: pageW - 120 });
+
+  // "This certifies that"
+  doc.fontSize(13).fillColor("#64748b").font("Helvetica");
+  doc.text("This certifies that", 0, 185, { align: "center" });
+
+  // Recipient name
+  doc.fontSize(22).fillColor("#f59e0b").font("Helvetica-Bold");
+  doc.text(driverName, 0, 210, { align: "center" });
+
+  // Completion text
+  doc.fontSize(13).fillColor("#64748b").font("Helvetica");
+  doc.text("has successfully completed all requirements", 0, 245, { align: "center" });
+
+  // Divider line
+  doc.moveTo(120, 290).lineTo(pageW - 120, 290).lineWidth(1).strokeColor("#e2e8f0").stroke();
+
+  // Certificate number (left)
+  doc.fontSize(9).fillColor("#64748b").font("Helvetica");
+  doc.text("CERTIFICATE NUMBER", 120, 305);
+  doc.fontSize(12).fillColor("#334155").font("Courier-Bold");
+  doc.text(cert.certificate_number, 120, 320);
+
+  // Issue date (right)
+  doc.fontSize(9).fillColor("#64748b").font("Helvetica");
+  doc.text("ISSUED", pageW - 250, 305);
+  doc.fontSize(12).fillColor("#334155").font("Helvetica-Bold");
+  doc.text(issuedDate, pageW - 250, 320);
+
+  // Verification note
+  doc.fontSize(9).fillColor("#94a3b8").font("Helvetica-Oblique");
+  doc.text(
+    `Verify at ${process.env.NEXT_PUBLIC_SITE_URL ?? "https://betterdriver.co.za"}/verify/${cert.certificate_number}`,
+    0,
+    pageH - 70,
+    { align: "center" }
+  );
+
+  doc.end();
+
+  const pdfBuffer = await pdfPromise;
+  const safeName = driverName.replace(/\s+/g, "_");
+
+  return new NextResponse(new Uint8Array(pdfBuffer), {
     headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Content-Disposition": `inline; filename="BetterDriver_Certificate_${driverName.replace(/\s+/g, "_")}.html"`,
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="BetterDriver_Certificate_${safeName}.pdf"`,
+      "Content-Length": String(pdfBuffer.length),
     },
   });
 }

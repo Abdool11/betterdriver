@@ -78,10 +78,10 @@ export async function GET(req: NextRequest) {
         progress.completed || (totalModules > 0 && completedModules >= totalModules) || !!enrolment.completed_at;
     } catch (err) {
       console.error("[CERTIFICATE_API] Moodle fetch failed:", err);
-      courseCompleted = !!enrolment.completed_at;
+      courseCompleted = !!enrolment.completed_at || (enrolment.progress_percent ?? 0) >= 100;
     }
   } else {
-    courseCompleted = !!enrolment.completed_at;
+    courseCompleted = !!enrolment.completed_at || (enrolment.progress_percent ?? 0) >= 100;
   }
 
   // 4. Ensure a certificate exists if the course is complete
