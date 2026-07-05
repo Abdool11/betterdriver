@@ -180,10 +180,16 @@ function ensureDownloadUrl(fileurl: string): string {
   return url.toString();
 }
 
-/** Append the Moodle web service token to a pluginfile URL for server-side fetches. */
+/** Append the Moodle web service token to a pluginfile URL for server-side fetches.
+ *  If the URL already contains a token (e.g. returned by core_course_get_contents),
+ *  keep it — it is the user-specific token Moodle generated for that file.
+ */
 export function withMoodleToken(fileurl: string): string {
   const url = new URL(fileurl);
-  url.searchParams.set("token", MOODLE_TOKEN);
+  if (!url.searchParams.get("token")) {
+    checkMoodleConfig();
+    url.searchParams.set("token", MOODLE_TOKEN);
+  }
   return url.toString();
 }
 
@@ -460,7 +466,7 @@ export async function moodleGetCourseModules(params: {
         const htmlFile = (mod.files ?? []).find((f) => f.filename === "index.html" && f.fileurl);
         if (!htmlFile?.fileurl) return;
 
-        const htmlUrl = htmlFile.fileurl + `&token=${MOODLE_TOKEN}`;
+        const htmlUrl = withMoodleToken(htmlFile.fileurl);
         try {
           const htmlRes = await fetch(htmlUrl);
           if (htmlRes.ok) {

@@ -120,13 +120,21 @@ export async function GET(req: NextRequest) {
   // ── Option A: Moodle-attached file ────────────────────────────────────────
   if (file?.fileurl) {
     try {
-      const fileRes = await fetch(withMoodleToken(file.fileurl));
-      if (!fileRes.ok) {
+      const fileUrl = withMoodleToken(file.fileurl);
+      const fileRes = await fetch(fileUrl);
+
+      // Moodle may return a JSON error with a 200 status (e.g. missing token).
+      // Detect that and return a friendly error instead of saving the JSON blob.
+      const contentType = fileRes.headers.get("content-type") ?? "";
+      if (!fileRes.ok || contentType.includes("application/json")) {
+        const body = await fileRes.text();
         console.error(
           "[DOWNLOAD] Moodle file fetch failed:",
           fileRes.status,
           fileRes.statusText,
-          file.fileurl
+          contentType,
+          fileUrl,
+          body.slice(0, 500)
         );
         return NextResponse.json(
           { error: "Unable to fetch the file from Moodle" },
@@ -137,7 +145,7 @@ export async function GET(req: NextRequest) {
       const headers = new Headers();
       setAttachmentHeaders(
         headers,
-        fileRes.headers.get("content-type"),
+        contentType,
         fileRes.headers.get("content-length"),
         file.filename
       );
