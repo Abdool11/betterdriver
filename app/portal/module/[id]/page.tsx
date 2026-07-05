@@ -4,7 +4,12 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
-import { moodleGetCourseModules, normalizeProgrammeSlug, MOODLE_URL } from "@/lib/moodle";
+import {
+  moodleGetCourseModules,
+  normalizeProgrammeSlug,
+  MOODLE_URL,
+  pickMoodleDownloadFile,
+} from "@/lib/moodle";
 import { ArrowRight, Lock } from "lucide-react";
 import ModuleContent from "./ModuleContent";
 
@@ -43,6 +48,7 @@ export default async function ModuleLandingPage({
   let modName = "";
   let quizId = 0;
   let isLocked = false;
+  let downloadable = false;
 
   if (!session) {
     loadError = "Please sign in to view this module.";
@@ -126,6 +132,8 @@ export default async function ModuleLandingPage({
             bunnyVideoId = mod.bunnyVideoId ?? "";
             bunnyLibraryId = mod.bunnyLibraryId ?? "";
             videoUrl = mod.videoUrl ?? "";
+            downloadable =
+              Boolean(pickMoodleDownloadFile(mod.files)) || Boolean(mod.bunnyVideoId);
             if (mod.modname === "quiz") {
               quizId = mod.instance;
             }
@@ -244,6 +252,7 @@ export default async function ModuleLandingPage({
       modName={modName}
       quizId={quizId}
       hasData={hasData}
+      downloadable={downloadable}
     />
   );
 }

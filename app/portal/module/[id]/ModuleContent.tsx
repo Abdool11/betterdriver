@@ -28,6 +28,7 @@ interface ModuleContentProps {
   modName: string;
   quizId: number;
   hasData: boolean;
+  downloadable?: boolean;
 }
 
 export default function ModuleContent({
@@ -45,11 +46,36 @@ export default function ModuleContent({
   modName,
   quizId,
   hasData,
+  downloadable,
 }: ModuleContentProps) {
   const [complete, setComplete] = useState(isComplete);
+  const [markingComplete, setMarkingComplete] = useState(false);
+  const [markError, setMarkError] = useState("");
 
   const handleComplete = () => {
     setComplete(true);
+  };
+
+  const handleManualComplete = async () => {
+    setMarkingComplete(true);
+    setMarkError("");
+    try {
+      const res = await fetch("/api/portal/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ moduleId: id, completed: true, percentWatched: 100 }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to mark module complete");
+      }
+      setComplete(true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to mark complete";
+      setMarkError(message);
+    } finally {
+      setMarkingComplete(false);
+    }
   };
 
   return (
@@ -223,6 +249,22 @@ export default function ModuleContent({
             >
               Next module <ArrowRight size={18} />
             </Link>
+          )}
+          {!complete && downloadable && (
+            <div className="flex flex-col gap-2 w-full sm:w-auto shrink-0">
+              <button
+                type="button"
+                onClick={handleManualComplete}
+                disabled={markingComplete}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-amber-500/50 bg-amber-500/10 text-amber-500 font-bold text-[0.9375rem] hover:bg-amber-500/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                style={{ fontFamily: "var(--font-dm-sans), sans-serif" }}
+              >
+                {markingComplete ? "Marking complete..." : "I watched this offline — mark complete"}
+              </button>
+              {markError && (
+                <p className="text-[0.75rem] text-red-400 m-0 text-center sm:text-left">{markError}</p>
+              )}
+            </div>
           )}
         </div>
       )}
