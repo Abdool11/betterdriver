@@ -6,10 +6,53 @@ import { ensureCertificate } from "@/lib/certificate";
 import PDFDocument from "pdfkit";
 
 /**
+ * Upload a generated PDF to Supabase Storage and update the certifications row.
+ * Returns the public URL on success, or null on failure.
+ */
+async function uploadCertificatePdf(
+  certificateNumber: string,
+  pdfBuffer: Buffer
+): Promise<string | null> {
+  const fileName = `${certificateNumber}.pdf`;
+  const filePath = `public/${fileName}`;
+
+  const { error: uploadError } = await supabaseAdmin.storage
+    .from("certificates")
+    .upload(filePath, pdfBuffer, {
+      contentType: "application/pdf",
+      cacheControl: "3600",
+      upsert: true,
+    });
+
+  if (uploadError) {
+    console.error("[DOWNLOAD] Failed to upload PDF to storage:", uploadError.message);
+    return null;
+  }
+
+  const { data: publicUrlData } = supabaseAdmin.storage
+    .from("certificates")
+    .getPublicUrl(filePath);
+
+  const publicUrl = publicUrlData.publicUrl;
+
+  const { error: updateError } = await supabaseAdmin
+    .from("certifications")
+    .update({ pdf_url: publicUrl })
+    .eq("certificate_number", certificateNumber);
+
+  if (updateError) {
+    console.error("[DOWNLOAD] Failed to update pdf_url:", updateError.message);
+  }
+
+  return publicUrl;
+}
+
+/**
  * GET /api/portal/certificate/download
  * Returns the driver's certificate as a downloadable PDF.
  * If pdf_url exists in the DB, redirects to it.
- * Otherwise generates a branded PDF certificate on the fly.
+ * Otherwise generates a branded PDF certificate on the fly, uploads it to
+ * Supabase Storage, and redirects to the stored PDF on the next request.
  */
 export async function GET() {
   const session = await getSession();
@@ -194,6 +237,15 @@ export async function GET() {
   doc.end();
 
   const pdfBuffer = await pdfPromise;
+
+  // Persist the generated PDF so future requests can be served from Storage
+  if (cert.certificate_number) {
+    const publicUrl = await uploadCertificatePdf(cert.certificate_number, pdfBuffer);
+    if (publicUrl) {
+      return NextResponse.redirect(publicUrl);
+    }
+  }
+
   const safeName = driverName.replace(/\s+/g, "_");
 
   return new NextResponse(new Uint8Array(pdfBuffer), {
