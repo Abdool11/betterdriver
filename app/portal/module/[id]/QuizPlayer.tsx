@@ -37,10 +37,11 @@ interface Props {
   moduleId: string;
   quizId?: number;
   moduleName: string;
+  onSaving?: () => void;
   onComplete?: () => void;
 }
 
-export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }: Props) {
+export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onComplete }: Props) {
   const router = useRouter();
   const [phase, setPhase] = useState<"loading" | "ready" | "review" | "error">("loading");
   const [quiz, setQuiz] = useState<QuizData | null>(null);
@@ -136,6 +137,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
     }
 
     try {
+      onSaving?.();
       const res = await fetch("/api/quiz/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -8,6 +8,7 @@ interface Props {
   videoId: string;
   moduleId: string;
   moduleName: string;
+  onSaving?: () => void;
   onComplete?: () => void;
 }
 
@@ -22,6 +23,7 @@ export default function BunnyPlayer({
   videoId,
   moduleId,
   moduleName,
+  onSaving,
   onComplete,
 }: Props) {
   const [phase, setPhase] = useState<"loading" | "ready" | "ended">("loading");
@@ -119,6 +121,7 @@ export default function BunnyPlayer({
   }
 
   async function markComplete() {
+    onSaving?.();
     await reportProgress(100, true);
   }
   const embedUrl = `https://iframe.mediadelivery.net/embed/${libraryId}/${videoId}?autoplay=false`;

@@ -13,6 +13,7 @@ import {
   Wifi,
   Download,
   Bell,
+  Loader2,
 } from "lucide-react";
 import { useLanguage, type Lang } from "@/hooks/useLanguage";
 
@@ -194,42 +195,51 @@ export default function PortalHomePage() {
 
         {/* Progress bar */}
         <div style={{ marginBottom: "0.5rem" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "0.5rem",
-            }}
-          >
-            <span style={{ fontSize: "0.8125rem", color: "#9CA3AF" }}>
-              {stats.programmeTitle}
-            </span>
-            <span style={{ fontSize: "0.8125rem", fontWeight: 700, color: "#14b8a6" }}>
-              {stats.progressPercent}%
-            </span>
-          </div>
-          <div
-            style={{
-              height: 6,
-              background: "rgba(255,255,255,0.08)",
-              borderRadius: 9999,
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                height: "100%",
-                width: `${stats.progressPercent}%`,
-                background: "linear-gradient(90deg, #14b8a6, #34d399)",
-                borderRadius: 9999,
-                transition: "width 0.6s ease",
-              }}
-            />
-          </div>
-          <p style={{ fontSize: "0.75rem", color: "#6B7280", marginTop: "0.375rem" }}>
-            {copy.modulesOf(stats.completedModules, stats.totalModules)}
-          </p>
+          {loading ? (
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", padding: "0.5rem 0" }}>
+              <Loader2 size={16} style={{ color: "#14b8a6", animation: "spin 1s linear infinite" }} />
+              <span style={{ fontSize: "0.8125rem", color: "#9CA3AF" }}>Loading your progress…</span>
+            </div>
+          ) : (
+            <>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "0.5rem",
+                }}
+              >
+                <span style={{ fontSize: "0.8125rem", color: "#9CA3AF" }}>
+                  {stats.programmeTitle}
+                </span>
+                <span style={{ fontSize: "0.8125rem", fontWeight: 700, color: "#14b8a6" }}>
+                  {stats.progressPercent}%
+                </span>
+              </div>
+              <div
+                style={{
+                  height: 6,
+                  background: "rgba(255,255,255,0.08)",
+                  borderRadius: 9999,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: `${stats.progressPercent}%`,
+                    background: "linear-gradient(90deg, #14b8a6, #34d399)",
+                    borderRadius: 9999,
+                    transition: "width 0.6s ease",
+                  }}
+                />
+              </div>
+              <p style={{ fontSize: "0.75rem", color: "#6B7280", marginTop: "0.375rem" }}>
+                {copy.modulesOf(stats.completedModules, stats.totalModules)}
+              </p>
+            </>
+          )}
         </div>
       </div>
 

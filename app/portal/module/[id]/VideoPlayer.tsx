@@ -7,10 +7,11 @@ interface Props {
   videoUrl: string;
   moduleId: string;
   moduleName: string;
+  onSaving?: () => void;
   onComplete?: () => void;
 }
 
-export default function VideoPlayer({ videoUrl, moduleId, moduleName, onComplete }: Props) {
+export default function VideoPlayer({ videoUrl, moduleId, moduleName, onSaving, onComplete }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [phase, setPhase] = useState<"loading" | "ready" | "ended">("loading");
   const markedRef = useRef(false);
@@ -34,6 +35,7 @@ export default function VideoPlayer({ videoUrl, moduleId, moduleName, onComplete
   }
 
   async function markComplete() {
+    onSaving?.();
     await reportProgress(100, true);
   }
 

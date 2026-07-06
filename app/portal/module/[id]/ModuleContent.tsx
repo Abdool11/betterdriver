@@ -7,6 +7,7 @@ import {
   PlayCircle,
   ArrowRight,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
 import BunnyPlayer from "./BunnyPlayer";
 import QuizPlayer from "./QuizPlayer";
@@ -49,10 +50,16 @@ export default function ModuleContent({
   downloadable,
 }: ModuleContentProps) {
   const [complete, setComplete] = useState(isComplete);
+  const [savingComplete, setSavingComplete] = useState(false);
   const [markingComplete, setMarkingComplete] = useState(false);
   const [markError, setMarkError] = useState("");
 
+  const handleSaving = () => {
+    setSavingComplete(true);
+  };
+
   const handleComplete = () => {
+    setSavingComplete(false);
     setComplete(true);
   };
 
@@ -130,7 +137,11 @@ export default function ModuleContent({
         </h1>
         {hasData && (
           <div style={{ display: "flex", gap: "clamp(0.75rem, 3vw, 1.25rem)", flexWrap: "wrap", alignItems: "center" }}>
-            {complete ? (
+            {savingComplete ? (
+              <span style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.8125rem", color: "#F59E0B" }}>
+                <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Saving completion…
+              </span>
+            ) : complete ? (
               <span style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.8125rem", color: "#10B981" }}>
                 <CheckCircle2 size={13} /> Completed
               </span>
@@ -184,6 +195,7 @@ export default function ModuleContent({
           videoId={bunnyVideoId}
           moduleId={id}
           moduleName={moduleName || "Module"}
+          onSaving={handleSaving}
           onComplete={handleComplete}
         />
       )}
@@ -194,13 +206,14 @@ export default function ModuleContent({
           videoUrl={videoUrl}
           moduleId={id}
           moduleName={moduleName || "Module"}
+          onSaving={handleSaving}
           onComplete={handleComplete}
         />
       )}
 
       {/* Native quiz player — when module is a Moodle quiz */}
       {modName === "quiz" && !bunnyVideoId && !videoUrl && (
-        <QuizPlayer moduleId={id} quizId={quizId} moduleName={moduleName || "Quiz"} onComplete={handleComplete} />
+        <QuizPlayer moduleId={id} quizId={quizId} moduleName={moduleName || "Quiz"} onSaving={handleSaving} onComplete={handleComplete} />
       )}
 
       {/* Moodle iframe fallback — when no Bunny video, direct video, or quiz */}
@@ -212,15 +225,25 @@ export default function ModuleContent({
       {hasData && (
         <div
           className={`flex flex-col sm:flex-row items-start sm:items-center gap-4 p-5 rounded-2xl mb-8 ${
-            complete ? "border border-emerald-500/30 bg-emerald-500/[0.06]" : "border border-amber-500/30 bg-[#1C2333]"
+            savingComplete
+              ? "border border-amber-500/30 bg-[#1C2333]"
+              : complete
+              ? "border border-emerald-500/30 bg-emerald-500/[0.06]"
+              : "border border-amber-500/30 bg-[#1C2333]"
           }`}
         >
           <div
             className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${
-              complete ? "bg-emerald-500/15 border border-emerald-500/25" : "bg-amber-500/15 border border-amber-500/25"
+              savingComplete
+                ? "bg-amber-500/15 border border-amber-500/25"
+                : complete
+                ? "bg-emerald-500/15 border border-emerald-500/25"
+                : "bg-amber-500/15 border border-amber-500/25"
             }`}
           >
-            {complete ? (
+            {savingComplete ? (
+              <Loader2 size={20} className="text-amber-500" style={{ animation: "spin 1s linear infinite" }} />
+            ) : complete ? (
               <CheckCircle2 size={20} className="text-emerald-500" />
             ) : (
               <PlayCircle size={20} className="text-amber-500" />
@@ -229,19 +252,29 @@ export default function ModuleContent({
           <div className="flex-1 min-w-0">
             <p
               className={`font-bold text-[0.9375rem] mb-0.5 ${
-                complete ? "text-emerald-500" : "text-amber-500"
+                savingComplete
+                  ? "text-amber-500"
+                  : complete
+                  ? "text-emerald-500"
+                  : "text-amber-500"
               }`}
               style={{ fontFamily: "var(--font-dm-sans), sans-serif" }}
             >
-              {complete ? "Module completed" : "Module in progress"}
+              {savingComplete
+                ? "Saving completion…"
+                : complete
+                ? "Module completed"
+                : "Module in progress"}
             </p>
             <p className="text-[0.8125rem] text-gray-500 m-0">
-              {complete
+              {savingComplete
+                ? "Updating your progress, just a moment…"
+                : complete
                 ? "You have completed this module. Great work!"
                 : "Finish the activity above to mark this module complete."}
             </p>
           </div>
-          {complete && nextModuleId && (
+          {complete && !savingComplete && nextModuleId && (
             <Link
               href={`/portal/module/${nextModuleId}`}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white font-bold text-[0.9375rem] shadow-lg shadow-amber-500/25 hover:from-amber-400 hover:to-amber-500 transition-colors shrink-0"
@@ -250,7 +283,7 @@ export default function ModuleContent({
               Next module <ArrowRight size={18} />
             </Link>
           )}
-          {!complete && downloadable && (
+          {!complete && !savingComplete && downloadable && (
             <div className="flex flex-col gap-2 w-full sm:w-auto shrink-0">
               <button
                 type="button"

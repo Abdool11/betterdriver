@@ -63,70 +63,89 @@ export async function POST(req: NextRequest) {
   const programmeSlug = enrolment?.programme_slug ?? "ptdp";
   const canonicalSlug = normalizeProgrammeSlug(programmeSlug);
 
-  // Find the module in Moodle
+  // Find the module in Moodle + update BD enrolment progress in parallel
   let moduleUrl = "";
   let foundModule = false;
   let modules: Awaited<ReturnType<typeof moodleGetCourseModules>> = [];
-  try {
-    modules = await moodleGetCourseModules({
-      moodleUserId: driver.moodle_user_id ?? 0,
-      programmeSlug: canonicalSlug,
-    });
-    const mod = modules.find((m) => String(m.id) === moduleId);
-    if (mod) {
-      foundModule = true;
-      const fallbackUrl = `${MOODLE_URL}/mod/${mod.modname}/view.php?id=${mod.id}`;
-      if (mod.url && mod.url.includes("id=")) {
-        moduleUrl = mod.url;
-      } else if (mod.url) {
-        const sep = mod.url.includes("?") ? "&" : "?";
-        moduleUrl = `${mod.url}${sep}id=${mod.id}`;
-      } else {
-        moduleUrl = fallbackUrl;
+
+  // Kick off Moodle module fetch (needed for autologin URL + completion check)
+  const moodleModulesPromise = (async () => {
+    try {
+      const mods = await moodleGetCourseModules({
+        moodleUserId: driver.moodle_user_id ?? 0,
+        programmeSlug: canonicalSlug,
+      });
+      const mod = mods.find((m) => String(m.id) === moduleId);
+      if (mod) {
+        const fallbackUrl = `${MOODLE_URL}/mod/${mod.modname}/view.php?id=${mod.id}`;
+        if (mod.url && mod.url.includes("id=")) {
+          moduleUrl = mod.url;
+        } else if (mod.url) {
+          const sep = mod.url.includes("?") ? "&" : "?";
+          moduleUrl = `${mod.url}${sep}id=${mod.id}`;
+        } else {
+          moduleUrl = fallbackUrl;
+        }
       }
+      return mods;
+    } catch (err) {
+      console.error("[PROGRESS] Moodle fetch failed:", err);
+      return [];
     }
-  } catch (err) {
-    console.error("[PROGRESS] Moodle fetch failed:", err);
+  })();
+
+  // Kick off Supabase enrolment update in parallel
+  const enrolmentUpdatePromise = (async () => {
+    try {
+      const { data: currentEnrolment } = await supabaseAdmin
+        .from("enrolments")
+        .select("id, modules_completed, progress_percent")
+        .eq("driver_id", session.driverId)
+        .in("status", ACTIVE_ENROLMENT_STATUSES)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      return currentEnrolment;
+    } catch (err) {
+      console.error("[PROGRESS] Failed to fetch enrolment:", err);
+      return null;
+    }
+  })();
+
+  // Await both in parallel
+  const [fetchedModules, currentEnrolment] = await Promise.all([
+    moodleModulesPromise,
+    enrolmentUpdatePromise,
+  ]);
+  modules = fetchedModules;
+  foundModule = modules.some((m) => String(m.id) === moduleId);
+
+  // Update enrolment if completed and not already counted
+  if (currentEnrolment && completed) {
+    const moduleIndex = modules.findIndex((m) => String(m.id) === moduleId);
+    const alreadyCounted =
+      moduleIndex >= 0 && moduleIndex < (currentEnrolment.modules_completed ?? 0);
+    if (!alreadyCounted) {
+      const newCompleted = Math.max(
+        currentEnrolment.modules_completed ?? 0,
+        (currentEnrolment.modules_completed ?? 0) + 1
+      );
+      await supabaseAdmin
+        .from("enrolments")
+        .update({
+          modules_completed: newCompleted,
+          progress_percent: currentEnrolment.progress_percent,
+          status: "in_progress",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", currentEnrolment.id);
+    }
   }
 
-  // Update BD enrolment progress
-  try {
-    const { data: currentEnrolment } = await supabaseAdmin
-      .from("enrolments")
-      .select("id, modules_completed, progress_percent")
-      .eq("driver_id", session.driverId)
-      .in("status", ACTIVE_ENROLMENT_STATUSES)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (currentEnrolment && completed) {
-      const moduleIndex = modules.findIndex((m) => String(m.id) === moduleId);
-      const alreadyCounted =
-        moduleIndex >= 0 && moduleIndex < (currentEnrolment.modules_completed ?? 0);
-      if (!alreadyCounted) {
-        const newCompleted = Math.max(
-          currentEnrolment.modules_completed ?? 0,
-          (currentEnrolment.modules_completed ?? 0) + 1
-        );
-        // We can't easily know total from here, so just increment if not already counted
-        await supabaseAdmin
-          .from("enrolments")
-          .update({
-            modules_completed: newCompleted,
-            progress_percent: currentEnrolment.progress_percent, // will recalc on next dashboard load
-            status: "in_progress",
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", currentEnrolment.id);
-      }
-    }
-  } catch (err) {
-    console.error("[PROGRESS] Failed to update enrolment:", err);
-  }
-
-  // Upsert partial progress (percent watched) so the course listing can show it
-  if (typeof percentWatched === "number" && percentWatched >= 0 && percentWatched <= 100) {
+  // Upsert partial progress + push completion to Moodle in parallel
+  const partialProgressPromise = (async () => {
+    if (typeof percentWatched !== "number" || percentWatched < 0 || percentWatched > 100) return;
     try {
       await supabaseAdmin
         .from("driver_module_progress")
@@ -143,10 +162,10 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       console.error("[PROGRESS] Failed to upsert module progress:", err);
     }
-  }
+  })();
 
-  // Push completion back to Moodle so badge/certificate rules fire there
-  if (completed && driver.moodle_user_id) {
+  const moodleCompletionPromise = (async () => {
+    if (!completed || !driver.moodle_user_id) return;
     try {
       await moodleUpdateModuleCompletion({
         moodleUserId: driver.moodle_user_id,
@@ -156,7 +175,9 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       console.error("[PROGRESS] Failed to update Moodle completion:", err);
     }
-  }
+  })();
+
+  await Promise.all([partialProgressPromise, moodleCompletionPromise]);
 
   // Generate a signed autologin URL so the CLIENT can trigger Moodle's
   // native completion tracking (server-side fetches lack user cookies).
