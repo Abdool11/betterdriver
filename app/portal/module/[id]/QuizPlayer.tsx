@@ -47,7 +47,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [sequenceChecks, setSequenceChecks] = useState<Record<number, number>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<{ passed: boolean; grade: number } | null>(null);
+  const [result, setResult] = useState<{ passed: boolean; grade: number; hasFreeText?: boolean } | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
 
   const loadQuiz = useCallback(async (retry = false) => {
@@ -67,9 +67,13 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
       }
       setQuiz(data);
       if (data.finished) {
+        const freeTextTypes = ["essay", "shortanswer", "numerical"];
+        const hasFreeText = data.hasFreeText === true ||
+          (data.questions ?? []).some((q: any) => freeTextTypes.includes(q.type));
         setResult({
-          passed: (data.grade ?? 0) >= 0,
+          passed: hasFreeText || (data.grade ?? 0) >= 0,
           grade: data.grade ?? 0,
+          hasFreeText,
         });
         setPhase("review");
       } else {
@@ -150,7 +154,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
         return;
       }
 
-      setResult({ passed: data.passed, grade: data.grade });
+      setResult({ passed: data.passed, grade: data.grade, hasFreeText: hasEssay });
       setPhase("review");
       if (data.passed) {
         onComplete?.();
@@ -307,9 +311,13 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onComplete }:
               {passed ? "Quiz submitted!" : "Quiz finished"}
             </p>
             <p style={{ fontSize: "0.875rem", color: "#9CA3AF", margin: 0 }}>
-              {passed
-                ? `You scored ${result.grade} points. Great work!`
-                : `You scored ${result.grade} points. You can try again if you want.`}
+              {result.hasFreeText
+                ? passed
+                  ? "Your answers have been submitted. You can move on to the next module."
+                  : "Your answers have been submitted. You can try again if you want."
+                : passed
+                  ? `You scored ${result.grade} points. Great work!`
+                  : `You scored ${result.grade} points. You can try again if you want.`}
             </p>
           </div>
           <button

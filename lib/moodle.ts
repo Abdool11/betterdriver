@@ -808,6 +808,7 @@ export async function moodleSubmitQuizAttempt(attemptId: number): Promise<Moodle
 export async function moodleGetAttemptReview(attemptId: number): Promise<{
   attempt: MoodleQuizAttempt;
   grade: number | null;
+  questionTypes: string[];
 } | null> {
   const url = moodleUrl("mod_quiz_get_attempt_review", { attemptid: attemptId });
   const res = await fetch(url);
@@ -819,7 +820,10 @@ export async function moodleGetAttemptReview(attemptId: number): Promise<{
   const attempt = (data.attempt ?? null) as MoodleQuizAttempt | null;
   const grade = (data.grade ?? null) as number | null;
   if (!attempt) return null;
-  return { attempt, grade };
+  const questionTypes: string[] = Array.isArray(data.questions)
+    ? data.questions.map((q: any) => q.type).filter(Boolean)
+    : [];
+  return { attempt, grade, questionTypes };
 }
 
 /**

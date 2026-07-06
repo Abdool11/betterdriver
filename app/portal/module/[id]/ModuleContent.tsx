@@ -200,7 +200,7 @@ export default function ModuleContent({
 
       {/* Native quiz player — when module is a Moodle quiz */}
       {modName === "quiz" && !bunnyVideoId && !videoUrl && (
-        <QuizPlayer moduleId={id} quizId={quizId} moduleName={moduleName || "Quiz"} />
+        <QuizPlayer moduleId={id} quizId={quizId} moduleName={moduleName || "Quiz"} onComplete={handleComplete} />
       )}
 
       {/* Moodle iframe fallback — when no Bunny video, direct video, or quiz */}

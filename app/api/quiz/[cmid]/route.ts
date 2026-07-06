@@ -69,11 +69,15 @@ export async function GET(
 
   if (finishedAttempt && !retry) {
     const review = await moodleGetAttemptReview(finishedAttempt.id);
+    const freeTextTypes = ["essay", "shortanswer", "numerical"];
+    const hasFreeText = (review?.questionTypes ?? []).some((t) => freeTextTypes.includes(t));
     return NextResponse.json({
       quiz: { id: quizId, name: quiz?.name ?? "Quiz", intro: quiz?.intro, grade: quiz?.grade ?? 0 },
       finished: true,
       attempt: finishedAttempt,
       grade: review?.grade ?? finishedAttempt.sumgrades,
+      questions: (review?.questionTypes ?? []).map((type, i) => ({ slot: i + 1, type })),
+      hasFreeText,
     });
   }
 

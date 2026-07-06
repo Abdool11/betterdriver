@@ -100,7 +100,10 @@ export async function POST(req: NextRequest) {
     try {
       await fetch(`${req.nextUrl.origin}/api/portal/progress`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          cookie: req.headers.get("cookie") ?? "",
+        },
         body: JSON.stringify({ moduleId: moduleCmid, completed: true }),
       });
     } catch (err) {
