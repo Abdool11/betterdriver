@@ -115,9 +115,55 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const file = pickMoodleDownloadFile(mod.files);
+  // ── Option A: Bunny Stream embedded video (checked first) ────────────────
+  // Modules with embedded Bunny videos are page-type modules whose only
+  // Moodle file is index.html.  Downloading that HTML file from Moodle's
+  // pluginfile.php fails (missing token) and is not what the driver wants —
+  // they want the actual MP4 from Bunny CDN.
+  if (mod.bunnyVideoId) {
+    const bunnyUrl = getBunnyVideoUrl(mod.bunnyVideoId);
+    const filename = `${mod.name.replace(/[^a-zA-Z0-9\s]/g, "").trim()}.mp4`;
 
-  // ── Option A: Moodle-attached file ────────────────────────────────────────
+    try {
+      const bunnyRes = await fetch(bunnyUrl, {
+        headers: { Referer: "https://iframe.mediadelivery.net/" },
+      });
+      if (!bunnyRes.ok) {
+        console.error(
+          "[DOWNLOAD] Bunny CDN fetch failed:",
+          bunnyRes.status,
+          bunnyRes.statusText,
+          bunnyUrl
+        );
+        return NextResponse.json(
+          { error: "Unable to fetch the video from the CDN" },
+          { status: 502 }
+        );
+      }
+
+      const headers = new Headers();
+      setAttachmentHeaders(
+        headers,
+        bunnyRes.headers.get("content-type"),
+        bunnyRes.headers.get("content-length"),
+        filename
+      );
+
+      return new Response(bunnyRes.body, {
+        status: 200,
+        headers,
+      });
+    } catch (err) {
+      console.error("[DOWNLOAD] Bunny proxy failed:", err);
+      return NextResponse.json(
+        { error: "Failed to download the video" },
+        { status: 502 }
+      );
+    }
+  }
+
+  // ── Option B: Moodle-attached file (fallback for non-video modules) ───────
+  const file = pickMoodleDownloadFile(mod.files);
   if (file?.fileurl) {
     try {
       const fileUrl = withMoodleToken(file.fileurl);
@@ -158,49 +204,6 @@ export async function GET(req: NextRequest) {
       console.error("[DOWNLOAD] File proxy failed:", err);
       return NextResponse.json(
         { error: "Failed to download the file" },
-        { status: 502 }
-      );
-    }
-  }
-
-  // ── Option B: Bunny Stream embedded video ─────────────────────────────────
-  if (mod.bunnyVideoId) {
-    const bunnyUrl = getBunnyVideoUrl(mod.bunnyVideoId);
-    const filename = `${mod.name.replace(/[^a-zA-Z0-9\s]/g, "").trim()}.mp4`;
-
-    try {
-      const bunnyRes = await fetch(bunnyUrl, {
-        headers: { Referer: "https://iframe.mediadelivery.net/" },
-      });
-      if (!bunnyRes.ok) {
-        console.error(
-          "[DOWNLOAD] Bunny CDN fetch failed:",
-          bunnyRes.status,
-          bunnyRes.statusText,
-          bunnyUrl
-        );
-        return NextResponse.json(
-          { error: "Unable to fetch the video from the CDN" },
-          { status: 502 }
-        );
-      }
-
-      const headers = new Headers();
-      setAttachmentHeaders(
-        headers,
-        bunnyRes.headers.get("content-type"),
-        bunnyRes.headers.get("content-length"),
-        filename
-      );
-
-      return new Response(bunnyRes.body, {
-        status: 200,
-        headers,
-      });
-    } catch (err) {
-      console.error("[DOWNLOAD] Bunny proxy failed:", err);
-      return NextResponse.json(
-        { error: "Failed to download the video" },
         { status: 502 }
       );
     }
