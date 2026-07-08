@@ -71,11 +71,20 @@ export async function GET(
     const review = await moodleGetAttemptReview(finishedAttempt.id);
     const freeTextTypes = ["essay", "shortanswer", "numerical"];
     const hasFreeText = (review?.questionTypes ?? []).some((t) => freeTextTypes.includes(t));
+    const quizGrade = quiz?.grade ?? 0;
+    const gradePass = quiz?.gradepass && quiz.gradepass > 0
+      ? quiz.gradepass
+      : quizGrade * 0.8;
+    const grade = review?.grade ?? finishedAttempt.sumgrades ?? 0;
+    const passed = grade >= gradePass;
     return NextResponse.json({
-      quiz: { id: quizId, name: quiz?.name ?? "Quiz", intro: quiz?.intro, grade: quiz?.grade ?? 0 },
+      quiz: { id: quizId, name: quiz?.name ?? "Quiz", intro: quiz?.intro, grade: quizGrade },
       finished: true,
       attempt: finishedAttempt,
-      grade: review?.grade ?? finishedAttempt.sumgrades,
+      grade,
+      maxGrade: quizGrade,
+      gradePass: Math.round(gradePass * 100) / 100,
+      passed,
       questions: (review?.questionTypes ?? []).map((type, i) => ({ slot: i + 1, type })),
       hasFreeText,
     });

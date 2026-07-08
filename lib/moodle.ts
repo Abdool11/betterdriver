@@ -495,6 +495,7 @@ export interface MoodleQuiz {
   intro?: string;
   grade: number;
   sumgrades: number;
+  gradepass: number;
   attemptallowed: number;
 }
 

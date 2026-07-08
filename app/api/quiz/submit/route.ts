@@ -6,6 +6,7 @@ import {
   moodleSubmitQuizAttempt,
   moodleGetAttemptReview,
   moodleGetQuizAttempts,
+  moodleGetQuizForModule,
 } from "@/lib/moodle";
 
 export const dynamic = "force-dynamic";
@@ -90,10 +91,20 @@ export async function POST(req: NextRequest) {
   const review = await moodleGetAttemptReview(attemptId);
   const grade = review?.grade ?? finishedAttempt.sumgrades ?? 0;
 
-  // Essay / free-form questions are not auto-graded by Moodle, so always pass
-  // if the quiz contains any essay questions. Otherwise, pass if grade >= 0.
+  // Determine the pass threshold. Prefer the quiz's configured gradepass from
+  // Moodle; otherwise fall back to 80% of the quiz grade (the documented pass
+  // mark: all 4 MCQs correct). The ungraded reflection (essay) contributes 0
+  // until manually graded, so reaching the threshold means the MCQs were correct.
+  const quiz = await moodleGetQuizForModule(parseInt(moduleCmid, 10));
+  const quizGrade = quiz?.grade ?? 0;
+  const gradePass = quiz?.gradepass && quiz.gradepass > 0
+    ? quiz.gradepass
+    : quizGrade * 0.8;
+
+  // Pass only when the achieved grade meets the threshold. The presence of an
+  // essay/reflection question must NOT force a pass — it is ungraded.
   const hasEssay = body.hasEssayQuestions === true;
-  const passed = hasEssay || (grade !== null && grade >= 0);
+  const passed = grade >= gradePass;
 
   if (passed) {
     // Mark module complete in BD — trigger via progress API
@@ -115,6 +126,9 @@ export async function POST(req: NextRequest) {
     success: true,
     passed,
     grade,
+    maxGrade: quizGrade,
+    gradePass: Math.round(gradePass * 100) / 100,
+    hasEssay,
     state: finishedAttempt.state,
   });
 }

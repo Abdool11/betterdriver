@@ -48,7 +48,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [sequenceChecks, setSequenceChecks] = useState<Record<number, number>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<{ passed: boolean; grade: number; hasFreeText?: boolean } | null>(null);
+  const [result, setResult] = useState<{ passed: boolean; grade: number; maxGrade?: number; gradePass?: number; hasFreeText?: boolean } | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
 
   const loadQuiz = useCallback(async (retry = false) => {
@@ -72,8 +72,10 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
         const hasFreeText = data.hasFreeText === true ||
           (data.questions ?? []).some((q: any) => freeTextTypes.includes(q.type));
         setResult({
-          passed: hasFreeText || (data.grade ?? 0) >= 0,
+          passed: data.passed === true || (data.grade ?? 0) >= (data.gradePass ?? 0),
           grade: data.grade ?? 0,
+          maxGrade: data.maxGrade,
+          gradePass: data.gradePass,
           hasFreeText,
         });
         setPhase("review");
@@ -156,7 +158,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
         return;
       }
 
-      setResult({ passed: data.passed, grade: data.grade, hasFreeText: hasEssay });
+       setResult({ passed: data.passed, grade: data.grade, maxGrade: data.maxGrade, gradePass: data.gradePass, hasFreeText: hasEssay });
       setPhase("review");
       if (data.passed) {
         onComplete?.();
@@ -300,7 +302,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
               <AlertCircle size={26} style={{ color: "#F59E0B" }} />
             )}
           </div>
-          <div>
+           <div>
             <p
               style={{
                 fontFamily: "var(--font-dm-sans), sans-serif",
@@ -310,16 +312,16 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
                 margin: "0 0 0.25rem",
               }}
             >
-              {passed ? "Quiz submitted!" : "Quiz finished"}
+              {passed ? "Quiz passed!" : "Quiz not passed"}
             </p>
             <p style={{ fontSize: "0.875rem", color: "#9CA3AF", margin: 0 }}>
-              {result.hasFreeText
-                ? passed
-                  ? "Your answers have been submitted. You can move on to the next module."
-                  : "Your answers have been submitted. You can try again if you want."
-                : passed
-                  ? `You scored ${result.grade} points. Great work!`
-                  : `You scored ${result.grade} points. You can try again if you want.`}
+              {result.maxGrade != null
+                ? `You scored ${result.grade} / ${result.maxGrade}`
+                  + (result.gradePass != null ? ` (need ${result.gradePass} to pass).` : ".")
+                : `You scored ${result.grade} points.`}{" "}
+              {passed
+                ? "Great work — you can move on to the next module."
+                : "You need all four multiple-choice questions correct to pass. Try again."}
             </p>
           </div>
           <button
