@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import {
   BookOpen,
@@ -13,6 +14,7 @@ import {
   Wifi,
   Download,
   X,
+  Loader2,
 } from "lucide-react";
 
 interface Module {
@@ -45,6 +47,8 @@ export default function LearningPage() {
   const [programme, setProgramme] = useState<Programme | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
   const [loading, setLoading] = useState(true);
+  const [navigating, setNavigating] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     fetch("/api/portal/course", { cache: "no-store" })
@@ -109,7 +113,17 @@ export default function LearningPage() {
           const Icon = cfg.icon;
 
           return (
-            <Link key={currentModule.id} href={`/portal/module/${currentModule.id}`} style={{ textDecoration: "none" }}>
+            <Link
+              key={currentModule.id}
+              href={`/portal/module/${currentModule.id}`}
+              onClick={(e) => {
+                e.preventDefault();
+                if (navigating) return;
+                setNavigating(true);
+                router.push(`/portal/module/${currentModule.id}`);
+              }}
+              style={{ textDecoration: "none" }}
+            >
               <div
                 className="card"
                 style={{
@@ -159,12 +173,38 @@ export default function LearningPage() {
                   </div>
                 </div>
 
-                {currentModule.status === "in_progress" && (
-                  <span className="badge badge-amber pulse-amber">Continue</span>
-                )}
-                {currentModule.status === "available" && (
-                  <span className="badge badge-info">Start</span>
-                )}
+                <span
+                  className="continue-cta"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4375rem",
+                    minHeight: "40px",
+                    padding: "0.5rem 1.125rem",
+                    borderRadius: "9999px",
+                    fontWeight: 700,
+                    fontSize: "0.8125rem",
+                    letterSpacing: "0.01em",
+                    whiteSpace: "nowrap",
+                    color: "#111827",
+                    background: navigating
+                      ? "rgba(245,158,11,0.85)"
+                      : "linear-gradient(135deg, var(--color-amber) 0%, var(--color-amber-light) 100%)",
+                    boxShadow: "0 4px 16px rgba(245,158,11,0.35)",
+                    opacity: navigating ? 0.9 : 1,
+                  }}
+                >
+                  {navigating ? (
+                    <>
+                      <Loader2 size={15} className="animate-spin" />
+                      Loading…
+                    </>
+                  ) : currentModule.status === "in_progress" ? (
+                    "Continue"
+                  ) : (
+                    "Start"
+                  )}
+                </span>
               </div>
             </Link>
           );
@@ -308,12 +348,16 @@ export default function LearningPage() {
       </div>
 
       <style>{`
-        @keyframes pulse-amber {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
-          50% { box-shadow: 0 0 0 8px rgba(245, 158, 11, 0); }
+        .continue-cta {
+          animation: cta-glow 2.2s ease-in-out infinite;
+          transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
         }
-        .pulse-amber {
-          animation: pulse-amber 2s infinite;
+        .continue-cta:active {
+          transform: scale(0.97);
+        }
+        @keyframes cta-glow {
+          0%, 100% { box-shadow: 0 4px 16px rgba(245, 158, 11, 0.35); }
+          50% { box-shadow: 0 4px 30px rgba(245, 158, 11, 0.6); }
         }
       `}</style>
 
