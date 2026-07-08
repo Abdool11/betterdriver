@@ -497,18 +497,20 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
                     value={answers[q.slot] ?? ""}
                     onChange={(e) => handleSelect(q.slot, e.target.value)}
                     placeholder="Type your answer here…"
-                    rows={4}
+                    rows={6}
                     style={{
                       width: "100%",
-                      padding: "0.625rem 0.875rem",
-                      borderRadius: "0.5rem",
+                      minHeight: "clamp(140px, 38vw, 200px)",
+                      padding: "0.875rem 1rem",
+                      borderRadius: "0.625rem",
                       border: "1px solid #2d3a4f",
                       background: "#0B1221",
                       color: "#E5E7EB",
                       fontSize: "16px",
-                      lineHeight: 1.6,
+                      lineHeight: 1.65,
                       resize: "vertical",
                       outline: "none",
+                      boxSizing: "border-box",
                     }}
                     onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(245,158,11,0.4)"; }}
                     onBlur={(e) => { e.currentTarget.style.borderColor = "#2d3a4f"; }}
@@ -521,14 +523,16 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
                     placeholder={q.type === "numerical" ? "Enter a number…" : "Type your answer…"}
                     style={{
                       width: "100%",
-                      padding: "0.625rem 0.875rem",
-                      borderRadius: "0.5rem",
+                      minHeight: "48px",
+                      padding: "0.75rem 0.875rem",
+                      borderRadius: "0.625rem",
                       border: "1px solid #2d3a4f",
                       background: "#0B1221",
                       color: "#E5E7EB",
                       fontSize: "16px",
                       lineHeight: 1.6,
                       outline: "none",
+                      boxSizing: "border-box",
                     }}
                     onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(245,158,11,0.4)"; }}
                     onBlur={(e) => { e.currentTarget.style.borderColor = "#2d3a4f"; }}
@@ -537,7 +541,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
                   <div
                     role="radiogroup"
                     aria-label={`Question ${idx + 1}`}
-                    style={{ display: "flex", flexDirection: "column", gap: "0.5rem", paddingLeft: "clamp(0.5rem, 6vw, 2.5rem)" }}
+                    style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}
                   >
                     {choices.map((choice) => {
                       const isSelected = selected === String(choice.id);
@@ -558,15 +562,18 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
                             display: "flex",
                             alignItems: "center",
                             gap: "0.625rem",
-                            padding: "0.625rem 0.75rem",
-                            borderRadius: "0.5rem",
+                            minHeight: "48px",
+                            padding: "0.75rem 0.875rem",
+                            borderRadius: "0.625rem",
                             border: `1px solid ${isSelected ? "rgba(245,158,11,0.4)" : "#2d3a4f"}`,
                             background: isSelected ? "rgba(245,158,11,0.08)" : "transparent",
                             cursor: "pointer",
-                            fontSize: "0.875rem",
+                            fontSize: "0.9375rem",
+                            lineHeight: 1.45,
                             color: "#E5E7EB",
                             transition: "all 0.15s ease",
                             userSelect: "none",
+                            boxSizing: "border-box",
                           }}
                           onMouseEnter={(e) => {
                             if (!isSelected) e.currentTarget.style.borderColor = "rgba(245,158,11,0.2)";
@@ -613,14 +620,16 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
                     placeholder="Type your answer…"
                     style={{
                       width: "100%",
-                      padding: "0.625rem 0.875rem",
-                      borderRadius: "0.5rem",
+                      minHeight: "48px",
+                      padding: "0.75rem 0.875rem",
+                      borderRadius: "0.625rem",
                       border: "1px solid #2d3a4f",
                       background: "#0B1221",
                       color: "#E5E7EB",
                       fontSize: "16px",
                       lineHeight: 1.6,
                       outline: "none",
+                      boxSizing: "border-box",
                     }}
                     onFocus={(e) => { e.currentTarget.style.borderColor = "rgba(245,158,11,0.4)"; }}
                     onBlur={(e) => { e.currentTarget.style.borderColor = "#2d3a4f"; }}

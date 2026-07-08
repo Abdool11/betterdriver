@@ -594,43 +594,70 @@ export async function moodleStartQuizAttempt(quizId: number): Promise<MoodleQuiz
  */
 function parseChoicesFromHtml(html: string): { id: number; text: string; fraction: number }[] {
   const answers: { id: number; text: string; fraction: number }[] = [];
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
   // Match all radio/checkbox inputs whose name contains "_answer"
-  // Moodle format: <input type="radio" name="q123:1_answer" value="0" id="q123:1_answer0" ... />
-  //               <label for="q123:1_answer0">Option text</label>
-  // OR:            <label ...><input type="radio" ... value="0" ... /> Option text</label>
+  // Moodle format (legacy): <input type="radio" name="q123:1_answer" value="0" id="q123:1_answer0" />
+  //                           <label for="q123:1_answer0">Option text</label>
+  // Moodle format (modern):  <input type="radio" ... value="0" id="q123:1_answer0"
+  //                           aria-labelledby="q123:1_answer0_label" />
+  //                           <div id="q123:1_answer0_label" ...><span>a. </span>
+  //                             <div class="flex-fill">Option text</div></div>
   const inputRegex = /<input[^>]*type=["'](?:radio|checkbox)["'][^>]*name=["'][^"']*_answer["'][^>]*>/gi;
   const inputs = html.match(inputRegex) || [];
 
   for (const inputTag of inputs) {
-    const valueMatch = inputTag.match(/value=["'](\d+)["']/i);
+    const valueMatch = inputTag.match(/value=["'](-?\d+)["']/i);
     if (!valueMatch) continue;
     const value = parseInt(valueMatch[1], 10);
+    // value -1 is Moodle's "Clear my choice" control, not a real answer
+    if (value < 0) continue;
 
     let labelText = "";
 
-    // Try to find a <label for="inputId">...</label>
-    const idMatch = inputTag.match(/id=["']([^"']+)["']/i);
-    if (idMatch) {
-      const labelRegex = new RegExp(
-        `<label[^>]*for=["']${idMatch[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'][^>]*>(.*?)</label>`,
-        "is"
+    // Modern Moodle: the answer text lives in the element referenced by aria-labelledby
+    const labelledBy = inputTag.match(/aria-labelledby=["']([^"']+)["']/i);
+    if (labelledBy) {
+      const lblId = labelledBy[1];
+      const blockMatch = html.match(
+        new RegExp(`<[^>]*id=["']${esc(lblId)}["'][^>]*>([\\s\\S]*?)</(?:div|label)>`, "i")
       );
-      const labelMatch = html.match(labelRegex);
-      if (labelMatch) {
-        labelText = labelMatch[1].replace(/<[^>]*>/g, "").trim();
+      if (blockMatch) {
+        const block = blockMatch[1];
+        // Prefer the dedicated answer-text node (.flex-fill), else use the whole block
+        const flex = block.match(
+          /<div[^>]*class=["'][^"']*flex-fill[^"']*["'][^>]*>([\s\S]*?)<\/div>/i
+        );
+        labelText = (flex ? flex[1] : block).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
       }
     }
 
-    // Fallback: check if input is wrapped inside a <label>...</label>
+    // Legacy Moodle: <label for="inputId">Option text</label>
     if (!labelText) {
-      const escapedInput = inputTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const wrapRegex = new RegExp(`<label[^>]*>\\s*${escapedInput}(.*?)</label>`, "is");
-      const wrapMatch = html.match(wrapRegex);
-      if (wrapMatch) {
-        labelText = wrapMatch[1].replace(/<[^>]*>/g, "").trim();
+      const idMatch = inputTag.match(/id=["']([^"']+)["']/i);
+      if (idMatch) {
+        const labelRegex = new RegExp(
+          `<label[^>]*for=["']${esc(idMatch[1])}["'][^>]*>(.*?)</label>`,
+          "is"
+        );
+        const labelMatch = html.match(labelRegex);
+        if (labelMatch) {
+          labelText = labelMatch[1].replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+        }
       }
     }
+
+    // Fallback: input wrapped inside a <label>...</label>
+    if (!labelText) {
+      const escapedInput = esc(inputTag);
+      const wrapMatch = html.match(new RegExp(`<label[^>]*>\\s*${escapedInput}(.*?)</label>`, "is"));
+      if (wrapMatch) {
+        labelText = wrapMatch[1].replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+      }
+    }
+
+    // Strip a leading answer bullet like "a. " if still present
+    labelText = labelText.replace(/^[a-z]\.\s*/i, "").trim();
 
     if (labelText) {
       answers.push({ id: value, text: labelText, fraction: 0 });
