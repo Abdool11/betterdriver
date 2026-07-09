@@ -90,7 +90,7 @@ export default function ModuleContent({
   };
 
   return (
-    <div className="page-content">
+    <div className="page-content module-content">
       {/* Back link */}
       <Link
         href="/portal/learning"
@@ -194,35 +194,43 @@ export default function ModuleContent({
 
       {/* Bunny Stream player — preferred when video data exists */}
       {bunnyVideoId && bunnyLibraryId && (
-        <BunnyPlayer
-          libraryId={bunnyLibraryId}
-          videoId={bunnyVideoId}
-          moduleId={id}
-          moduleName={moduleName || "Module"}
-          onSaving={handleSaving}
-          onComplete={handleComplete}
-        />
+        <div className="module-media">
+          <BunnyPlayer
+            libraryId={bunnyLibraryId}
+            videoId={bunnyVideoId}
+            moduleId={id}
+            moduleName={moduleName || "Module"}
+            onSaving={handleSaving}
+            onComplete={handleComplete}
+          />
+        </div>
       )}
 
       {/* Native video player — direct video files uploaded to Moodle */}
       {videoUrl && !bunnyVideoId && (
-        <VideoPlayer
-          videoUrl={videoUrl}
-          moduleId={id}
-          moduleName={moduleName || "Module"}
-          onSaving={handleSaving}
-          onComplete={handleComplete}
-        />
+        <div className="module-media">
+          <VideoPlayer
+            videoUrl={videoUrl}
+            moduleId={id}
+            moduleName={moduleName || "Module"}
+            onSaving={handleSaving}
+            onComplete={handleComplete}
+          />
+        </div>
       )}
 
       {/* Native quiz player — when module is a Moodle quiz */}
       {modName === "quiz" && !bunnyVideoId && !videoUrl && (
-        <QuizPlayer moduleId={id} quizId={quizId} moduleName={moduleName || "Quiz"} onSaving={handleSaving} onComplete={handleComplete} onDone={handleSavingDone} />
+        <div className="module-media">
+          <QuizPlayer moduleId={id} quizId={quizId} moduleName={moduleName || "Quiz"} onSaving={handleSaving} onComplete={handleComplete} onDone={handleSavingDone} />
+        </div>
       )}
 
       {/* Moodle iframe fallback — when no Bunny video, direct video, or quiz */}
       {!bunnyVideoId && !videoUrl && modName !== "quiz" && moduleUrl && (
-        <MoodleIframe moduleUrl={moduleUrl} moduleName={moduleName || "Module"} />
+        <div className="module-media">
+          <MoodleIframe moduleUrl={moduleUrl} moduleName={moduleName || "Module"} />
+        </div>
       )}
 
       {/* Completion status — only when we successfully found the module */}

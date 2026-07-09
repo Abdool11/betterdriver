@@ -504,3 +504,24 @@ h3 { font-size: clamp(1.125rem, 2.5vw, 1.5rem); }
     padding: 2rem;
   }
 }
+
+/* ─── Module page (video + quiz) ──────────────────────────────────────────────
+   On mobile, let the media (video / quiz) span the full screen width so the
+   player isn't cramped by the default page padding. */
+@media (max-width: 767px) {
+  .module-content {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0));
+  }
+  .module-media {
+    margin-left: -0.75rem;
+    margin-right: -0.75rem;
+    border-radius: 0 !important;
+  }
+  .module-media > div {
+    border-radius: 0 !important;
+    border-left: none !important;
+    border-right: none !important;
+  }
+}

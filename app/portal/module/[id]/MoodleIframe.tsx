@@ -67,6 +67,7 @@ export default function MoodleIframe({ moduleUrl, moduleName }: Props) {
     position: "relative",
     width: "100%",
     paddingBottom: "56.25%",
+    minHeight: "clamp(220px, 56vh, 520px)",
     background: "#0d1526",
     borderRadius: "1rem",
     overflow: "hidden",
