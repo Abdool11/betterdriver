@@ -146,6 +146,7 @@ const COPY: Record<Lang, {
 export default function PortalHomePage() {
   const [stats, setStats] = useState<DriverStats>(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
+  const [continueNavigating, setContinueNavigating] = useState(false);
   const lang = useLanguage();
   const copy = COPY[lang];
 
@@ -268,8 +269,11 @@ export default function PortalHomePage() {
           {/* Continue Training */}
           <Link
             href="/portal/learning"
+            onClick={() => setContinueNavigating(true)}
             style={{
-              background: "linear-gradient(135deg, rgba(20,184,166,0.15), rgba(20,184,166,0.05))",
+              background: continueNavigating
+                ? "linear-gradient(135deg, rgba(20,184,166,0.25), rgba(20,184,166,0.1))"
+                : "linear-gradient(135deg, rgba(20,184,166,0.15), rgba(20,184,166,0.05))",
               border: "1px solid rgba(20,184,166,0.3)",
               borderRadius: "1rem",
               padding: "1.25rem",
@@ -277,6 +281,7 @@ export default function PortalHomePage() {
               display: "flex",
               flexDirection: "column",
               gap: "0.75rem",
+              opacity: continueNavigating ? 0.9 : 1,
             }}
           >
             <div
@@ -290,7 +295,11 @@ export default function PortalHomePage() {
                 justifyContent: "center",
               }}
             >
-              <PlayCircle size={20} color="#14b8a6" />
+              {continueNavigating ? (
+                <Loader2 size={20} color="#14b8a6" className="animate-spin" />
+              ) : (
+                <PlayCircle size={20} color="#14b8a6" />
+              )}
             </div>
             <div>
               <p
@@ -302,7 +311,11 @@ export default function PortalHomePage() {
                   margin: "0 0 0.25rem",
                 }}
               >
-                {stats.completedModules > 0 ? copy.continueTrain : copy.startTrain}
+                {continueNavigating
+                  ? "Opening…"
+                  : stats.completedModules > 0
+                  ? copy.continueTrain
+                  : copy.startTrain}
               </p>
               <p style={{ fontSize: "0.75rem", color: "#9CA3AF", margin: 0 }}>
                 {stats.completedModules > 0 ? copy.continueTrainSub : copy.startTrainSub}
