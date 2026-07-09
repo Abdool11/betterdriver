@@ -105,8 +105,7 @@ export async function POST(req: NextRequest) {
 
   // Determine the pass threshold. Prefer the quiz's configured gradepass from
   // Moodle; otherwise fall back to 80% of the quiz grade (the documented pass
-  // mark: all 4 MCQs correct).
-  const quiz = await moodleGetQuizForModule(parseInt(moduleCmid, 10));
+  // mark: all 4 MCQs correct). `quiz` was already fetched above.
   const quizGrade = quiz?.grade ?? 0;
   const gradePass = quiz?.gradepass && quiz.gradepass > 0
     ? quiz.gradepass
