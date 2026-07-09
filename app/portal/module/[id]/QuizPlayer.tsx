@@ -39,9 +39,10 @@ interface Props {
   moduleName: string;
   onSaving?: () => void;
   onComplete?: () => void;
+  onDone?: () => void;
 }
 
-export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onComplete }: Props) {
+export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onComplete, onDone }: Props) {
   const router = useRouter();
   const [phase, setPhase] = useState<"loading" | "ready" | "review" | "error">("loading");
   const [quiz, setQuiz] = useState<QuizData | null>(null);
@@ -155,6 +156,7 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
       if (!res.ok) {
         setErrorMsg(data.error || "Failed to submit quiz.");
         setSubmitting(false);
+        onDone?.();
         return;
       }
 
@@ -163,10 +165,13 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
       if (data.passed) {
         onComplete?.();
         router.refresh();
+      } else {
+        onDone?.();
       }
     } catch (err) {
       console.error("[QuizPlayer] Submit error:", err);
       setErrorMsg("Network error while submitting quiz.");
+      onDone?.();
     } finally {
       setSubmitting(false);
     }

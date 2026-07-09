@@ -63,6 +63,10 @@ export default function ModuleContent({
     setComplete(true);
   };
 
+  const handleSavingDone = () => {
+    setSavingComplete(false);
+  };
+
   const handleManualComplete = async () => {
     setMarkingComplete(true);
     setMarkError("");
@@ -213,7 +217,7 @@ export default function ModuleContent({
 
       {/* Native quiz player — when module is a Moodle quiz */}
       {modName === "quiz" && !bunnyVideoId && !videoUrl && (
-        <QuizPlayer moduleId={id} quizId={quizId} moduleName={moduleName || "Quiz"} onSaving={handleSaving} onComplete={handleComplete} />
+        <QuizPlayer moduleId={id} quizId={quizId} moduleName={moduleName || "Quiz"} onSaving={handleSaving} onComplete={handleComplete} onDone={handleSavingDone} />
       )}
 
       {/* Moodle iframe fallback — when no Bunny video, direct video, or quiz */}
