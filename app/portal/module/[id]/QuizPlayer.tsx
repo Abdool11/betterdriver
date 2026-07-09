@@ -329,29 +329,31 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
                 : "You need all four multiple-choice questions correct to pass. Try again."}
             </p>
           </div>
-          <button
-            onClick={() => {
-              setAnswers({});
-              setResult(null);
-              loadQuiz(true);
-            }}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              background: "linear-gradient(135deg, #F59E0B, #D97706)",
-              color: "#111827",
-              fontFamily: "var(--font-dm-sans), sans-serif",
-              fontWeight: 700,
-              fontSize: "0.9375rem",
-              padding: "0.75rem clamp(1.25rem, 4vw, 1.5rem)",
-              borderRadius: "0.75rem",
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            <RotateCcw size={16} /> Try again
-          </button>
+          {!passed && (
+            <button
+              onClick={() => {
+                setAnswers({});
+                setResult(null);
+                loadQuiz(true);
+              }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.5rem",
+                background: "linear-gradient(135deg, #F59E0B, #D97706)",
+                color: "#111827",
+                fontFamily: "var(--font-dm-sans), sans-serif",
+                fontWeight: 700,
+                fontSize: "0.9375rem",
+                padding: "0.75rem clamp(1.25rem, 4vw, 1.5rem)",
+                borderRadius: "0.75rem",
+                border: "none",
+                cursor: "pointer",
+              }}
+            >
+              <RotateCcw size={16} /> Try again
+            </button>
+          )}
         </div>
       </div>
     );

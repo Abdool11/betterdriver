@@ -837,6 +837,13 @@ export async function moodleGetAttemptReview(attemptId: number): Promise<{
   attempt: MoodleQuizAttempt;
   grade: number | null;
   questionTypes: string[];
+  questions: {
+    slot: number;
+    type: string;
+    state: string;
+    mark: number | null;
+    maxmark: number | null;
+  }[];
 } | null> {
   const url = moodleUrl("mod_quiz_get_attempt_review", { attemptid: attemptId });
   const res = await fetch(url);
@@ -846,12 +853,29 @@ export async function moodleGetAttemptReview(attemptId: number): Promise<{
     return null;
   }
   const attempt = (data.attempt ?? null) as MoodleQuizAttempt | null;
-  const grade = (data.grade ?? null) as number | null;
+  const gradeRaw = data.grade;
+  const grade: number | null =
+    gradeRaw == null
+      ? null
+      : typeof gradeRaw === "number"
+      ? gradeRaw
+      : parseFloat(String(gradeRaw));
   if (!attempt) return null;
-  const questionTypes: string[] = Array.isArray(data.questions)
-    ? data.questions.map((q: any) => q.type).filter(Boolean)
-    : [];
-  return { attempt, grade, questionTypes };
+
+  const toNum = (v: any): number | null =>
+    v == null ? null : typeof v === "number" ? v : parseFloat(String(v));
+
+  const rawQuestions: any[] = Array.isArray(data.questions) ? data.questions : [];
+  const questions = rawQuestions.map((q) => ({
+    slot: Number(q.slot),
+    type: String(q.type ?? q.qtype ?? ""),
+    state: String(q.state ?? ""),
+    mark: toNum(q.mark),
+    maxmark: toNum(q.maxmark),
+  }));
+
+  const questionTypes: string[] = questions.map((q) => q.type).filter(Boolean);
+  return { attempt, grade: isNaN(grade as number) ? null : grade, questionTypes, questions };
 }
 
 /**

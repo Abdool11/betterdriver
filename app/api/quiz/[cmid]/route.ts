@@ -75,14 +75,52 @@ export async function GET(
     const gradePass = quiz?.gradepass && quiz.gradepass > 0
       ? quiz.gradepass
       : quizGrade * 0.8;
-    const grade = review?.grade ?? finishedAttempt.sumgrades ?? 0;
-    const passed = grade >= gradePass;
+    const moodleGrade = review?.grade ?? finishedAttempt.sumgrades ?? 0;
+
+    // Grade from the attempt review (authoritative), so an ungraded essay does
+    // not zero out an otherwise-correct MCQ attempt.
+    const reviewQuestions = review?.questions ?? [];
+    const gradedQuestions = reviewQuestions.filter(
+      (q) => q.type && !freeTextTypes.includes(q.type.toLowerCase())
+    );
+    const isCorrect = (q: { mark: number | null; maxmark: number | null; state: string }) => {
+      if (q.mark != null && q.maxmark != null && q.maxmark > 0) {
+        return q.mark >= q.maxmark - 1e-6;
+      }
+      const s = (q.state || "").toLowerCase();
+      return s.includes("right") || s === "correct" || s === "gradedright";
+    };
+
+    let passed: boolean;
+    let displayGrade: number;
+    let displayMax: number;
+    if (gradedQuestions.length > 0) {
+      const usable = gradedQuestions.some(
+        (q) => q.mark != null || q.maxmark != null || (q.state && q.state.length > 0)
+      );
+      if (usable) {
+        passed = gradedQuestions.filter(isCorrect).length === gradedQuestions.length;
+        const marksSum = gradedQuestions.reduce((acc, q) => acc + (q.mark ?? 0), 0);
+        const maxSum = gradedQuestions.reduce((acc, q) => acc + (q.maxmark ?? 0), 0);
+        displayGrade = maxSum > 0 ? marksSum : moodleGrade;
+        displayMax = maxSum > 0 ? maxSum : quizGrade;
+      } else {
+        passed = moodleGrade >= gradePass;
+        displayGrade = moodleGrade;
+        displayMax = quizGrade;
+      }
+    } else {
+      passed = hasFreeText ? true : moodleGrade >= gradePass;
+      displayGrade = moodleGrade;
+      displayMax = quizGrade;
+    }
+
     return NextResponse.json({
       quiz: { id: quizId, name: quiz?.name ?? "Quiz", intro: quiz?.intro, grade: quizGrade },
       finished: true,
       attempt: finishedAttempt,
-      grade,
-      maxGrade: quizGrade,
+      grade: displayGrade,
+      maxGrade: displayMax,
       gradePass: Math.round(gradePass * 100) / 100,
       passed,
       questions: (review?.questionTypes ?? []).map((type, i) => ({ slot: i + 1, type })),
