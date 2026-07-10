@@ -100,6 +100,7 @@ export async function GET(req: NextRequest) {
       id: String(mod.id),
       name: mod.name,
       url: mod.url,
+      modname: mod.modname,
       completionstate: mod.completionstate,
       status,
       locked,

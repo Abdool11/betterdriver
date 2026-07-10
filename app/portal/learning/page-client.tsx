@@ -23,6 +23,7 @@ interface Module {
   status: "completed" | "in_progress" | "available";
   order: number;
   url?: string;
+  modname?: string;
   downloadable?: boolean;
   downloadSize?: number;
   downloadFilename?: string;
@@ -72,6 +73,93 @@ export default function LearningPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
       {/* Programme title */}
       <h2 style={{ margin: 0, fontSize: "1.25rem" }}>{prog.title}</h2>
+
+      {/* Programme progress — shown above the current module so the driver
+          sees their overall completion at a glance. */}
+      <div className="card-elevated">
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "0.875rem", marginBottom: "1rem" }}>
+          <div
+            style={{
+              width: "3rem",
+              height: "3rem",
+              background: "rgba(245,158,11,0.12)",
+              borderRadius: "0.75rem",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <BookOpen size={22} style={{ color: "var(--color-amber)" }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "var(--color-text-primary)" }}>
+              Programme progress
+            </p>
+          </div>
+        </div>
+
+        {/* Progress */}
+        <div style={{ marginBottom: "1rem" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "0.625rem",
+            }}
+          >
+            <span style={{ fontSize: "0.8125rem", color: "var(--color-text-secondary)", fontWeight: 600 }}>
+              {prog.completedModules} of {prog.totalModules} modules complete
+            </span>
+            <span
+              style={{
+                fontSize: "0.8125rem",
+                fontWeight: 700,
+                color: "var(--color-amber)",
+                background: "rgba(245,158,11,0.12)",
+                padding: "0.125rem 0.5rem",
+                borderRadius: "9999px",
+                minWidth: "2.5rem",
+                textAlign: "center",
+              }}
+            >
+              {prog.progressPercent}%
+            </span>
+          </div>
+          <div
+            style={{
+              height: "0.625rem",
+              background: "rgba(245,158,11,0.12)",
+              borderRadius: "9999px",
+              overflow: "hidden",
+              border: "1px solid rgba(245, 158, 11, 0.15)",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${prog.progressPercent}%`,
+                background: "var(--color-amber)",
+                borderRadius: "9999px",
+                transition: "width 0.6s ease",
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Meta */}
+        <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+            <Clock size={13} style={{ color: "var(--color-text-muted)" }} />
+            <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>Self-paced modules</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+            <Award size={13} style={{ color: "var(--color-success)" }} />
+            <span style={{ fontSize: "0.75rem", color: "var(--color-text-muted)" }}>Certificate on completion</span>
+          </div>
+        </div>
+      </div>
 
       {/* Current / Next module — the only module the driver can access */}
       <div>
@@ -211,8 +299,15 @@ export default function LearningPage() {
         })()}
       </div>
 
-      {/* WiFi download banner */}
-      {showDownloadBanner && (
+      {/* WiFi download banner — hidden when the current module is a quiz
+          (nothing to download for a quiz). */}
+      {showDownloadBanner &&
+        (() => {
+          const currentModule =
+            modules.find((m) => m.status === "in_progress") ??
+            modules.find((m) => m.status === "available" && !m.locked);
+          return currentModule?.modname !== "quiz";
+        })() && (
         <div style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: "0.875rem", padding: "1rem" }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
             <div style={{ width: 32, height: 32, background: "rgba(59,130,246,0.15)", borderRadius: "0.5rem", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -261,91 +356,7 @@ export default function LearningPage() {
         </div>
       )}
 
-      {/* Programme card */}
-      <div className="card-elevated">
-        <div style={{ display: "flex", alignItems: "flex-start", gap: "0.875rem", marginBottom: "1rem" }}>
-          <div
-            style={{
-              width: "3rem",
-              height: "3rem",
-              background: "var(--amber-subtle)",
-              borderRadius: "0.75rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              flexShrink: 0,
-            }}
-          >
-            <BookOpen size={22} style={{ color: "var(--amber)" }} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <p style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, color: "var(--text-primary)" }}>
-              Programme progress
-            </p>
-          </div>
-        </div>
-
-        {/* Progress */}
-        <div style={{ marginBottom: "1rem" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "0.625rem",
-            }}
-          >
-            <span style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", fontWeight: 600 }}>
-              {prog.completedModules} of {prog.totalModules} modules complete
-            </span>
-            <span
-              style={{
-                fontSize: "0.8125rem",
-                fontWeight: 700,
-                color: "var(--amber)",
-                background: "var(--amber-subtle)",
-                padding: "0.125rem 0.5rem",
-                borderRadius: "9999px",
-                minWidth: "2.5rem",
-                textAlign: "center",
-              }}
-            >
-              {prog.progressPercent}%
-            </span>
-          </div>
-          <div
-            style={{
-              height: "0.625rem",
-              background: "var(--amber-subtle)",
-              borderRadius: "9999px",
-              overflow: "hidden",
-              border: "1px solid rgba(245, 158, 11, 0.15)",
-            }}
-          >
-            <div
-              style={{
-                height: "100%",
-                width: `${prog.progressPercent}%`,
-                background: "var(--amber)",
-                borderRadius: "9999px",
-                transition: "width 0.6s ease",
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Meta */}
-        <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-            <Clock size={13} style={{ color: "var(--text-muted)" }} />
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Self-paced modules</span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-            <Award size={13} style={{ color: "var(--success)" }} />
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Certificate on completion</span>
-          </div>
-        </div>
-      </div>
+      {/* Programme card — moved above the current module section */}
 
       <style>{`
         .continue-cta {
