@@ -11,6 +11,19 @@ import {
 
 export const dynamic = "force-dynamic";
 
+/** Strip Moodle's HTML answer markup down to readable plain text for the UI. */
+function stripHtml(html?: string | null): string {
+  if (!html) return "";
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /**
  * GET /api/quiz/{cmid}
  * Returns quiz questions for the current user, starting a fresh attempt if needed.
@@ -64,8 +77,12 @@ export async function GET(
   const retry = req.nextUrl.searchParams.get("retry") === "1";
 
   // Check existing attempts
-  const attempts = await moodleGetQuizAttempts(quizId, driver.moodle_user_id);
+    const attempts = await moodleGetQuizAttempts(quizId, driver.moodle_user_id);
   const finishedAttempt = attempts.find((a) => a.state === "finished");
+
+  const MAX_ATTEMPTS = 3;
+  const attemptNumber = attempts.length;
+  const exhausted = attemptNumber >= MAX_ATTEMPTS;
 
   if (finishedAttempt && !retry) {
     const review = await moodleGetAttemptReview(finishedAttempt.id);
@@ -122,6 +139,23 @@ export async function GET(
       Math.round(displayMax * 100) / 100
     );
 
+    // After the allowed attempts are used up, move the driver on to the next
+    // module even though they didn't pass — the answer key is still shown.
+    const allowProceed = !passed && exhausted;
+
+    // Build a per-question answer review so the UI can show which were right/wrong.
+    const questionResults = reviewQuestions.map((q) => {
+      const graded = q.type && !freeTextTypes.includes(q.type.toLowerCase());
+      const correct = graded ? isCorrect(q) : true;
+      return {
+        slot: Number(q.slot),
+        type: String(q.type ?? ""),
+        correct,
+        rightAnswer: stripHtml(q.rightAnswer),
+        userAnswer: stripHtml(q.userAnswer),
+      };
+    });
+
     return NextResponse.json({
       quiz: { id: quizId, name: quiz?.name ?? "Quiz", intro: quiz?.intro, grade: quizGrade },
       finished: true,
@@ -130,6 +164,10 @@ export async function GET(
       maxGrade: displayMax,
       gradePass: displayGradePass,
       passed,
+      allowProceed,
+      attemptsUsed: attemptNumber,
+      maxAttempts: MAX_ATTEMPTS,
+      questionResults,
       questions: (review?.questionTypes ?? []).map((type, i) => ({ slot: i + 1, type })),
       hasFreeText,
     });

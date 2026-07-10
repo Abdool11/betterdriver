@@ -11,6 +11,19 @@ import {
 
 export const dynamic = "force-dynamic";
 
+/** Strip Moodle's HTML answer markup down to readable plain text for the UI. */
+function stripHtml(html?: string | null): string {
+  if (!html) return "";
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /**
  * POST /api/quiz/submit
  * Body: { attemptId: number, answers: Record<slot, answerValue> }
@@ -67,9 +80,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Driver not found" }, { status: 404 });
   }
 
-  // Count existing attempts for this quiz so we can auto-pass on the 4th try.
-  // moodleGetQuizAttempts returns every attempt (finished + the in-progress one
-  // currently being submitted), so the 4th submission is attempt #4.
+  // Count existing attempts for this quiz. moodleGetQuizAttempts returns every
+  // attempt (finished + the in-progress one currently being submitted), so the
+  // attempt number equals the current list length (1 = first attempt).
+  const MAX_ATTEMPTS = 3;
   const quiz = await moodleGetQuizForModule(parseInt(moduleCmid, 10));
   const quizId = quiz?.id;
   let attemptCount = 0;
@@ -77,7 +91,10 @@ export async function POST(req: NextRequest) {
     const existingAttempts = await moodleGetQuizAttempts(quizId, driver.moodle_user_id);
     attemptCount = existingAttempts.length;
   }
-  const autoPass = attemptCount >= 4;
+  const attemptNumber = attemptCount;
+  // After MAX_ATTEMPTS failed tries the driver is moved on to the next module
+  // regardless of score, with the answer key shown.
+  const exhausted = attemptNumber >= MAX_ATTEMPTS;
 
   // Save answers
   try {
@@ -164,16 +181,35 @@ export async function POST(req: NextRequest) {
 
   const hasEssay = body.hasEssayQuestions === true || freeTextQuestions.length > 0;
 
+  // After the allowed attempts are used up, move the driver on to the next
+  // module even though they didn't pass — the answer key is still shown.
+  const allowProceed = !passed && exhausted;
+
+  // Build a per-question answer review so the UI can show which were right/wrong.
+  const questionResults = reviewQuestions.map((q) => {
+    const graded = q.type && !FREE_TEXT.includes(q.type.toLowerCase());
+    const correct = graded ? isCorrect(q) : true;
+    return {
+      slot: Number(q.slot),
+      type: String(q.type ?? ""),
+      correct,
+      rightAnswer: stripHtml(q.rightAnswer),
+      userAnswer: stripHtml(q.userAnswer),
+    };
+  });
+
   console.log("[QUIZ_SUBMIT] grading", {
     gradedQuestions: gradedQuestions.length,
     freeTextQuestions: freeTextQuestions.length,
     passed,
+    allowProceed,
+    attemptNumber,
     displayGrade,
     displayMax,
     moodleGrade,
   });
 
-  if (passed) {
+  if (passed || allowProceed) {
     // Mark module complete in BD — trigger via progress API
     try {
       await fetch(`${req.nextUrl.origin}/api/portal/progress`, {
@@ -199,9 +235,13 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({
     success: true,
     passed,
+    allowProceed,
+    attemptsUsed: attemptNumber,
+    maxAttempts: MAX_ATTEMPTS,
     grade: displayGrade,
     maxGrade: displayMax,
     gradePass: displayGradePass,
+    questionResults,
     hasEssay,
     state: finishedAttempt.state,
   });

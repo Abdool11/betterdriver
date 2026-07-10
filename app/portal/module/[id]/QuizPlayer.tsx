@@ -49,7 +49,23 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [sequenceChecks, setSequenceChecks] = useState<Record<number, number>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<{ passed: boolean; grade: number; maxGrade?: number; gradePass?: number; hasFreeText?: boolean } | null>(null);
+  const [result, setResult] = useState<{
+    passed: boolean;
+    grade: number;
+    maxGrade?: number;
+    gradePass?: number;
+    hasFreeText?: boolean;
+    allowProceed?: boolean;
+    attemptsUsed?: number;
+    maxAttempts?: number;
+    questionResults?: {
+      slot: number;
+      type: string;
+      correct: boolean;
+      rightAnswer: string;
+      userAnswer: string;
+    }[];
+  } | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
 
   const loadQuiz = useCallback(async (retry = false) => {
@@ -78,6 +94,10 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
           maxGrade: data.maxGrade,
           gradePass: data.gradePass,
           hasFreeText,
+          allowProceed: data.allowProceed === true,
+          attemptsUsed: data.attemptsUsed,
+          maxAttempts: data.maxAttempts,
+          questionResults: data.questionResults,
         });
         setPhase("review");
       } else {
@@ -160,9 +180,9 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
         return;
       }
 
-       setResult({ passed: data.passed, grade: data.grade, maxGrade: data.maxGrade, gradePass: data.gradePass, hasFreeText: hasEssay });
+       setResult({ passed: data.passed, grade: data.grade, maxGrade: data.maxGrade, gradePass: data.gradePass, hasFreeText: hasEssay, allowProceed: data.allowProceed, attemptsUsed: data.attemptsUsed, maxAttempts: data.maxAttempts, questionResults: data.questionResults });
       setPhase("review");
-      if (data.passed) {
+      if (data.passed || data.allowProceed) {
         onComplete?.();
         router.refresh();
       } else {
@@ -274,8 +294,10 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
 
   if (phase === "review" && result) {
     const passed = result.passed;
+    const movedOn = result.allowProceed === true;
+    const showAnswers = !passed && (result.questionResults?.length ?? 0) > 0;
     return (
-      <div style={{ marginBottom: "2rem" }}>
+      <div style={{ marginBottom: "2rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
         <div
           style={{
             background: passed ? "rgba(16,185,129,0.08)" : "rgba(245,158,11,0.08)",
@@ -325,10 +347,12 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
                 : `You scored ${result.grade} points.`}{" "}
               {passed
                 ? "That's 100% — great work, you can move on to the next module."
-                : `Get all ${result.maxGrade ?? 4} questions right to score 100% and pass. Try again.`}
+                : movedOn
+                ? "You've used all 3 attempts. You can now move on to the next module — review the correct answers below."
+                : `Attempt ${result.attemptsUsed ?? 1} of ${result.maxAttempts ?? 3}. Get all ${result.maxGrade ?? 4} questions right to score 100% and pass. Try again.`}
             </p>
           </div>
-          {!passed && (
+          {!passed && !movedOn && (
             <button
               onClick={() => {
                 setAnswers({});
@@ -354,6 +378,94 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
             </button>
           )}
         </div>
+
+        {showAnswers && (
+          <div
+            style={{
+              background: "#1C2333",
+              border: "1px solid #2d3a4f",
+              borderRadius: "1rem",
+              padding: "clamp(1rem, 4vw, 1.5rem)",
+            }}
+          >
+            <p
+              style={{
+                fontFamily: "var(--font-dm-sans), sans-serif",
+                fontWeight: 800,
+                fontSize: "clamp(0.9375rem, 3.5vw, 1.0625rem)",
+                color: "#F9FAFB",
+                margin: "0 0 0.875rem",
+              }}
+            >
+              Answer review
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+              {result.questionResults!.map((qr) => (
+                <div
+                  key={qr.slot}
+                  style={{
+                    background: "#0d1526",
+                    border: `1px solid ${qr.correct ? "rgba(16,185,129,0.2)" : "rgba(239,68,68,0.25)"}`,
+                    borderRadius: "0.625rem",
+                    padding: "0.75rem 0.875rem",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: qr.correct ? 0 : "0.375rem" }}>
+                    {qr.correct ? (
+                      <CheckCircle2 size={16} style={{ color: "#10B981", flexShrink: 0 }} />
+                    ) : (
+                      <span
+                        style={{
+                          width: 16,
+                          height: 16,
+                          borderRadius: "50%",
+                          background: "rgba(239,68,68,0.15)",
+                          border: "1px solid rgba(239,68,68,0.4)",
+                          color: "#EF4444",
+                          fontSize: "0.625rem",
+                          fontWeight: 800,
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        ✕
+                      </span>
+                    )}
+                    <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "#E5E7EB" }}>
+                      Question {qr.slot}
+                    </span>
+                    <span
+                      style={{
+                        marginLeft: "auto",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        color: qr.correct ? "#10B981" : "#EF4444",
+                      }}
+                    >
+                      {qr.correct ? "Correct" : "Incorrect"}
+                    </span>
+                  </div>
+                  {!qr.correct && (
+                    <div style={{ fontSize: "0.8125rem", color: "#9CA3AF", lineHeight: 1.5, paddingLeft: "1.5rem" }}>
+                      {qr.userAnswer && (
+                        <div>
+                          <span style={{ color: "#EF4444" }}>Your answer:</span> {qr.userAnswer}
+                        </div>
+                      )}
+                      {qr.rightAnswer && (
+                        <div>
+                          <span style={{ color: "#10B981" }}>Correct answer:</span> {qr.rightAnswer}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }

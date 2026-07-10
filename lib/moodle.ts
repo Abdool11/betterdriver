@@ -843,6 +843,9 @@ export async function moodleGetAttemptReview(attemptId: number): Promise<{
     state: string;
     mark: number | null;
     maxmark: number | null;
+    rightAnswer?: string | null;
+    userAnswer?: string | null;
+    questionText?: string | null;
   }[];
 } | null> {
   const url = moodleUrl("mod_quiz_get_attempt_review", { attemptid: attemptId });
@@ -872,6 +875,9 @@ export async function moodleGetAttemptReview(attemptId: number): Promise<{
     state: String(q.state ?? ""),
     mark: toNum(q.mark),
     maxmark: toNum(q.maxmark),
+    rightAnswer: typeof q.rightanswer === "string" ? q.rightanswer : null,
+    userAnswer: typeof q.responsesummary === "string" ? q.responsesummary : null,
+    questionText: typeof q.questionnumber === "string" ? q.questionnumber : null,
   }));
 
   const questionTypes: string[] = questions.map((q) => q.type).filter(Boolean);
