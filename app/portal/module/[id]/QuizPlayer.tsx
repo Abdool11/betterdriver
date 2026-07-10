@@ -321,12 +321,11 @@ export default function QuizPlayer({ moduleId, quizId, moduleName, onSaving, onC
             </p>
             <p style={{ fontSize: "0.875rem", color: "#9CA3AF", margin: 0 }}>
               {result.maxGrade != null
-                ? `You scored ${result.grade} / ${result.maxGrade}`
-                  + (result.gradePass != null ? ` (need ${result.gradePass} to pass).` : ".")
+                ? `You scored ${result.grade} / ${result.maxGrade}.`
                 : `You scored ${result.grade} points.`}{" "}
               {passed
-                ? "Great work — you can move on to the next module."
-                : "You need all four multiple-choice questions correct to pass. Try again."}
+                ? "That's 100% — great work, you can move on to the next module."
+                : `Get all ${result.maxGrade ?? 4} questions right to score 100% and pass. Try again.`}
             </p>
           </div>
           {!passed && (

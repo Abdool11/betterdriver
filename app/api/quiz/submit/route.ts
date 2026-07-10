@@ -189,12 +189,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Never show a pass threshold higher than the quiz's max grade — that happens
+  // when Moodle's "Grade to pass" is misconfigured above the total marks.
+  const displayGradePass = Math.min(
+    Math.round(gradePass * 100) / 100,
+    Math.round(displayMax * 100) / 100
+  );
+
   return NextResponse.json({
     success: true,
     passed,
     grade: displayGrade,
     maxGrade: displayMax,
-    gradePass: Math.round(gradePass * 100) / 100,
+    gradePass: displayGradePass,
     hasEssay,
     state: finishedAttempt.state,
   });
