@@ -17,9 +17,10 @@ jobs:
     steps:
       - name: Poll Moodle Progress
         run: |
-          curl -X POST "https://betterdriver.co.za/api/moodle/poll" \
+          curl -X POST "https://www.betterdriver.co.za/api/moodle/poll" \
             -H "Authorization: Bearer ${{ secrets.MOODLE_POLL_SECRET }}" \
             -H "Content-Type: application/json" \
+            -L --fail --max-time 300 \
             -w "\nHTTP Status: %{http_code}\n" \
             -s -o /dev/null
 
@@ -30,8 +31,9 @@ jobs:
     steps:
       - name: Run Inactivity Check
         run: |
-          curl -X POST "https://betterdriver.co.za/api/moodle/inactivity-check" \
+          curl -X POST "https://www.betterdriver.co.za/api/moodle/inactivity-check" \
             -H "Authorization: Bearer ${{ secrets.MOODLE_POLL_SECRET }}" \
             -H "Content-Type: application/json" \
+            -L --fail --max-time 300 \
             -w "\nHTTP Status: %{http_code}\n" \
             -s -o /dev/null
