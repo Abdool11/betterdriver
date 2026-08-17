@@ -7,7 +7,7 @@ BetterDriver is the driver-facing LMS portal for professional truck driver train
 **Design principle:** Zero friction between link tap and learning. Drivers never create passwords. A magic link tap silently authenticates the driver and lands them directly in their portal, pre-enrolled and ready to learn.
 
 Key platform capabilities include:
-- **Persistent Magic Link Authentication** — drivers authenticate via a persistent opaque token (no passwords, no registration screens); the token resolves to a 30-day rolling JWT session; links expire only at campaign end date or when revoked by the operator
+- **Persistent Magic Link Authentication** — drivers authenticate through the canonical `/join/{token}` opaque-link route (no passwords or registration screens); the token resolves to a 30-day JWT session that is safely renewed for active drivers during its final seven days; invitation links remain subject to their configured expiry or operator revocation
 - **Language Selection on First Access** — drivers choose English or IsiZulu on their first visit; preference is stored and applied throughout the portal
 - **Welcome Video on First Access** — after language selection, drivers see a personalised welcome screen with the programme invite video before entering the portal
 - **Moodle Integration (Webhook + Polling)** — Moodle handles all video delivery, quizzes, and completion logic; BD syncs progress via real-time webhooks (primary) and a polling cron job (fallback); see `MOODLE_SETUP.md` for full configuration instructions
@@ -51,7 +51,8 @@ app/
     auth/                     # Driver login, logout
     admin/                    # Admin-only routes (JWT protected)
     driver/                   # Driver profile, progress, certificate
-    join/[token]/             # Magic link resolution — resolves opaque token, issues JWT, redirects to portal
+    join/[token]/             # Canonical public driver entry — forwards GFA /join/{token} links to the invitation resolver
+    api/join/[token]/         # Magic link resolution — resolves opaque token, issues JWT, redirects to portal
     moodle/
       webhook/                # POST — receives real-time completion events from Moodle
       poll/                   # POST — cron fallback; polls Moodle for all active enrolments
@@ -105,13 +106,13 @@ npm run dev
 
 1. GFA deploys training → creates a `driver_invitations` row with a UUID opaque token and sets `expires_at` to the campaign end date
 2. GFA sends WhatsApp with link: `https://betterdriver.co.za/join/{token}`
-3. Driver taps link → `GET /api/join/[token]` resolves the token, marks `first_accessed_at` if first visit, issues a 30-day JWT session cookie, and redirects to:
+3. Driver taps the canonical `GET /join/[token]` route, which forwards internally to `GET /api/join/[token]`. The resolver marks `first_accessed_at` if first visit, issues a 30-day JWT session cookie, and redirects to:
    - `/portal/language` — if first access and no language preference set
    - `/portal/welcome` — if first access and language already set
    - `/portal` — returning driver
 4. All portal pages call `requireDriverSession()` which reads the JWT cookie — no password ever required
-5. Sessions roll automatically on each visit; the driver is re-authenticated silently when the JWT nears expiry
-6. Operators can revoke a link at any time via GFA admin → the `revoked_at` field is checked on every token resolution
+5. Active driver sessions are renewed silently when fewer than seven days remain on the JWT. Idle sessions still expire and require a valid re-access link.
+6. Operators can revoke a link at any time via GFA admin; the `revoked_at` field is checked when an invitation token is resolved and by server-side driver-session guards.
 
 ---
 
@@ -165,6 +166,22 @@ All changes go through a branch and Pull Request — nothing is pushed directly 
 7. Delete the feature branch after merging
 
 ---
+
+## RBD-1 Handover Stabilisation — Deployment and Rollback
+
+RBD-1 adds an explicit in-application `/join/[token]` route so GFA WhatsApp links no longer depend on an undocumented proxy rewrite. It also renews active driver sessions only during the final seven days of a 30-day session.
+
+### Pre-merge verification
+
+1. From a deployed GFA test quote, send a BetterDriver link and confirm `https://betterdriver.co.za/join/{token}` reaches the first-access language/welcome flow.
+2. Open an existing valid link and confirm a returning driver reaches `/portal`.
+3. Confirm an invalid, revoked and expired token each redirect to `/start` with the correct error state.
+4. Use a test JWT with fewer than seven days remaining and confirm the portal response replaces the `bd_session` cookie with a new 30-day token.
+5. Confirm a driver session never grants access to `/admin`, and an admin session never grants access to `/portal`.
+
+### Failsafe rollback
+
+The change is self-contained: revert the RBD-1 Git commit or redeploy the prior known-good BetterDriver release. No SQL migration or environment-variable change is required. If an external `/join/*` proxy rewrite exists, it may remain in place during and after rollback because the in-app route is compatible with the current GFA link format.
 
 ## Deployment
 
