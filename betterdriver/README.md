@@ -167,6 +167,10 @@ All changes go through a branch and Pull Request — nothing is pushed directly 
 
 ---
 
+## RBD-2 Driver Re-access and WhatsApp Onboarding
+
+RBD-2 adds a rate-limited, non-enumerating driver re-access request flow at `/start`. A registered driver can request a fresh 30-day opaque BetterDriver link through an approved Meta Utility template. The required migration, Meta template parameters, paired GFA message release, verification journey and failsafe rollback are documented in `docs/RBD-2-DRIVER-REACCESS-AND-WHATSAPP-HANDOVER.md`.
+
 ## RBD-1 Handover Stabilisation — Deployment and Rollback
 
 RBD-1 adds an explicit in-application `/join/[token]` route so GFA WhatsApp links no longer depend on an undocumented proxy rewrite. It also renews active driver sessions only during the final seven days of a 30-day session.
