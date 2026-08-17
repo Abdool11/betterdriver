@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import StartErrorBanner from "./StartErrorBanner";
+import ReaccessRequestForm from "./ReaccessRequestForm";
 
 export default function HowToJoinPage() {
   return (
@@ -80,6 +81,7 @@ export default function HowToJoinPage() {
 
       <main style={{ flex: 1, padding: "2rem 1.25rem", maxWidth: 600, margin: "0 auto", width: "100%" }}>
         <Suspense fallback={null}><StartErrorBanner /></Suspense>
+        <ReaccessRequestForm />
         {/* Hero */}
         <div style={{ textAlign: "center", marginBottom: "2.5rem" }}>
           <div
