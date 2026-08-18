@@ -18,7 +18,7 @@ Key platform capabilities include:
 - **Driver Bulletins** — urgent and standard safety bulletins delivered to drivers with WhatsApp notification; drivers acknowledge and complete comprehension checks in-portal
 - **Installable Driver Portal** — the BetterDriver PWA provides branded home-screen icons and an Android install prompt after a driver has entered the portal
 - **Opt-in Push Foundation** — browser push subscriptions and delivery audit records are available behind a disabled-by-default flag; WhatsApp remains the driver fallback channel
-- **Deployment Experience** — GitHub build checks, a deployment-ready PR template and a versioned integration runbook make the GFA/BetterDriver release train easier to review and reverse
+- **Deployment Experience** — a root-level GitHub build check, a deployment-ready PR template and a versioned integration runbook make the GFA/BetterDriver release train easier to review and reverse
 
 ---
 
@@ -89,12 +89,20 @@ MOODLE_SETUP.md               # Full Moodle + WhatsApp setup guide for Asif
 
 ---
 
+## Repository Layout and Vercel Configuration
+
+This GitHub repository has a **monorepo layout**. The BetterDriver Next.js application is nested in the repository’s `betterdriver/` directory alongside separate GFA and TAG source copies. The application `package.json`, `vercel.json`, `app/`, `public/`, and Supabase migrations are all under that directory.
+
+> **Required Vercel setting:** in the BetterDriver Vercel project, open **Settings → General → Root Directory**, set it to **`betterdriver`**, save, then redeploy the Preview deployment. The root must not be left blank because the Git root has no BetterDriver `package.json`.
+
+The GitHub Actions file belongs at the **Git repository root**: `.github/workflows/betterdriver-build-check.yml`. It deliberately uses `working-directory: betterdriver`, so dependency installation, type-checking and builds run against the nested application. The copy-safe source is also stored at `betterdriver/docs/deployment-assets/betterdriver-build-check.yml`.
+
 ## Local Development
 
 ```bash
 git clone https://github.com/Abdool11/betterdriver.git
-cd betterdriver
-npm install
+cd betterdriver/betterdriver
+npm ci
 cp .env.local.example .env.local
 # Fill in .env.local values
 # Apply all incremental migrations in order:
@@ -174,7 +182,7 @@ All changes go through a branch and Pull Request — nothing is pushed directly 
 3. Run `npm ci`, `npm run type-check` and `npm run build`.
 4. Push the branch: `git push origin feature/your-feature-name`.
 5. Complete the deployment-ready PR template, including migration, external configuration, feature-flag and rollback details.
-6. Wait for the GitHub **Build Check** and a Vercel Preview deployment.
+6. Wait for the GitHub **BetterDriver Build Check** and a Vercel Preview deployment. Confirm the Vercel project Root Directory is `betterdriver` before interpreting any build failure.
 7. For a cumulative release, merge feature commits into a `release/...` branch and open one final PR to `main` after preview tests pass.
 8. Approve and merge only after the preview checklist passes; delete the source branch after the release is stable.
 
@@ -204,6 +212,8 @@ The change is self-contained: revert the RBD-1 Git commit or redeploy the prior 
 
 Vercel deploys `main` to production. Feature and release branches should be reviewed on their Vercel Preview deployment before a PR is merged. BetterDriver’s companion integration branch is `release/betterdriver-driver-experience-v1`.
 
+> **Required before deployment:** set the Vercel project **Root Directory** to `betterdriver`. A blank Root Directory makes Vercel look for `package.json` at the monorepo root and will break the BetterDriver build.
+>
 > **Important:** Do not push directly to `main`. Keep `ENABLE_PUSH_NOTIFICATIONS=false` until real-device opt-in and WhatsApp-fallback testing are documented.
 
 ---
