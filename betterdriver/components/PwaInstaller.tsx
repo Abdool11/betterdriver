@@ -1,0 +1,3 @@
+"use client";
+import { useEffect, useState } from "react";
+export default function PwaInstaller(){const[prompt,setPrompt]=useState<any>(null),[show,setShow]=useState(false);useEffect(()=>{if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});const h=(e:any)=>{e.preventDefault();setPrompt(e);setShow(true);};window.addEventListener("beforeinstallprompt",h);return()=>window.removeEventListener("beforeinstallprompt",h);},[]);if(!show)return null;return <button onClick={async()=>{await prompt?.prompt();setShow(false)}} style={{position:"fixed",right:16,bottom:16,zIndex:99,background:"#14b8a6",color:"#06283b",border:0,borderRadius:999,padding:"11px 16px",fontWeight:800,boxShadow:"0 6px 20px #0005"}}>Install BetterDriver</button>}
