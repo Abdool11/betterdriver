@@ -89,7 +89,7 @@ const MOCK_BULLETIN: BulletinData = {
 const STEP_ORDER: FlowStep[] = ["reading", "acknowledge", "check", "feedback", "done"];
 
 export default function BulletinReadPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id = "" } = useParams<{ id: string }>() ?? {};
   const router = useRouter();
   const bulletin = MOCK_BULLETIN; // Replace with fetch by id
 

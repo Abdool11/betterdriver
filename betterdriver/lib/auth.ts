@@ -114,7 +114,7 @@ export async function getSession(): Promise<DriverSession | null> {
     // Fallback: check Authorization header for API requests
     if (!token) {
       const { headers } = await import("next/headers");
-      const authHeader = headers().get("authorization");
+      const authHeader = (await headers()).get("authorization");
       if (authHeader?.startsWith("Bearer ")) {
         token = authHeader.substring(7);
       }

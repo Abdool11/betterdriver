@@ -240,7 +240,7 @@ export function PortalLayout({
         >
           {PORTAL_NAV.map(({ label, href, icon: Icon }) => {
             const isActive =
-              pathname === href || pathname.startsWith(href + "/");
+              pathname === href || pathname?.startsWith(href + "/");
             return (
               <Link
                 key={href}

@@ -16,6 +16,9 @@ Key platform capabilities include:
 - **Personalised Portal** — every screen addresses the driver by first name; language preference (English or Zulu) is applied throughout
 - **Offline Download** — drivers can download course content over WiFi for offline viewing
 - **Driver Bulletins** — urgent and standard safety bulletins delivered to drivers with WhatsApp notification; drivers acknowledge and complete comprehension checks in-portal
+- **Installable Driver Portal** — the BetterDriver PWA provides branded home-screen icons and an Android install prompt after a driver has entered the portal
+- **Opt-in Push Foundation** — browser push subscriptions and delivery audit records are available behind a disabled-by-default flag; WhatsApp remains the driver fallback channel
+- **Deployment Experience** — GitHub build checks, a deployment-ready PR template and a versioned integration runbook make the GFA/BetterDriver release train easier to review and reverse
 
 ---
 
@@ -97,6 +100,8 @@ cp .env.local.example .env.local
 # Apply all incremental migrations in order:
 #   supabase/migrations/20260502_phase1_auth_rebuild.sql
 #   supabase/migrations/20260504_moodle_integration.sql
+#   supabase/migrations/20260820_rbd2_driver_reaccess.sql
+#   supabase/migrations/20260822_rbd4_push_notifications.sql
 npm run dev
 ```
 
@@ -137,8 +142,14 @@ npm run dev
 | `NEXT_PUBLIC_BD_URL` | Yes | Full public URL of this site (used in WhatsApp message links) |
 | `GFA_BASE_URL` | Yes | Green Freight Academy site URL |
 | `NEXT_PUBLIC_SITE_URL` | Yes | Full URL of this site in production |
+| `VAPID_PUBLIC_KEY` | Push only | Server VAPID public key |
+| `VAPID_PRIVATE_KEY` | Push only | Server VAPID private key; never expose this value |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Push only | Same public VAPID key, safe for the browser subscription request |
+| `ENABLE_PUSH_NOTIFICATIONS` | Release controlled | Leave `false` until real-device opt-in and WhatsApp fallback tests pass |
 
 > See `MOODLE_SETUP.md` for full Moodle configuration instructions and WhatsApp template copy.
+>
+> **Driver Experience V1:** The GFA companion release runbook at [`../greenfreightacademy/docs/releases/2026-08-commercial-compliance-v1/00-RELEASE-SUMMARY.md`](https://github.com/Abdool11/greenfreightacademy/tree/release/gfa-commercial-compliance-v1/docs/releases/2026-08-commercial-compliance-v1) explains the shared deployment, migration, feature-activation and rollback sequence.
 
 ---
 
@@ -154,16 +165,18 @@ All changes go through a branch and Pull Request — nothing is pushed directly 
 | Bug fix | `fix/short-description` | `fix/moodle-progress-sync` |
 | Content update | `content/short-description` | `content/update-help-page` |
 | Hotfix (urgent) | `hotfix/short-description` | `hotfix/driver-login-broken` |
+| Integration release | `release/short-description` | `release/betterdriver-driver-experience-v1` |
 
 ### Step-by-Step Workflow
 
 1. Create a branch from `main`: `git checkout -b feature/your-feature-name`
 2. Make changes and commit: `git commit -m "feat: describe what changed and why"`
-3. Push the branch: `git push origin feature/your-feature-name`
-4. Open a Pull Request on GitHub against `main`
-5. Review the diff — GitHub flags any conflicts before merge
-6. Approve and merge to `main`
-7. Delete the feature branch after merging
+3. Run `npm ci`, `npm run type-check` and `npm run build`.
+4. Push the branch: `git push origin feature/your-feature-name`.
+5. Complete the deployment-ready PR template, including migration, external configuration, feature-flag and rollback details.
+6. Wait for the GitHub **Build Check** and a Vercel Preview deployment.
+7. For a cumulative release, merge feature commits into a `release/...` branch and open one final PR to `main` after preview tests pass.
+8. Approve and merge only after the preview checklist passes; delete the source branch after the release is stable.
 
 ---
 
@@ -189,9 +202,9 @@ The change is self-contained: revert the RBD-1 Git commit or redeploy the prior 
 
 ## Deployment
 
-Packaged as a standalone tar.gz including `server.js`, `pm2.config.js`, `nginx.conf`, `deploy.sh`, `QUICK-START-CARD.md`, and `.env.local.example`.
+Vercel deploys `main` to production. Feature and release branches should be reviewed on their Vercel Preview deployment before a PR is merged. BetterDriver’s companion integration branch is `release/betterdriver-driver-experience-v1`.
 
-> **Important:** The Nginx config must include a `location /_next/static/` block. Without this the site loads without any styling. This is already included in the provided `nginx.conf`.
+> **Important:** Do not push directly to `main`. Keep `ENABLE_PUSH_NOTIFICATIONS=false` until real-device opt-in and WhatsApp-fallback testing are documented.
 
 ---
 
