@@ -29,6 +29,14 @@ No WhatsApp template, invitation-token format, Supabase table, Moodle connection
 5. An active portal session with seven or fewer days remaining receives a replacement 30-day session cookie.
 6. Invalid, revoked or expired invitation tokens retain the existing safe redirect to `/start`.
 
+## Option C confirmation: re-access plus rolling renewal
+
+RBD-1 and RBD-2 together implement **Option C**. RBD-2 provides rate-limited, non-enumerating self-service re-access after an idle session has expired. RBD-1 keeps active drivers signed in without requiring them to request a new link.
+
+The initial driver JWT is correctly issued for 30 days in `lib/auth.ts`. Renewal is intentionally implemented in `middleware.ts`, rather than in `auth.ts`, because middleware can attach a replacement httpOnly cookie to every eligible `/portal/*` response. On a valid driver portal request, middleware calculates the remaining JWT lifetime. If **seven days or fewer** remain, it signs and sets a fresh 30-day `bd_session` cookie. It never renews admin sessions, invalid tokens, or tokens with more than seven days remaining.
+
+> A driver who returns to the BetterDriver portal during the final seven days of a valid session receives a fresh 30-day session. A driver who remains idle until expiry uses the RBD-2 re-access route. This is deliberate Option C behaviour, not an Option B-only implementation.
+
 ## Pre-deployment checks
 
 Use a dedicated non-production test driver and quote where possible.

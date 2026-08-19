@@ -95,7 +95,7 @@ This GitHub repository has a **monorepo layout**. The BetterDriver Next.js appli
 
 > **Required Vercel setting:** in the BetterDriver Vercel project, open **Settings → General → Root Directory**, set it to **`betterdriver`**, save, then redeploy the Preview deployment. The root must not be left blank because the Git root has no BetterDriver `package.json`.
 
-The GitHub Actions file belongs at the **Git repository root**: `.github/workflows/betterdriver-build-check.yml`. It deliberately uses `working-directory: betterdriver`, so dependency installation, type-checking and builds run against the nested application. The copy-safe source is also stored at `betterdriver/docs/deployment-assets/betterdriver-build-check.yml`.
+The GitHub Actions file belongs at the **Git repository root**: `.github/workflows/betterdriver-build-check.yml`. It deliberately uses `working-directory: betterdriver`, so dependency installation, type-checking and builds run against the nested application. The copy-safe source is also stored at `betterdriver/docs/deployment-assets/betterdriver-build-check.yml`. See [`docs/RELEASE-SCOPE-AND-MONOREPO-BOUNDARY.md`](docs/RELEASE-SCOPE-AND-MONOREPO-BOUNDARY.md) for the release boundary: GFA and TAG directories are pre-existing monorepo baseline content, not BetterDriver release changes.
 
 ## Local Development
 
