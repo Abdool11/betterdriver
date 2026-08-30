@@ -340,3 +340,6 @@ export const FAQS = [
     answer: "Make sure you are using the mobile number or email address you registered with. Use the 'Forgot password' link on the login screen. If you still cannot get in, contact us using the form on this page.",
   },
 ];
+
+// ─── Enrolment Statuses ──────────────────────────────────────────────────────
+export const ACTIVE_ENROLMENT_STATUSES = ["enrolled", "in_progress"];
