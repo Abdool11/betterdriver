@@ -1,41 +1,31 @@
-# ============================================================
-# ROOT GITIGNORE — TAG Ecosystem
-# Prevents secrets and local files from being committed
-# ============================================================
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
 
-# ── Environment files ──
+# Next.js build output
+.next/
+out/
+
+# Environment files - NEVER commit these
 .env
 .env.local
-.env.*.local
-!.env.local.example
+.env.development.local
+.env.test.local
+.env.production.local
 
-# ── SSH keys ──
-*.pem
-*.key
-id_rsa
-id_rsa.pub
-id_ed25519
-id_ed25519.pub
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# ── Local test / debug scripts ──
-moodle_*.py
-moodle_*.sh
-check_*.py
-debug_*.py
-fix_*.py
-test_*.py
-reset_*.py
-
-# ── Python / Node artifacts ──
-__pycache__/
-*.pyc
-*.pyo
-node_modules/
-
-# ── IDE / OS files ──
-.vscode/
-.idea/
-*.swp
-*.swo
+# OS files
 .DS_Store
 Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# TypeScript incremental-build cache
+*.tsbuildinfo
