@@ -32,7 +32,7 @@ const ERROR_MESSAGES: Record<string, { icon: React.ElementType; title: string; b
 
 export default function StartErrorBanner() {
   const searchParams = useSearchParams();
-  const errorCode = searchParams.get("error");
+  const errorCode = searchParams?.get("error");
   if (!errorCode) return null;
 
   const msg = ERROR_MESSAGES[errorCode];

@@ -42,9 +42,8 @@ const COPY: Record<Lang, {
 export default function WelcomePageClient({ session }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const videoUrl = searchParams.get("video")
-    ? decodeURIComponent(searchParams.get("video")!)
-    : null;
+  const video = searchParams?.get("video");
+  const videoUrl = video ? decodeURIComponent(video) : null;
 
   const [videoEnded, setVideoEnded] = useState(false);
   const [skipped, setSkipped] = useState(false);

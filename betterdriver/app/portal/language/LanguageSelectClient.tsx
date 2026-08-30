@@ -44,9 +44,8 @@ const ERROR: Record<Lang, string> = {
 export default function LanguageSelectClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const videoParam = searchParams.get("video")
-    ? `?video=${encodeURIComponent(searchParams.get("video")!)}`
-    : "";
+  const video = searchParams?.get("video");
+  const videoParam = video ? `?video=${encodeURIComponent(video)}` : "";
 
   const [selected, setSelected] = useState<Lang | null>(null);
   const [saving, setSaving] = useState(false);

@@ -15,6 +15,7 @@ import {
   Bell,
 } from "lucide-react";
 import { useLanguage, type Lang } from "@/hooks/useLanguage";
+import PushNotificationOptIn from "@/components/PushNotificationOptIn";
 
 interface DriverStats {
   firstName: string;
@@ -158,6 +159,7 @@ export default function PortalHomePage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      <PushNotificationOptIn />
       {/* Welcome banner */}
       <div
         style={{

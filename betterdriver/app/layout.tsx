@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import PwaInstaller from "@/components/PwaInstaller";
 
 export const metadata: Metadata = {
   title: {
@@ -8,6 +9,7 @@ export const metadata: Metadata = {
   },
   description:
     "BetterDriver is where professional truck drivers enrol in training, complete programmes, earn certification, and build their professional record.",
+  manifest: "/manifest.webmanifest",
   keywords: [
     "truck driver training",
     "professional driver certification",
@@ -25,6 +27,8 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport: Viewport = { themeColor: "#0d1b2a" };
+
 export default function RootLayout({
   children,
 }: {
@@ -40,7 +44,7 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>{children}<PwaInstaller /></body>
     </html>
   );
 }

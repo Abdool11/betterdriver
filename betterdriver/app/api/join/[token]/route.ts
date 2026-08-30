@@ -42,7 +42,7 @@ export async function GET(
       ? `?video=${encodeURIComponent(result.inviteVideoUrl)}`
       : "";
 
-    if (!result.languagePreference) {
+    if (!result.session.languagePreference) {
       // Driver has not chosen a language yet — show language selection first
       return NextResponse.redirect(new URL(`/portal/language${videoParam}`, req.url));
     }

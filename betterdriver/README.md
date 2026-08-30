@@ -7,7 +7,7 @@ BetterDriver is the driver-facing LMS portal for professional truck driver train
 **Design principle:** Zero friction between link tap and learning. Drivers never create passwords. A magic link tap silently authenticates the driver and lands them directly in their portal, pre-enrolled and ready to learn.
 
 Key platform capabilities include:
-- **Persistent Magic Link Authentication** — drivers authenticate via a persistent opaque token (no passwords, no registration screens); the token resolves to a 30-day rolling JWT session; links expire only at campaign end date or when revoked by the operator
+- **Persistent Magic Link Authentication** — drivers authenticate through the canonical `/join/{token}` opaque-link route (no passwords or registration screens); the token resolves to a 30-day JWT session that is safely renewed for active drivers during its final seven days; invitation links remain subject to their configured expiry or operator revocation
 - **Language Selection on First Access** — drivers choose English or IsiZulu on their first visit; preference is stored and applied throughout the portal
 - **Welcome Video on First Access** — after language selection, drivers see a personalised welcome screen with the programme invite video before entering the portal
 - **Moodle Integration (Webhook + Polling)** — Moodle handles all video delivery, quizzes, and completion logic; BD syncs progress via real-time webhooks (primary) and a polling cron job (fallback); see `MOODLE_SETUP.md` for full configuration instructions
@@ -16,6 +16,9 @@ Key platform capabilities include:
 - **Personalised Portal** — every screen addresses the driver by first name; language preference (English or Zulu) is applied throughout
 - **Offline Download** — drivers can download course content over WiFi for offline viewing
 - **Driver Bulletins** — urgent and standard safety bulletins delivered to drivers with WhatsApp notification; drivers acknowledge and complete comprehension checks in-portal
+- **Installable Driver Portal** — the BetterDriver PWA provides branded home-screen icons and an Android install prompt after a driver has entered the portal
+- **Opt-in Push Foundation** — browser push subscriptions and delivery audit records are available behind a disabled-by-default flag; WhatsApp remains the driver fallback channel
+- **Deployment Experience** — a root-level GitHub build check, a deployment-ready PR template and a versioned integration runbook make the GFA/BetterDriver release train easier to review and reverse
 
 ---
 
@@ -51,7 +54,8 @@ app/
     auth/                     # Driver login, logout
     admin/                    # Admin-only routes (JWT protected)
     driver/                   # Driver profile, progress, certificate
-    join/[token]/             # Magic link resolution — resolves opaque token, issues JWT, redirects to portal
+    join/[token]/             # Canonical public driver entry — forwards GFA /join/{token} links to the invitation resolver
+    api/join/[token]/         # Magic link resolution — resolves opaque token, issues JWT, redirects to portal
     moodle/
       webhook/                # POST — receives real-time completion events from Moodle
       poll/                   # POST — cron fallback; polls Moodle for all active enrolments
@@ -85,17 +89,27 @@ MOODLE_SETUP.md               # Full Moodle + WhatsApp setup guide for Asif
 
 ---
 
+## Repository Layout and Vercel Configuration
+
+This GitHub repository has a **monorepo layout**. The BetterDriver Next.js application is nested in the repository’s `betterdriver/` directory alongside separate GFA and TAG source copies. The application `package.json`, `vercel.json`, `app/`, `public/`, and Supabase migrations are all under that directory.
+
+> **Required Vercel setting:** in the BetterDriver Vercel project, open **Settings → General → Root Directory**, set it to **`betterdriver`**, save, then redeploy the Preview deployment. The root must not be left blank because the Git root has no BetterDriver `package.json`.
+
+The GitHub Actions file belongs at the **Git repository root**: `.github/workflows/betterdriver-build-check.yml`. It deliberately uses `working-directory: betterdriver`, so dependency installation, type-checking and builds run against the nested application. The copy-safe source is also stored at `betterdriver/docs/deployment-assets/betterdriver-build-check.yml`. See [`docs/RELEASE-SCOPE-AND-MONOREPO-BOUNDARY.md`](docs/RELEASE-SCOPE-AND-MONOREPO-BOUNDARY.md) for the release boundary: GFA and TAG directories are pre-existing monorepo baseline content, not BetterDriver release changes.
+
 ## Local Development
 
 ```bash
 git clone https://github.com/Abdool11/betterdriver.git
-cd betterdriver
-npm install
+cd betterdriver/betterdriver
+npm ci
 cp .env.local.example .env.local
 # Fill in .env.local values
 # Apply all incremental migrations in order:
 #   supabase/migrations/20260502_phase1_auth_rebuild.sql
 #   supabase/migrations/20260504_moodle_integration.sql
+#   supabase/migrations/20260820_rbd2_driver_reaccess.sql
+#   supabase/migrations/20260822_rbd4_push_notifications.sql
 npm run dev
 ```
 
@@ -105,13 +119,13 @@ npm run dev
 
 1. GFA deploys training → creates a `driver_invitations` row with a UUID opaque token and sets `expires_at` to the campaign end date
 2. GFA sends WhatsApp with link: `https://betterdriver.co.za/join/{token}`
-3. Driver taps link → `GET /api/join/[token]` resolves the token, marks `first_accessed_at` if first visit, issues a 30-day JWT session cookie, and redirects to:
+3. Driver taps the canonical `GET /join/[token]` route, which forwards internally to `GET /api/join/[token]`. The resolver marks `first_accessed_at` if first visit, issues a 30-day JWT session cookie, and redirects to:
    - `/portal/language` — if first access and no language preference set
    - `/portal/welcome` — if first access and language already set
    - `/portal` — returning driver
 4. All portal pages call `requireDriverSession()` which reads the JWT cookie — no password ever required
-5. Sessions roll automatically on each visit; the driver is re-authenticated silently when the JWT nears expiry
-6. Operators can revoke a link at any time via GFA admin → the `revoked_at` field is checked on every token resolution
+5. Active driver sessions are renewed silently when fewer than seven days remain on the JWT. Idle sessions still expire and require a valid re-access link.
+6. Operators can revoke a link at any time via GFA admin; the `revoked_at` field is checked when an invitation token is resolved and by server-side driver-session guards.
 
 ---
 
@@ -136,8 +150,14 @@ npm run dev
 | `NEXT_PUBLIC_BD_URL` | Yes | Full public URL of this site (used in WhatsApp message links) |
 | `GFA_BASE_URL` | Yes | Green Freight Academy site URL |
 | `NEXT_PUBLIC_SITE_URL` | Yes | Full URL of this site in production |
+| `VAPID_PUBLIC_KEY` | Push only | Server VAPID public key |
+| `VAPID_PRIVATE_KEY` | Push only | Server VAPID private key; never expose this value |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Push only | Same public VAPID key, safe for the browser subscription request |
+| `ENABLE_PUSH_NOTIFICATIONS` | Release controlled | Leave `false` until real-device opt-in and WhatsApp fallback tests pass |
 
 > See `MOODLE_SETUP.md` for full Moodle configuration instructions and WhatsApp template copy.
+>
+> **Driver Experience V1:** The GFA companion release runbook at [`../greenfreightacademy/docs/releases/2026-08-commercial-compliance-v1/00-RELEASE-SUMMARY.md`](https://github.com/Abdool11/greenfreightacademy/tree/release/gfa-commercial-compliance-v1/docs/releases/2026-08-commercial-compliance-v1) explains the shared deployment, migration, feature-activation and rollback sequence.
 
 ---
 
@@ -153,24 +173,48 @@ All changes go through a branch and Pull Request — nothing is pushed directly 
 | Bug fix | `fix/short-description` | `fix/moodle-progress-sync` |
 | Content update | `content/short-description` | `content/update-help-page` |
 | Hotfix (urgent) | `hotfix/short-description` | `hotfix/driver-login-broken` |
+| Integration release | `release/short-description` | `release/betterdriver-driver-experience-v1` |
 
 ### Step-by-Step Workflow
 
 1. Create a branch from `main`: `git checkout -b feature/your-feature-name`
 2. Make changes and commit: `git commit -m "feat: describe what changed and why"`
-3. Push the branch: `git push origin feature/your-feature-name`
-4. Open a Pull Request on GitHub against `main`
-5. Review the diff — GitHub flags any conflicts before merge
-6. Approve and merge to `main`
-7. Delete the feature branch after merging
+3. Run `npm ci`, `npm run type-check` and `npm run build`.
+4. Push the branch: `git push origin feature/your-feature-name`.
+5. Complete the deployment-ready PR template, including migration, external configuration, feature-flag and rollback details.
+6. Wait for the GitHub **BetterDriver Build Check** and a Vercel Preview deployment. Confirm the Vercel project Root Directory is `betterdriver` before interpreting any build failure.
+7. For a cumulative release, merge feature commits into a `release/...` branch and open one final PR to `main` after preview tests pass.
+8. Approve and merge only after the preview checklist passes; delete the source branch after the release is stable.
 
 ---
 
+## RBD-2 Driver Re-access and WhatsApp Onboarding
+
+RBD-2 adds a rate-limited, non-enumerating driver re-access request flow at `/start`. A registered driver can request a fresh 30-day opaque BetterDriver link through an approved Meta Utility template. The required migration, Meta template parameters, paired GFA message release, verification journey and failsafe rollback are documented in `docs/RBD-2-DRIVER-REACCESS-AND-WHATSAPP-HANDOVER.md`.
+
+## RBD-1 Handover Stabilisation — Deployment and Rollback
+
+RBD-1 adds an explicit in-application `/join/[token]` route so GFA WhatsApp links no longer depend on an undocumented proxy rewrite. It also renews active driver sessions only during the final seven days of a 30-day session.
+
+### Pre-merge verification
+
+1. From a deployed GFA test quote, send a BetterDriver link and confirm `https://betterdriver.co.za/join/{token}` reaches the first-access language/welcome flow.
+2. Open an existing valid link and confirm a returning driver reaches `/portal`.
+3. Confirm an invalid, revoked and expired token each redirect to `/start` with the correct error state.
+4. Use a test JWT with fewer than seven days remaining and confirm the portal response replaces the `bd_session` cookie with a new 30-day token.
+5. Confirm a driver session never grants access to `/admin`, and an admin session never grants access to `/portal`.
+
+### Failsafe rollback
+
+The change is self-contained: revert the RBD-1 Git commit or redeploy the prior known-good BetterDriver release. No SQL migration or environment-variable change is required. If an external `/join/*` proxy rewrite exists, it may remain in place during and after rollback because the in-app route is compatible with the current GFA link format.
+
 ## Deployment
 
-Packaged as a standalone tar.gz including `server.js`, `pm2.config.js`, `nginx.conf`, `deploy.sh`, `QUICK-START-CARD.md`, and `.env.local.example`.
+Vercel deploys `main` to production. Feature and release branches should be reviewed on their Vercel Preview deployment before a PR is merged. BetterDriver’s companion integration branch is `release/betterdriver-driver-experience-v1`.
 
-> **Important:** The Nginx config must include a `location /_next/static/` block. Without this the site loads without any styling. This is already included in the provided `nginx.conf`.
+> **Required before deployment:** set the Vercel project **Root Directory** to `betterdriver`. A blank Root Directory makes Vercel look for `package.json` at the monorepo root and will break the BetterDriver build.
+>
+> **Important:** Do not push directly to `main`. Keep `ENABLE_PUSH_NOTIFICATIONS=false` until real-device opt-in and WhatsApp-fallback testing are documented.
 
 ---
 

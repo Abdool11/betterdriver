@@ -18,11 +18,7 @@ export const metadata: Metadata = {
   description: "Log in to your BetterDriver Driver University.",
 };
 
-export default function LoginPage({
-  searchParams,
-}: {
-  searchParams: { returnTo?: string };
-}) {
+export default function LoginPage() {
   return (
     <div style={{ minHeight: "100vh", background: "#111827", display: "flex", flexDirection: "column" }}>
       <Navigation />
