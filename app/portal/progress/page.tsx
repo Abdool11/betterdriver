@@ -1,5 +1,6 @@
 import { Metadata } from "next";
 import { MOCK_ENROLMENT, MOCK_MODULES, MOCK_CPD_RECORDS } from "@/lib/constants";
+import DemoContentNotice from "@/components/portal/DemoContentNotice";
 import { CheckCircle2, TrendingUp, Calendar } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
 
@@ -23,9 +24,7 @@ export default function ProgressPage() {
 
   return (
     <div className="page-content">
-      <div className="mock-banner" style={{ marginBottom: "1.5rem" }}>
-        MOCK DATA — Asif to connect live Supabase progress data
-      </div>
+      <DemoContentNotice description="The progress, module and CPD values below are demonstration data. They are not the training record for the signed-in account shown in the portal header." />
       <TranslatedPageHeader pageKey="progress" />
 
       {/* Stats row */}
