@@ -120,14 +120,14 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
   const labels = NAV_LABELS[lang];
 
   const NAV = [
-    { href: "/portal", label: labels.tasks, icon: CheckSquare, exact: true },
-    { href: "/portal/course", label: labels.course, icon: BookOpen },
-    { href: "/portal/progress", label: labels.progress, icon: TrendingUp },
-    { href: "/portal/certificate", label: labels.certificate, icon: Award },
-    { href: "/portal/cpd", label: labels.cpd, icon: RefreshCw },
-    { href: "/portal/bulletins", label: labels.bulletins, icon: Bell, badge: true },
-    { href: "/portal/profile", label: labels.profile, icon: User },
-    { href: "/portal/support", label: labels.support, icon: HelpCircle },
+    { href: "/portal", label: labels.tasks, mobileLabel: lang === "zu" ? "Imisebenzi" : "Tasks", icon: CheckSquare, exact: true },
+    { href: "/portal/course", label: labels.course, mobileLabel: lang === "zu" ? "Ikhosi" : "Course", icon: BookOpen },
+    { href: "/portal/progress", label: labels.progress, mobileLabel: lang === "zu" ? "Inqubekela" : "Progress", icon: TrendingUp },
+    { href: "/portal/certificate", label: labels.certificate, mobileLabel: lang === "zu" ? "Isitifiketi" : "Certificate", icon: Award },
+    { href: "/portal/cpd", label: labels.cpd, mobileLabel: "CPD", icon: RefreshCw },
+    { href: "/portal/bulletins", label: labels.bulletins, mobileLabel: lang === "zu" ? "Izaziso" : "Bulletins", icon: Bell, badge: true },
+    { href: "/portal/profile", label: labels.profile, mobileLabel: lang === "zu" ? "Iphrofayeli" : "Profile", icon: User },
+    { href: "/portal/support", label: labels.support, mobileLabel: lang === "zu" ? "Usizo" : "Support", icon: HelpCircle },
   ];
 
   const isActive = (href: string, exact?: boolean) => {
@@ -219,14 +219,17 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
             <div style={{ padding: "1rem", borderBottom: "1px solid var(--border)" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                 <div className="avatar">{initials}</div>
-                <div>
-                  <div style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--text-primary)" }}>
-                    {driver.firstName} {driver.lastName}
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: "0.6875rem", color: "var(--text-muted)", marginBottom: "0.125rem" }}>
+                      Signed in as
+                    </div>
+                    <div style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {driver.firstName} {driver.lastName}
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                      {labels.driverUniversity}
+                    </div>
                   </div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                    {labels.driverUniversity}
-                  </div>
-                </div>
               </div>
             </div>
           )}
@@ -310,8 +313,11 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
             <span className="app-bar-title">BetterDriver</span>
           </div>
           {driver && (
-            <div className="avatar" style={{ width: "2rem", height: "2rem", fontSize: "0.75rem" }}>
-              {initials}
+            <div className="mobile-account-chip" aria-label={`Signed in as ${driver.firstName} ${driver.lastName}`} title={`Signed in as ${driver.firstName} ${driver.lastName}`}>
+              <div className="avatar" style={{ width: "2rem", height: "2rem", fontSize: "0.75rem", flexShrink: 0 }}>
+                {initials}
+              </div>
+              <span>{driver.firstName}</span>
             </div>
           )}
         </div>
@@ -323,7 +329,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
 
         {/* ── Mobile bottom nav ── */}
         <nav className="bottom-nav" aria-label="Main navigation">
-          {NAV.slice(0, 5).map(({ href, label, icon: Icon, badge, exact }) => {
+          {NAV.slice(0, 5).map(({ href, label, mobileLabel, icon: Icon, badge, exact }) => {
             const active = isActive(href, exact);
             return (
               <Link
@@ -331,6 +337,8 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
                 href={href}
                 className={`bottom-nav-item tap-target${active ? " active" : ""}`}
                 aria-current={active ? "page" : undefined}
+                aria-label={label}
+                title={label}
               >
                 <div style={{ position: "relative" }}>
                   <Icon size={20} strokeWidth={active ? 2.5 : 1.75} />
@@ -338,7 +346,7 @@ export default function PortalLayout({ children }: { children: ReactNode }) {
                     <span className="bottom-nav-badge">{urgentCount}</span>
                   )}
                 </div>
-                <span>{label}</span>
+                <span>{mobileLabel}</span>
               </Link>
             );
           })}
