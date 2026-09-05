@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import Link from "next/link";
 import { MOCK_CPD_RECORDS } from "@/lib/constants";
+import DemoContentNotice from "@/components/portal/DemoContentNotice";
 import { AlertTriangle, Clock, CheckCircle2, ArrowRight } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
 
@@ -22,9 +23,7 @@ export default function CpdPage() {
 
   return (
     <div className="page-content">
-      <div className="mock-banner" style={{ marginBottom: "1.5rem" }}>
-        MOCK DATA — Asif to connect live Supabase CPD records
-      </div>
+      <DemoContentNotice description="The CPD and refresher activities below are sample content for demonstration. They are not assigned to, completed by, or due for the signed-in account." />
       <TranslatedPageHeader pageKey="cpd" />
 
       {/* Urgent / action required */}
