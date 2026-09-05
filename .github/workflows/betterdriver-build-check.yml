@@ -1,8 +1,6 @@
-# Copy this file unchanged to the repository root:
-# .github/workflows/betterdriver-build-check.yml
-#
-# BetterDriver is nested at betterdriver/ in this repository. The defaults below
-# ensure every npm command runs against betterdriver/package.json, not the Git root.
+# BetterDriver build gate.
+# The BetterDriver Next.js app lives at the repository root, so all npm
+# commands run against the root package.json.
 
 name: BetterDriver Build Check
 
@@ -28,9 +26,6 @@ jobs:
     name: Install, type-check and build BetterDriver
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: betterdriver
 
     steps:
       - name: Check out source
@@ -41,7 +36,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: betterdriver/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install locked dependencies
         run: npm ci
