@@ -1,6 +1,7 @@
 import { Metadata } from "next";
 import Link from "next/link";
 import { MOCK_ENROLMENT, MOCK_MODULES } from "@/lib/constants";
+import DemoContentNotice from "@/components/portal/DemoContentNotice";
 import { CheckCircle2, Clock, PlayCircle, ArrowRight, Lock } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -26,9 +27,7 @@ export default function CoursePage() {
 
   return (
     <div className="page-content">
-      <div className="mock-banner" style={{ marginBottom: "1.5rem" }}>
-        MOCK DATA — Asif to connect live Supabase enrolment + Moodle module data
-      </div>
+      <DemoContentNotice description="This course summary uses sample programme and module data for demonstration. The signed-in account shown in the portal header remains separate from these example values." />
       <div style={{ marginBottom: "2rem" }}>
         <h1 style={{ fontFamily: "var(--font-dm-sans), sans-serif", fontWeight: 800, fontSize: "1.75rem", color: "#F9FAFB", margin: "0 0 0.375rem" }}>
           {enrolment.programmeTitle}
