@@ -29,16 +29,18 @@ interface DriverStats {
   unreadBulletins: number;
 }
 
-const DEMO_STATS: DriverStats = {
-  firstName: "Demo",
-  lastName: "Driver",
-  programmeTitle: "Driver University Programme",
-  progressPercent: 42,
-  completedModules: 5,
-  totalModules: 12,
-  cpdDue: true,
+// Neutral starting state — a brand-new driver has 0% progress until the
+// dashboard API reports otherwise. Never seed the UI with fake progress.
+const INITIAL_STATS: DriverStats = {
+  firstName: "",
+  lastName: "",
+  programmeTitle: "",
+  progressPercent: 0,
+  completedModules: 0,
+  totalModules: 0,
+  cpdDue: false,
   certificateReady: false,
-  unreadBulletins: 2,
+  unreadBulletins: 0,
 };
 
 const COPY: Record<Lang, {
@@ -48,8 +50,12 @@ const COPY: Record<Lang, {
   loading: string;
   modulesOf: (done: number, total: number) => string;
   quickActions: string;
+  startTrain: string;
+  startTrainSub: string;
   continueTrain: string;
   continueTrainSub: string;
+  reviewTrain: string;
+  reviewTrainSub: string;
   cpdRefresh: string;
   cpdDue: string;
   cpdOk: string;
@@ -78,8 +84,12 @@ const COPY: Record<Lang, {
     loading: "Loading…",
     modulesOf: (done, total) => `${done} of ${total} modules completed`,
     quickActions: "Quick actions",
+    startTrain: "Start Training",
+    startTrainSub: "Begin your first module",
     continueTrain: "Continue Training",
     continueTrainSub: "Pick up where you left off",
+    reviewTrain: "Review Training",
+    reviewTrainSub: "Revisit any module",
     cpdRefresh: "CPD Refresh",
     cpdDue: "New module available",
     cpdOk: "Up to date",
@@ -108,8 +118,12 @@ const COPY: Record<Lang, {
     loading: "Iyalayisha…",
     modulesOf: (done, total) => `Izifundo ${done} kwezi ${total} ziqediwe`,
     quickActions: "Izenzo ezisheshayo",
+    startTrain: "Qala Ukuqeqesha",
+    startTrainSub: "Qala isifundo sakho sokuqala",
     continueTrain: "Qhubeka Ukuqeqesha",
     continueTrainSub: "Qhubeka lapho ushiye khona",
+    reviewTrain: "Buyekeza Izifundo",
+    reviewTrainSub: "Hlola noma yisiphi isifundo",
     cpdRefresh: "Ukuqeqesha Okuqhubekayo",
     cpdDue: "Isifundo esisha sitholakala",
     cpdOk: "Kuhleli kahle",
@@ -134,7 +148,7 @@ const COPY: Record<Lang, {
 };
 
 export default function PortalHomePage() {
-  const [stats, setStats] = useState<DriverStats>(DEMO_STATS);
+  const [stats, setStats] = useState<DriverStats>(INITIAL_STATS);
   const [loading, setLoading] = useState(true);
   const lang = useLanguage();
   const copy = COPY[lang];
@@ -156,6 +170,21 @@ export default function PortalHomePage() {
       : hour < 17
       ? copy.greetingAfternoon
       : copy.greetingEvening;
+
+  // CTA reflects real course state: new drivers start fresh, returning
+  // drivers pick up where they left off, completed drivers can revisit.
+  const hasStarted = stats.completedModules > 0;
+  const isComplete = stats.totalModules > 0 && stats.completedModules >= stats.totalModules;
+  const trainLabel = isComplete
+    ? copy.reviewTrain
+    : hasStarted
+    ? copy.continueTrain
+    : copy.startTrain;
+  const trainSub = isComplete
+    ? copy.reviewTrainSub
+    : hasStarted
+    ? copy.continueTrainSub
+    : copy.startTrainSub;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
@@ -247,7 +276,7 @@ export default function PortalHomePage() {
             gap: "0.875rem",
           }}
         >
-          {/* Continue Training */}
+          {/* Start / Continue Training */}
           <Link
             href="/portal/learning"
             style={{
@@ -284,10 +313,10 @@ export default function PortalHomePage() {
                   margin: "0 0 0.25rem",
                 }}
               >
-                {copy.continueTrain}
+                {trainLabel}
               </p>
               <p style={{ fontSize: "0.75rem", color: "#9CA3AF", margin: 0 }}>
-                {copy.continueTrainSub}
+                {trainSub}
               </p>
             </div>
           </Link>

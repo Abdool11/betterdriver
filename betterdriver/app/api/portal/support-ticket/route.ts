@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
   const supportEmail = await getConfig("bd_support_email");
   if (supportEmail) {
     try {
-      const { default: Resend } = await import("resend");
+      const { Resend } = await import("resend");
       const resend = new Resend(process.env.RESEND_API_KEY ?? "");
       await resend.emails.send({
         from: "BetterDriver Support <support@betterdriver.co.za>",
