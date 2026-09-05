@@ -14,6 +14,8 @@ Key platform capabilities include:
 - **WhatsApp Notifications** — automated messages sent via Meta Graph API at key milestones: welcome on first access, module completion, programme completion, and inactivity nudges at 7 and 14 days
 - **Module Landing Pages** — each module has a dedicated landing page showing video status, quiz status, and a Moodle deep-link launch button; the button is locked until all 5 videos are complete
 - **Personalised Portal** — every screen addresses the driver by first name; language preference (English or Zulu) is applied throughout
+- **Clear Demonstration Content** — intentionally sample-backed portal views display a prominent notice that distinguishes demonstration values from the signed-in account’s live record
+- **Responsive Mobile Navigation** — the five primary mobile portal tabs use concise visible labels, full accessible labels, overflow protection and safe-area-aware spacing on narrow screens
 - **Offline Download** — drivers can download course content over WiFi for offline viewing
 - **Driver Bulletins** — urgent and standard safety bulletins delivered to drivers with WhatsApp notification; drivers acknowledge and complete comprehension checks in-portal
 - **Installable Driver Portal** — the BetterDriver PWA provides branded home-screen icons and an Android install prompt after a driver has entered the portal
