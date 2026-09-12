@@ -10,7 +10,6 @@ import {
   moodleGetUserByEmail,
   normalizeProgrammeSlug,
 } from "@/lib/moodle";
-import { ensureCertificate } from "@/lib/certificate";
 
 /**
  * GET /api/portal/dashboard
@@ -209,24 +208,8 @@ export async function GET(req: NextRequest) {
       .eq("id", enrolment.id);
   }
 
-  // 6b. Auto-create certificate when the course is first detected as complete
-  let certificateNumber: string | null = null;
-  let certificateIssuedAt: string | null = null;
-  if (courseCompleted && enrolment) {
-    const cert = await ensureCertificate({
-      driverId: session.driverId,
-      enrolmentId: enrolment.id,
-      companyId: driver.company_id ?? null,
-      programme: canonicalSlug === "professional-truck-driver" ? "p1" : "p2",
-      enrolmentSlug: canonicalSlug,
-    });
-    if (cert) {
-      certificateNumber = cert.certificate_number;
-      certificateIssuedAt = cert.issued_at;
-    } else {
-      console.error("[DASHBOARD] ensureCertificate returned null for driver", session.driverId);
-    }
-  }
+  // BetterDriver records learning completion only. GFA controls certificate issuance,
+  // certificate status, PDFs and public verification through the approved handoff.
 
   // 7. Determine next module (first incomplete module in order)
   const nextModule = moodleModules.find((m) => m.completionstate === 0) ?? null;
@@ -248,9 +231,8 @@ export async function GET(req: NextRequest) {
       cpdDue: cpdOverdueCount > 0 || cpdUpcomingCount > 0,
       cpdOverdueCount,
       cpdUpcomingCount,
-      certificateReady: courseCompleted,
-      certificateNumber,
-      certificateIssuedAt,
+      certificateReady: false,
+      certificatePendingGfa: courseCompleted,
       unreadBulletins,
     },
     nextModule: nextModule
