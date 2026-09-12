@@ -1,153 +1,56 @@
-import { Metadata } from "next";
-import { Navigation } from "@/components/layout/Navigation";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { ArrowUpRight, Award, CheckCircle2, ShieldCheck } from "lucide-react";
 import { Footer } from "@/components/layout/Footer";
-import { MOCK_REGISTRY } from "@/lib/constants";
-import { Search, CheckCircle2, Award } from "lucide-react";
+import { Navigation } from "@/components/layout/Navigation";
 
 export const dynamic = "force-dynamic";
 
-
-// DATA REQUIREMENTS:
-// - registry: RegistryEntry[] — from /api/registry?q=searchQuery
-// - searchQuery: string — from URL search param ?q=
-// - Total certified count — from /api/metrics
-// TODO: Asif — implement /api/registry endpoint (Supabase query on certifications table, public read)
-// TODO: Asif — implement search with debounce on client side
-
 export const metadata: Metadata = {
-  title: "Certificate Registry",
-  description: "Publicly verifiable registry of BetterDriver certified professional drivers. Verify any certificate by driver name, ID number, or certificate number.",
+  title: "Certificate Verification",
+  description: "Official driver certificate verification is provided by Green Freight Academy.",
 };
 
-export default async function RegistryPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ q?: string }>;
-}) {
-  // TODO: Asif — replace with live /api/registry fetch filtered by searchParams.q
-  const resolvedSearchParams = await searchParams;
-  const results = MOCK_REGISTRY;
+const GFA_URL = process.env.NEXT_PUBLIC_GFA_URL?.replace(/\/$/, "") || "";
 
+export default function RegistryPage() {
   return (
     <div style={{ minHeight: "100vh", background: "#111827", display: "flex", flexDirection: "column" }}>
       <Navigation />
-
       <main style={{ flex: 1, paddingTop: "6rem" }}>
-        {/* Header */}
-        <section style={{ padding: "3rem 0 2rem", background: "#0D1520", borderBottom: "1px solid #2d3a4f" }}>
-          <div className="container" style={{ maxWidth: 1200, margin: "0 auto", padding: "0 1.5rem" }}>
-            <div className="pill pill-amber" style={{ marginBottom: "1rem" }}>Certificate Registry</div>
-            <h1 style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 800, fontSize: "clamp(1.75rem, 4vw, 2.75rem)", color: "#F9FAFB", marginBottom: "0.75rem" }}>
-              Driver Certification Registry
-            </h1>
-            <p style={{ color: "#9CA3AF", maxWidth: 560, lineHeight: 1.7, marginBottom: "1.5rem" }}>
-              Verify any BetterDriver certificate. Search by driver name, ID number, or certificate number. Results show the programme completed, date issued, and certificate status.
-            </p>
-
-            {/* Search */}
-            {/* TODO: Asif — wire to live /api/registry with debounced search */}
-            <div style={{ position: "relative", maxWidth: 480 }}>
-              <Search size={18} style={{ position: "absolute", left: "1rem", top: "50%", transform: "translateY(-50%)", color: "#6B7280" }} />
-              <input
-                type="search"
-                name="q"
-                defaultValue={resolvedSearchParams.q ?? ""}
-                placeholder="Search by driver name, ID number, or certificate number…"
-                style={{
-                  width: "100%",
-                  padding: "0.75rem 1rem 0.75rem 2.75rem",
-                  background: "#1C2333",
-                  border: "1px solid #2d3a4f",
-                  borderRadius: "0.75rem",
-                  color: "#F9FAFB",
-                  fontSize: "0.9375rem",
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
+        <section style={{ padding: "4rem 0", background: "#0D1520", borderBottom: "1px solid #2d3a4f" }}>
+          <div className="container" style={{ maxWidth: 760, margin: "0 auto", padding: "0 1.5rem" }}>
+            <div className="pill pill-amber" style={{ marginBottom: "1rem" }}>Certificate verification</div>
+            <h1 style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 800, fontSize: "clamp(1.75rem, 4vw, 2.75rem)", color: "#F9FAFB", margin: "0 0 0.75rem" }}>Verify a driver qualification</h1>
+            <p style={{ color: "#9CA3AF", maxWidth: 620, lineHeight: 1.7, margin: 0 }}>Green Freight Academy is the official source for professional driver certificate status, certificate PDFs and public verification. BetterDriver delivers learning and does not maintain a separate public certificate register.</p>
           </div>
         </section>
 
-        {/* Mock data banner */}
-        <div className="container" style={{ maxWidth: 1200, margin: "0 auto", padding: "1.5rem 1.5rem 0" }}>
-          <div className="mock-banner">
-            ⚠ MOCK DATA — Asif to connect live Supabase certifications table
-          </div>
-        </div>
-
-        {/* Results */}
         <section style={{ padding: "2rem 0 4rem" }}>
-          <div className="container" style={{ maxWidth: 1200, margin: "0 auto", padding: "0 1.5rem" }}>
-            <p style={{ color: "#6B7280", fontSize: "0.875rem", marginBottom: "1.5rem" }}>
-              Showing {results.length} certified drivers
-            </p>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              {results.map((entry) => (
-                <div
-                  key={entry.certNumber}
-                  style={{
-                    background: "#1C2333",
-                    border: "1px solid #2d3a4f",
-                    borderRadius: "1rem",
-                    padding: "1.25rem 1.5rem",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    flexWrap: "wrap",
-                    gap: "1rem",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-                    <div
-                      style={{
-                        width: 44,
-                        height: 44,
-                        background: "rgba(245, 158, 11, 0.12)",
-                        border: "1px solid rgba(245, 158, 11, 0.2)",
-                        borderRadius: "50%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontFamily: "'DM Sans', sans-serif",
-                        fontWeight: 700,
-                        fontSize: "1rem",
-                        color: "#F59E0B",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {entry.name.charAt(0)}
-                    </div>
-                    <div>
-                      <p style={{ fontFamily: "'DM Sans', sans-serif", fontWeight: 700, fontSize: "1rem", color: "#F9FAFB", margin: "0 0 0.125rem" }}>
-                        {entry.name}
-                      </p>
-                      <p style={{ fontSize: "0.8125rem", color: "#9CA3AF", margin: 0 }}>{entry.programme}</p>
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", alignItems: "center", gap: "1.5rem", flexWrap: "wrap" }}>
-                    <div style={{ textAlign: "right" }}>
-                      <p style={{ fontSize: "0.75rem", color: "#6B7280", margin: "0 0 0.125rem" }}>Certificate</p>
-                      <p style={{ fontFamily: "monospace", fontSize: "0.875rem", color: "#9CA3AF", margin: 0 }}>{entry.certNumber}</p>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <p style={{ fontSize: "0.75rem", color: "#6B7280", margin: "0 0 0.125rem" }}>Issued</p>
-                      <p style={{ fontSize: "0.875rem", color: "#9CA3AF", margin: 0 }}>{entry.issuedDate}</p>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-                      <CheckCircle2 size={16} style={{ color: "#10B981" }} />
-                      <span className="pill pill-green" style={{ fontSize: "0.6875rem" }}>Verified</span>
-                    </div>
-                  </div>
+          <div className="container" style={{ maxWidth: 760, margin: "0 auto", padding: "0 1.5rem" }}>
+            <div style={{ background: "#1C2333", border: "1px solid #2d3a4f", borderRadius: "1.25rem", padding: "1.5rem", display: "grid", gap: "1.25rem" }}>
+              <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
+                <div style={{ width: 44, height: 44, display: "grid", placeItems: "center", background: "rgba(20,184,166,0.1)", borderRadius: "50%", color: "#14b8a6", flexShrink: 0 }}><ShieldCheck size={22} /></div>
+                <div>
+                  <h2 style={{ color: "#F9FAFB", fontSize: "1.125rem", margin: "0 0 0.375rem" }}>Use the official GFA verification service</h2>
+                  <p style={{ color: "#9CA3AF", lineHeight: 1.55, margin: 0 }}>GFA controls the verified certificate record and returns only the information approved for public verification. This protects driver personal information and prevents duplicate records.</p>
                 </div>
-              ))}
+              </div>
+
+              {GFA_URL ? (
+                <a href={GFA_URL} style={{ display: "inline-flex", justifyContent: "center", alignItems: "center", gap: "0.5rem", padding: "0.8rem 1rem", borderRadius: "0.75rem", background: "#F59E0B", color: "#111827", textDecoration: "none", fontWeight: 800 }}>
+                  Open Green Freight Academy <ArrowUpRight size={17} />
+                </a>
+              ) : (
+                <div style={{ background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.25)", borderRadius: "0.75rem", padding: "1rem", color: "#FCD34D", fontSize: "0.875rem" }}>The GFA verification service link is being configured. Please contact Green Freight Academy for official verification.</div>
+              )}
             </div>
+
+            <div style={{ marginTop: "1rem", display: "flex", gap: "0.75rem", alignItems: "flex-start", color: "#9CA3AF", fontSize: "0.8125rem", lineHeight: 1.5 }}><CheckCircle2 size={17} style={{ color: "#10B981", flexShrink: 0, marginTop: "0.1rem" }} /><span>BetterDriver no longer displays sample driver names, ID numbers or certificate numbers. A driver’s official qualification is issued and verified by GFA.</span></div>
+            <p style={{ marginTop: "1.5rem", color: "#6B7280", fontSize: "0.875rem" }}>Are you a driver looking for your own learning record? <Link href="/start" style={{ color: "#FCD34D" }}>Open BetterDriver</Link> using your authorised link.</p>
           </div>
         </section>
       </main>
-
       <Footer />
     </div>
   );
