@@ -2,7 +2,7 @@
 
 **Website:** [betterdriver.co.za](https://betterdriver.co.za)
 
-BetterDriver is the driver-facing LMS portal for professional truck driver training and certification. Drivers access their assigned courses, track progress, download certificates, and maintain their profile. Companies activate cohorts through the Green Freight Academy. This repository contains the full source code for the BetterDriver platform.
+BetterDriver is the driver-facing learning-delivery portal for professional truck driver training. Drivers access only their assigned courses, track learning progress, read company bulletins and maintain a learner profile. Companies activate cohorts through Green Freight Academy (GFA). GFA remains the authority for professional identity, certificate lifecycle, certificate PDFs and public certificate verification; BetterDriver must use an approved, scoped GFA handoff rather than maintaining a competing registry or certificate authority. This repository contains the standalone BetterDriver platform source.
 
 **Design principle:** Zero friction between link tap and learning. Drivers never create passwords. A magic link tap silently authenticates the driver and lands them directly in their portal, pre-enrolled and ready to learn.
 
@@ -12,13 +12,12 @@ Key platform capabilities include:
 - **Welcome Video on First Access** — after language selection, drivers see a personalised welcome screen with the programme invite video before entering the portal
 - **Moodle Integration (Webhook + Polling)** — Moodle handles all video delivery, quizzes, and completion logic; BD syncs progress via real-time webhooks (primary) and a polling cron job (fallback); see `MOODLE_SETUP.md` for full configuration instructions
 - **WhatsApp Notifications** — automated messages sent via Meta Graph API at key milestones: welcome on first access, module completion, programme completion, and inactivity nudges at 7 and 14 days
-- **Module Landing Pages** — each module has a dedicated landing page showing video status, quiz status, and a Moodle deep-link launch button; the button is locked until all 5 videos are complete
-- **Personalised Portal** — every screen addresses the driver by first name; language preference (English or Zulu) is applied throughout
-- **Driver-Scoped Learning Data** — course, progress and CPD screens request only the authenticated driver’s active training, module-completion and CPD records; drivers without an assignment see an explicit empty state rather than representative demo data
-- **Clear Demonstration Content** — intentionally sample-backed portal views display a prominent notice that distinguishes demonstration values from the signed-in account’s live record
+- **Secure Moodle Module Handoff** — each assigned module is launched through a five-minute, signed Moodle handoff generated only after BetterDriver validates the signed-in driver, their active enrolment, the requested Moodle module and sequential access
+- **Live Driver-Scoped Portal Data** — course, progress, CPD, profile, tasks and company bulletin views use authenticated driver/company data; drivers without an assignment see explicit empty states rather than representative demo data
+- **GFA-Authoritative Certificates** — BetterDriver does not issue public certificates, host a public certificate registry or present itself as the verification destination; driver certificate access must be routed to GFA through the approved contract
 - **Responsive Mobile Navigation** — the five primary mobile portal tabs use concise visible labels, full accessible labels, overflow protection and safe-area-aware spacing on narrow screens
 - **Offline Download** — drivers can download course content over WiFi for offline viewing
-- **Driver Bulletins** — urgent and standard safety bulletins delivered to drivers with WhatsApp notification; drivers acknowledge and complete comprehension checks in-portal
+- **Driver Bulletins** — company-scoped safety and operational bulletins delivered to authenticated drivers; read acknowledgement is stored only for the signed-in driver
 - **Installable Driver Portal** — the BetterDriver PWA provides branded home-screen icons and an Android install prompt after a driver has entered the portal
 - **Opt-in Push Foundation** — browser push subscriptions and delivery audit records are available behind a disabled-by-default flag; WhatsApp remains the driver fallback channel
 - **Deployment Experience** — a root-level GitHub build check, a deployment-ready PR template and a versioned integration runbook make the GFA/BetterDriver release train easier to review and reverse
@@ -29,7 +28,7 @@ Key platform capabilities include:
 
 | Layer | Technology |
 | :--- | :--- |
-| Framework | Next.js 14 (App Router, standalone output) |
+| Framework | Next.js 15 (App Router, standalone output) |
 | Language | TypeScript |
 | Styling | Tailwind CSS |
 | Database | Supabase (PostgreSQL) |
@@ -43,7 +42,7 @@ Key platform capabilities include:
 
 | Role | Access | Description |
 | :--- | :--- | :--- |
-| Driver | Portal pages | Accesses courses, tracks progress, downloads certificate |
+| Driver | Portal pages | Accesses assigned learning, tracks delivery progress and opens the approved GFA certificate handoff when available |
 | Company | Activation flow | Activates cohort and registers drivers |
 | Admin | Admin dashboard | Manages drivers, cohorts, and platform settings |
 
@@ -68,16 +67,16 @@ app/
     welcome/                  # First-access welcome screen with invite video
     tasks/                    # Assigned training tasks
     course/                   # Programme overview — module list with lock/progress state
-    module/[id]/              # Module landing page — video list, quiz status, Moodle launch
-    progress/                 # Progress tracking
-    certificate/              # Certificate download
-    profile/                  # Driver profile management
-    bulletins/                # Driver bulletin list and detail
+    module/[id]/              # Assigned module view — secure Moodle handoff
+    progress/                 # Driver-scoped course and CPD progress
+    certificate/              # GFA-authoritative certificate access handoff (when approved)
+    profile/                  # Signed-in driver profile view
+    bulletins/                # Company-scoped bulletin list and read acknowledgement
   admin/                      # Admin dashboard (JWT protected)
   activate/                   # Redirect — forwards any /activate?token=xxx URLs to /join/[token]
   start/                      # Shown when no session exists; handles invalid/revoked/expired link errors
   login/                      # Driver login (fallback)
-  registry/                   # Public certified driver registry
+  registry/                   # GFA-authoritative public verification handoff (no local registry data)
   help/                       # Help and support
   about/ contact/ privacy/ terms/
 components/                   # Shared React components
@@ -94,17 +93,17 @@ MOODLE_SETUP.md               # Full Moodle + WhatsApp setup guide for Asif
 
 ## Repository Layout and Vercel Configuration
 
-This GitHub repository has a **monorepo layout**. The BetterDriver Next.js application is nested in the repository’s `betterdriver/` directory alongside separate GFA and TAG source copies. The application `package.json`, `vercel.json`, `app/`, `public/`, and Supabase migrations are all under that directory.
+This is the standalone BetterDriver repository. The application `package.json`, `app/`, `public/`, `supabase/`, `.env.local.example` and deployment configuration are at the repository root. Do not copy, vendor, mount or merge GFA, TAG or SafeFreight source, schema, migration, environment, build or deployment files into this repository.
 
-> **Required Vercel setting:** in the BetterDriver Vercel project, open **Settings → General → Root Directory**, set it to **`betterdriver`**, save, then redeploy the Preview deployment. The root must not be left blank because the Git root has no BetterDriver `package.json`.
+> **Required Vercel setting:** in the BetterDriver Vercel project, open **Settings → General → Root Directory**, leave it **blank**, save and redeploy the Preview deployment. BetterDriver is built from the repository root.
 
-The GitHub Actions file belongs at the **Git repository root**: `.github/workflows/betterdriver-build-check.yml`. It deliberately uses `working-directory: betterdriver`, so dependency installation, type-checking and builds run against the nested application. The copy-safe source is also stored at `betterdriver/docs/deployment-assets/betterdriver-build-check.yml`. See [`docs/RELEASE-SCOPE-AND-MONOREPO-BOUNDARY.md`](docs/RELEASE-SCOPE-AND-MONOREPO-BOUNDARY.md) for the release boundary: GFA and TAG directories are pre-existing monorepo baseline content, not BetterDriver release changes.
+The GitHub Actions file belongs at `.github/workflows/betterdriver-build-check.yml` and must install, type-check and build from the repository root. The release boundary remains product-specific: GFA, TAG and SafeFreight functionality is reused only through an expressly approved versioned package, API, SSO or webhook contract.
 
 ## Local Development
 
 ```bash
 git clone https://github.com/Abdool11/betterdriver.git
-cd betterdriver/betterdriver
+cd betterdriver
 npm ci
 cp .env.local.example .env.local
 # Fill in .env.local values
@@ -147,11 +146,12 @@ npm run dev
 | `MOODLE_ECO_DRIVER_COURSE_ID` | Yes | Moodle course ID for Eco-Driver programme |
 | `MOODLE_WEBHOOK_SECRET` | Yes | Shared secret for validating Moodle webhook requests |
 | `MOODLE_POLL_SECRET` | Yes | Bearer token for authorising cron poll requests |
+| `MOODLE_AUTOLOGIN_SECRET` | Yes for module handoff | Shared minimum-32-character secret used only by BetterDriver and Moodle to create five-minute driver/module launch handoffs |
 | `META_WA_TOKEN` | Yes | Meta Graph API permanent system user token |
 | `META_WA_PHONE_NUMBER_ID` | Yes | Meta WhatsApp Business phone number ID |
 | `META_WA_API_VERSION` | No | Meta Graph API version (default: v19.0) |
 | `NEXT_PUBLIC_BD_URL` | Yes | Full public URL of this site (used in WhatsApp message links) |
-| `GFA_BASE_URL` | Yes | Green Freight Academy site URL |
+| `NEXT_PUBLIC_GFA_URL` | Yes | Green Freight Academy public URL; BetterDriver must use only the approved GFA certificate/verification handoff, not an assumed internal endpoint |
 | `NEXT_PUBLIC_SITE_URL` | Yes | Full URL of this site in production |
 | `VAPID_PUBLIC_KEY` | Push only | Server VAPID public key |
 | `VAPID_PRIVATE_KEY` | Push only | Server VAPID private key; never expose this value |
@@ -160,7 +160,7 @@ npm run dev
 
 > See `MOODLE_SETUP.md` for full Moodle configuration instructions and WhatsApp template copy.
 >
-> **Driver Experience V1:** The GFA companion release runbook at [`../greenfreightacademy/docs/releases/2026-08-commercial-compliance-v1/00-RELEASE-SUMMARY.md`](https://github.com/Abdool11/greenfreightacademy/tree/release/gfa-commercial-compliance-v1/docs/releases/2026-08-commercial-compliance-v1) explains the shared deployment, migration, feature-activation and rollback sequence.
+> **Cross-product boundary:** coordinate GFA/BetterDriver releases through the approved versioned handoff contract. Do not copy, mount or depend on GFA source, migrations, deployment scripts or environment files from this repository.
 
 ---
 
@@ -172,7 +172,7 @@ All changes go through a branch and Pull Request — nothing is pushed directly 
 
 | Type | Pattern | Example |
 | :--- | :--- | :--- |
-| New feature | `feature/short-description` | `feature/certificate-pdf-download` |
+| New feature | `feature/short-description` | `feature/live-driver-data-moodle-handoff` |
 | Bug fix | `fix/short-description` | `fix/moodle-progress-sync` |
 | Content update | `content/short-description` | `content/update-help-page` |
 | Hotfix (urgent) | `hotfix/short-description` | `hotfix/driver-login-broken` |
@@ -185,7 +185,7 @@ All changes go through a branch and Pull Request — nothing is pushed directly 
 3. Run `npm ci`, `npm run type-check` and `npm run build`.
 4. Push the branch: `git push origin feature/your-feature-name`.
 5. Complete the deployment-ready PR template, including migration, external configuration, feature-flag and rollback details.
-6. Wait for the GitHub **BetterDriver Build Check** and a Vercel Preview deployment. Confirm the Vercel project Root Directory is `betterdriver` before interpreting any build failure.
+6. Wait for the GitHub **BetterDriver Build Check** and a Vercel Preview deployment. Confirm the Vercel project Root Directory is blank before interpreting any build failure.
 7. For a cumulative release, merge feature commits into a `release/...` branch and open one final PR to `main` after preview tests pass.
 8. Approve and merge only after the preview checklist passes; delete the source branch after the release is stable.
 
@@ -215,9 +215,9 @@ The change is self-contained: revert the RBD-1 Git commit or redeploy the prior 
 
 Vercel deploys `main` to production. Feature and release branches should be reviewed on their Vercel Preview deployment before a PR is merged. BetterDriver’s companion integration branch is `release/betterdriver-driver-experience-v1`.
 
-> **Required before deployment:** set the Vercel project **Root Directory** to `betterdriver`. A blank Root Directory makes Vercel look for `package.json` at the monorepo root and will break the BetterDriver build.
+> **Required before deployment:** leave the Vercel project **Root Directory** blank. BetterDriver’s `package.json` is at the repository root.
 >
-> **Important:** Do not push directly to `main`. Keep `ENABLE_PUSH_NOTIFICATIONS=false` until real-device opt-in and WhatsApp-fallback testing are documented.
+> **Important:** Do not push directly to `main`. Keep `ENABLE_PUSH_NOTIFICATIONS=false` until real-device opt-in and WhatsApp-fallback testing are documented. Never promote a branch that alters certificate authority or public verification without the approved GFA handoff contract.
 
 ---
 
