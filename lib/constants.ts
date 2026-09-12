@@ -1,11 +1,10 @@
 // ─── BetterDriver — Static Constants ─────────────────────────────────────────
-// All static strings, navigation config, and mock data for the BetterDriver frontend.
-// TODO: Asif — replace MOCK_* constants with live Supabase/Moodle data.
+// Static strings, navigation configuration and public programme information for the BetterDriver frontend.
 
 export const SITE_NAME = "BetterDriver";
 export const SITE_TAGLINE = "The driver development portal";
 export const SITE_DESCRIPTION =
-  "BetterDriver is where professional truck drivers enrol in training, complete programmes, earn certification, and build their professional record.";
+  "BetterDriver is where professional truck drivers enrol in learning, complete programmes and build their learning record; Green Freight Academy issues and verifies professional certification.";
 
 // ─── Logo & Brand ─────────────────────────────────────────────────────────────
 // TODO: Asif — replace with final BetterDriver logo CDN URL
@@ -129,159 +128,8 @@ export const PROGRAMMES = [
   },
 ];
 
-// ─── Mock Data — Portal Screens ───────────────────────────────────────────────
-// TODO: Asif — replace all MOCK_* constants with live Supabase queries.
-// These are used as fallback/demo data only. Remove [MOCK DATA] banners when live.
-
-export const MOCK_DRIVER = {
-  id: "drv_001",
-  name: "Sipho Dlamini",
-  email: "sipho.dlamini@example.com",
-  mobile: "+27 82 555 0123",
-  companyName: "Auto Carriers",
-  profileCompletionPercent: 72,
-  idNumber: "8501015001087",
-  licenceNumber: "GP-2019-00445",
-  licenceCode: "EC",
-  pdpNumber: "PDP-2024-11234",
-  pdpExpiry: "2027-03-15",
-  currentEmployer: "Auto Carriers (Pty) Ltd",
-  yearsExperience: 7,
-  vehicleTypes: ["Interlink", "Rigid truck"],
-};
-
-export const MOCK_TASKS = [
-  {
-    id: "task_001",
-    type: "module",
-    status: "in-progress",
-    title: "Module 4: Safe Following Distance",
-    description: "Continue your Professional Truck Driver programme",
-    programmeTitle: "Professional Truck Driver",
-    priority: "normal",
-    isOverdue: false,
-    estimatedMinutes: 45,
-    progressPercent: 58,
-    dueLabel: undefined as string | undefined,
-    actionLabel: "Resume module",
-    actionHref: "/portal/course",
-  },
-  {
-    id: "task_002",
-    type: "cpd",
-    status: "urgent",
-    title: "Q1 CPD: Tyre Management in Hot Conditions",
-    description: "Quarterly CPD due by 30 April 2026",
-    programmeTitle: "Professional Truck Driver",
-    priority: "urgent",
-    dueDate: "2026-04-30",
-    dueLabel: "30 Apr 2026",
-    isOverdue: false,
-    estimatedMinutes: 30,
-    progressPercent: undefined as number | undefined,
-    actionLabel: "Start CPD",
-    actionHref: "/portal/cpd",
-  },
-  {
-    id: "task_003",
-    type: "refresh",
-    status: "urgent",
-    title: "Urgent Refresh: Load Securing Protocol Update",
-    description: "Your company has requested an urgent CPD intervention",
-    programmeTitle: "Professional Truck Driver",
-    priority: "urgent",
-    dueDate: "2026-04-20",
-    dueLabel: "20 Apr 2026",
-    isOverdue: false,
-    estimatedMinutes: 20,
-    progressPercent: undefined as number | undefined,
-    actionLabel: "Start now",
-    actionHref: "/portal/cpd",
-  },
-  {
-    id: "task_004",
-    type: "profile",
-    status: "upcoming",
-    title: "Complete your professional profile",
-    description: "Your profile is 72% complete — add your PDP number and work history",
-    priority: "normal",
-    isOverdue: false,
-    dueLabel: "No deadline",
-    progressPercent: undefined as number | undefined,
-    actionLabel: "Update profile",
-    actionHref: "/portal/profile",
-  },
-];
-
-export const MOCK_ENROLMENT = {
-  id: "enr_001",
-  programmeId: "professional-truck-driver",
-  programmeTitle: "The Professional Truck Driver Programme",
-  status: "in-progress",
-  progressPercent: 58,
-  currentModuleTitle: "Module 4: Safe Following Distance",
-  startedAt: "2026-01-15",
-  cpdCompletions: 1,
-  nextCpdDueDate: "2026-04-30",
-};
-
-export const MOCK_MODULES = [
-  { id: "m01", title: "Module 1: The Professional Driver Mindset", status: "completed", durationMinutes: 40 },
-  { id: "m02", title: "Module 2: Vehicle Pre-Trip Inspection", status: "completed", durationMinutes: 50 },
-  { id: "m03", title: "Module 3: Defensive Driving Principles", status: "completed", durationMinutes: 45 },
-  { id: "m04", title: "Module 4: Safe Following Distance", status: "in-progress", durationMinutes: 45 },
-  { id: "m05", title: "Module 5: Load Management and Weight Distribution", status: "upcoming", durationMinutes: 55 },
-  { id: "m06", title: "Module 6: Fatigue Management", status: "upcoming", durationMinutes: 40 },
-  { id: "m07", title: "Module 7: Emergency Procedures", status: "upcoming", durationMinutes: 50 },
-  { id: "m08", title: "Module 8: Professionalism and Customer Interaction", status: "upcoming", durationMinutes: 35 },
-];
-
-export const MOCK_CPD_RECORDS = [
-  {
-    id: "cpd_001",
-    title: "Q1 2026: Tyre Management in Hot Conditions",
-    status: "upcoming",
-    dueDate: "2026-04-30",
-    programmeTitle: "Professional Truck Driver",
-  },
-  {
-    id: "cpd_002",
-    title: "Urgent Refresh: Load Securing Protocol Update",
-    status: "urgent",
-    dueDate: "2026-04-20",
-    programmeTitle: "Professional Truck Driver",
-  },
-  {
-    id: "cpd_003",
-    title: "Q4 2025: Night Driving Safety",
-    status: "completed",
-    completedAt: "2025-12-18",
-    completedOnTime: true,
-    programmeTitle: "Professional Truck Driver",
-  },
-];
-
-// ─── Registry Mock Data ───────────────────────────────────────────────────────
-// TODO: Asif — replace with live Supabase query: SELECT drivers.name, certifications.* FROM certifications JOIN drivers ON drivers.id = certifications.driver_id WHERE certifications.status = 'active'
-export const MOCK_REGISTRY = [
-  { id: "r001", name: "Sipho Dlamini", certNumber: "BD-2026-00127", programme: "Professional Truck Driver", issuedDate: "Mar 2026", company: "Auto Carriers" },
-  { id: "r002", name: "Thabo Nkosi", certNumber: "BD-2026-00128", programme: "Professional Truck Driver", issuedDate: "Mar 2026", company: "Auto Carriers" },
-  { id: "r003", name: "Lungelo Mthembu", certNumber: "BD-2026-00129", programme: "Eco-Driver", issuedDate: "Feb 2026", company: "KDG Transport" },
-  { id: "r004", name: "Bongani Zulu", certNumber: "BD-2026-00130", programme: "Professional Truck Driver", issuedDate: "Feb 2026", company: "KDG Transport" },
-  { id: "r005", name: "Mandla Khumalo", certNumber: "BD-2026-00131", programme: "Professional Truck Driver", issuedDate: "Jan 2026", company: "Auto Carriers" },
-  { id: "r006", name: "Nhlanhla Dube", certNumber: "BD-2026-00132", programme: "Eco-Driver", issuedDate: "Jan 2026", company: "Auto Carriers" },
-  { id: "r007", name: "Siyanda Mhlongo", certNumber: "BD-2026-00133", programme: "Professional Truck Driver", issuedDate: "Dec 2025", company: "KDG Transport" },
-  { id: "r008", name: "Thandolwethu Ngema", certNumber: "BD-2026-00134", programme: "Professional Truck Driver", issuedDate: "Dec 2025", company: "Auto Carriers" },
-];
-
-export const MOCK_CERTIFICATE = {
-  id: "cert_001",
-  driverName: "Sipho Dlamini",
-  programmeName: "The Professional Truck Driver Programme",
-  issuedDate: "1 March 2026",
-  certNumber: "BD-2026-00127",
-  verificationUrl: "https://betterdriver.co.za/verify/BD-2026-00127",
-};
+// Driver-specific portal data is fetched from authenticated BetterDriver APIs.
+// GFA remains authoritative for official certificates and public verification.
 
 // ─── Footer Links ─────────────────────────────────────────────────────────────
 export const FOOTER_LINKS = {
@@ -325,11 +173,11 @@ export const FAQS = [
   },
   {
     question: "What is CPD and why do I need to do it?",
-    answer: "CPD stands for Continuing Professional Development. It is short, regular training that keeps your skills current and your certification valid. Your company or the training team will notify you when a CPD session is due.",
+    answer: "CPD stands for Continuing Professional Development. It is short, regular learning that keeps professional driving knowledge current. Your company or the training team will notify you when a CPD activity is assigned.",
   },
   {
     question: "How do I download my certificate?",
-    answer: "Go to My Certificate in your portal. Once your programme is complete, a Download PDF button will appear. Your certificate is also listed in the public Driver Registry.",
+    answer: "Open My Certificate in your portal. Green Freight Academy issues the official certificate and provides public verification. The secure GFA certificate handoff will be available after the approved integration is enabled.",
   },
   {
     question: "What if my company is not enrolled — can I join as an individual?",
@@ -342,4 +190,6 @@ export const FAQS = [
 ];
 
 // ─── Enrolment Statuses ──────────────────────────────────────────────────────
-export const ACTIVE_ENROLMENT_STATUSES = ["enrolled", "in_progress"];
+// The existing BetterDriver enrolment schema uses `active`; legacy records may use
+// `enrolled` or `in_progress`. All three represent launchable live learning.
+export const ACTIVE_ENROLMENT_STATUSES = ["active", "enrolled", "in_progress"];
