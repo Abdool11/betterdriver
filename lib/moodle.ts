@@ -870,6 +870,19 @@ export async function generateMoodleAutoLoginUrl(params: {
 }): Promise<string | null> {
   if (!MOODLE_URL || !AUTOLOGIN_SECRET.byteLength) return null;
 
+  let moodleOrigin = "";
+  let redirectOrigin = "";
+  try {
+    moodleOrigin = new URL(MOODLE_URL).origin;
+    redirectOrigin = new URL(params.redirectUrl).origin;
+  } catch {
+    return null;
+  }
+
+  // Do not issue a signed handoff to an arbitrary URL. The caller must have
+  // already resolved the target from the authenticated driver's Moodle modules.
+  if (redirectOrigin !== moodleOrigin) return null;
+
   const { SignJWT } = await import("jose");
   const token = await new SignJWT({
     uid: params.moodleUserId,
