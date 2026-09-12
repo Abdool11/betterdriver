@@ -23,11 +23,11 @@ const FAQS = [
   },
   {
     q: "How do I download my certificate?",
-    a: "Go to My Certificate in the left menu. Once your programme is complete, a Download PDF button will appear. If your certificate is not showing, please contact support.",
+    a: "Open My Certificate in BetterDriver. Green Freight Academy issues the official certificate and provides verification. The secure GFA certificate link will appear once the approved handoff is enabled; contact your company training coordinator or GFA support if you need help.",
   },
   {
     q: "What is CPD and why do I need to do it?",
-    a: "CPD stands for Continuing Professional Development. It is short, regular training that keeps your skills current and your certification valid. Your company or the training team will notify you when a CPD session is due.",
+    a: "CPD stands for Continuing Professional Development. It is short, regular learning that keeps professional driving knowledge current. Your company or training team will notify you when a CPD activity is assigned.",
   },
   {
     q: "Can I do training on my phone?",
