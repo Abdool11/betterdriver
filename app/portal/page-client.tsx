@@ -26,6 +26,7 @@ interface DriverStats {
   totalModules: number;
   cpdDue: boolean;
   certificateReady: boolean;
+  certificatePendingGfa: boolean;
   unreadBulletins: number;
 }
 
@@ -40,6 +41,7 @@ const INITIAL_STATS: DriverStats = {
   totalModules: 0,
   cpdDue: false,
   certificateReady: false,
+  certificatePendingGfa: false,
   unreadBulletins: 0,
 };
 
@@ -62,6 +64,7 @@ const COPY: Record<Lang, {
   viewCert: string;
   certReady: string;
   certPending: string;
+  certAwaitingGfa: string;
   getHelp: string;
   getHelpSub: string;
   wifiTitle: string;
@@ -96,6 +99,7 @@ const COPY: Record<Lang, {
     viewCert: "View Certificate",
     certReady: "Ready to download",
     certPending: "Complete training first",
+    certAwaitingGfa: "Learning complete — GFA certificate pending",
     getHelp: "Get Help",
     getHelpSub: "Support & FAQs",
     wifiTitle: "Save data — download on WiFi",
@@ -130,6 +134,7 @@ const COPY: Record<Lang, {
     viewCert: "Buka Isitifiketi",
     certReady: "Ilungele ukulanda",
     certPending: "Qeda ukuqeqesha kuqala",
+    certAwaitingGfa: "Ukuqeqesha kuqediwe — isitifiketi se-GFA sisalindile",
     getHelp: "Thola Usizo",
     getHelpSub: "Usizo nezimpendulo",
     wifiTitle: "Londoloza idatha —landa nge-WiFi",
@@ -416,6 +421,8 @@ export default function PortalHomePage() {
                 height: 40,
                 background: stats.certificateReady
                   ? "rgba(16,185,129,0.2)"
+                  : stats.certificatePendingGfa
+                  ? "rgba(59,130,246,0.16)"
                   : "rgba(255,255,255,0.05)",
                 borderRadius: "0.75rem",
                 display: "flex",
@@ -423,7 +430,7 @@ export default function PortalHomePage() {
                 justifyContent: "center",
               }}
             >
-              <Award size={20} color={stats.certificateReady ? "#10B981" : "#6B7280"} />
+              <Award size={20} color={stats.certificateReady ? "#10B981" : stats.certificatePendingGfa ? "#60A5FA" : "#6B7280"} />
             </div>
             <div>
               <p
@@ -440,11 +447,11 @@ export default function PortalHomePage() {
               <p
                 style={{
                   fontSize: "0.75rem",
-                  color: stats.certificateReady ? "#10B981" : "#9CA3AF",
+                  color: stats.certificateReady ? "#10B981" : stats.certificatePendingGfa ? "#60A5FA" : "#9CA3AF",
                   margin: 0,
                 }}
               >
-                {stats.certificateReady ? copy.certReady : copy.certPending}
+                {stats.certificateReady ? copy.certReady : stats.certificatePendingGfa ? copy.certAwaitingGfa : copy.certPending}
               </p>
             </div>
           </Link>
