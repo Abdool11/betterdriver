@@ -3,21 +3,20 @@ import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import {
-  moodleGetCourseModules,
+  isMoodleModuleComplete,
+  moodleGetLearningSnapshot,
   normalizeProgrammeSlug,
-  MOODLE_URL,
-  generateMoodleAutoLoginUrl,
-  moodleUpdateModuleCompletion,
 } from "@/lib/moodle";
 
 export const dynamic = "force-dynamic";
 
 /**
  * POST /api/portal/progress
- * Body: { moduleId: string, completed: boolean }
+ * Body: { moduleId: string }
  *
- * 1. Marks the module complete in BD's database
- * 2. Simulates a Moodle page view to trigger native completion tracking
+ * Compatibility endpoint for a completed Moodle quiz. BetterDriver never marks
+ * a learner complete from browser input: it re-reads the driver-specific Moodle
+ * activity state and stores only the aggregate learning summary.
  */
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -25,173 +24,98 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { moduleId?: string; completed?: boolean; percentWatched?: number };
+  let body: { moduleId?: unknown };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { moduleId, completed, percentWatched } = body;
-  if (!moduleId || typeof completed !== "boolean") {
-    return NextResponse.json(
-      { error: "moduleId and completed are required" },
-      { status: 400 }
-    );
+  const moduleId = typeof body.moduleId === "string" ? body.moduleId.trim() : "";
+  if (!moduleId) {
+    return NextResponse.json({ error: "moduleId is required" }, { status: 400 });
   }
 
-  // Fetch driver + enrolment
-  const { data: driver, error: driverErr } = await supabaseAdmin
-    .from("drivers")
-    .select("id, moodle_user_id")
-    .eq("id", session.driverId)
-    .single();
+  const [{ data: driver, error: driverErr }, { data: enrolment, error: enrolmentErr }] = await Promise.all([
+    supabaseAdmin
+      .from("drivers")
+      .select("id, moodle_user_id")
+      .eq("id", session.driverId)
+      .single(),
+    supabaseAdmin
+      .from("enrolments")
+      .select("id, programme_slug, progress_percent, modules_completed, completed_at")
+      .eq("driver_id", session.driverId)
+      .in("status", ACTIVE_ENROLMENT_STATUSES)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
   if (driverErr || !driver) {
     return NextResponse.json({ error: "Driver not found" }, { status: 404 });
   }
+  if (enrolmentErr) {
+    console.error("[PROGRESS] Enrolment lookup failed:", enrolmentErr.message);
+    return NextResponse.json({ error: "Could not verify your programme assignment" }, { status: 500 });
+  }
+  if (!enrolment) {
+    return NextResponse.json({ error: "No active training programme is assigned to this driver profile" }, { status: 403 });
+  }
+  if (!driver.moodle_user_id) {
+    return NextResponse.json({ error: "Your learning account has not been provisioned yet" }, { status: 409 });
+  }
 
-  const { data: enrolment } = await supabaseAdmin
-    .from("enrolments")
-    .select("programme_slug, status")
-    .eq("driver_id", session.driverId)
-    .in("status", ACTIVE_ENROLMENT_STATUSES)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  try {
+    const snapshot = await moodleGetLearningSnapshot({
+      moodleUserId: driver.moodle_user_id,
+      programmeSlug: normalizeProgrammeSlug(enrolment.programme_slug ?? "professional-truck-driver"),
+    });
+    const module = snapshot.modules.find((candidate) => String(candidate.id) === moduleId);
 
-  const programmeSlug = enrolment?.programme_slug ?? "ptdp";
-  const canonicalSlug = normalizeProgrammeSlug(programmeSlug);
-
-  // Find the module in Moodle + update BD enrolment progress in parallel
-  let moduleUrl = "";
-  let foundModule = false;
-  let modules: Awaited<ReturnType<typeof moodleGetCourseModules>> = [];
-
-  // Kick off Moodle module fetch (needed for autologin URL + completion check)
-  const moodleModulesPromise = (async () => {
-    try {
-      const mods = await moodleGetCourseModules({
-        moodleUserId: driver.moodle_user_id ?? 0,
-        programmeSlug: canonicalSlug,
-      });
-      const mod = mods.find((m) => String(m.id) === moduleId);
-      if (mod) {
-        const fallbackUrl = `${MOODLE_URL}/mod/${mod.modname}/view.php?id=${mod.id}`;
-        if (mod.url && mod.url.includes("id=")) {
-          moduleUrl = mod.url;
-        } else if (mod.url) {
-          const sep = mod.url.includes("?") ? "&" : "?";
-          moduleUrl = `${mod.url}${sep}id=${mod.id}`;
-        } else {
-          moduleUrl = fallbackUrl;
-        }
-      }
-      return mods;
-    } catch (err) {
-      console.error("[PROGRESS] Moodle fetch failed:", err);
-      return [];
+    if (!module) {
+      return NextResponse.json({ error: "Module not found in your programme" }, { status: 404 });
     }
-  })();
-
-  // Kick off Supabase enrolment update in parallel
-  const enrolmentUpdatePromise = (async () => {
-    try {
-      const { data: currentEnrolment } = await supabaseAdmin
-        .from("enrolments")
-        .select("id, modules_completed, progress_percent")
-        .eq("driver_id", session.driverId)
-        .in("status", ACTIVE_ENROLMENT_STATUSES)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      return currentEnrolment;
-    } catch (err) {
-      console.error("[PROGRESS] Failed to fetch enrolment:", err);
-      return null;
-    }
-  })();
-
-  // Await both in parallel
-  const [fetchedModules, currentEnrolment] = await Promise.all([
-    moodleModulesPromise,
-    enrolmentUpdatePromise,
-  ]);
-  modules = fetchedModules;
-  foundModule = modules.some((m) => String(m.id) === moduleId);
-
-  // Update enrolment if completed and not already counted
-  if (currentEnrolment && completed) {
-    const moduleIndex = modules.findIndex((m) => String(m.id) === moduleId);
-    const alreadyCounted =
-      moduleIndex >= 0 && moduleIndex < (currentEnrolment.modules_completed ?? 0);
-    if (!alreadyCounted) {
-      const newCompleted = Math.max(
-        currentEnrolment.modules_completed ?? 0,
-        (currentEnrolment.modules_completed ?? 0) + 1
+    if (!isMoodleModuleComplete(module)) {
+      return NextResponse.json(
+        { error: "Moodle has not confirmed completion for this module yet. Please complete it in the learning player." },
+        { status: 409 }
       );
-      await supabaseAdmin
+    }
+
+    const justCompleted = snapshot.completed && !enrolment.completed_at;
+    const changed =
+      snapshot.progressPercent !== enrolment.progress_percent ||
+      snapshot.completedModules !== enrolment.modules_completed ||
+      justCompleted;
+
+    if (changed) {
+      const { error: updateError } = await supabaseAdmin
         .from("enrolments")
         .update({
-          modules_completed: newCompleted,
-          progress_percent: currentEnrolment.progress_percent,
-          status: "in_progress",
-          updated_at: new Date().toISOString(),
+          progress_percent: snapshot.progressPercent,
+          modules_completed: snapshot.completedModules,
+          completed_at: justCompleted ? new Date().toISOString() : enrolment.completed_at,
+          last_activity_at: new Date().toISOString(),
         })
-        .eq("id", currentEnrolment.id);
+        .eq("id", enrolment.id);
+      if (updateError) {
+        console.error("[PROGRESS] Enrolment summary update failed:", updateError.message);
+        return NextResponse.json({ error: "Could not save your confirmed learning progress" }, { status: 500 });
+      }
     }
+
+    return NextResponse.json({
+      success: true,
+      progress: {
+        completedModules: snapshot.completedModules,
+        totalModules: snapshot.totalModules,
+        progressPercent: snapshot.progressPercent,
+        completed: snapshot.completed,
+      },
+    });
+  } catch (error) {
+    console.error("[PROGRESS] Moodle confirmation failed:", error);
+    return NextResponse.json({ error: "Could not confirm your learning progress with Moodle" }, { status: 502 });
   }
-
-  // Upsert partial progress + push completion to Moodle in parallel
-  const partialProgressPromise = (async () => {
-    if (typeof percentWatched !== "number" || percentWatched < 0 || percentWatched > 100) return;
-    try {
-      await supabaseAdmin
-        .from("driver_module_progress")
-        .upsert(
-          {
-            driver_id: session.driverId,
-            module_id: moduleId,
-            percent_watched: Math.round(percentWatched),
-            last_watched_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "driver_id,module_id" }
-        );
-    } catch (err) {
-      console.error("[PROGRESS] Failed to upsert module progress:", err);
-    }
-  })();
-
-  const moodleCompletionPromise = (async () => {
-    if (!completed || !driver.moodle_user_id) return;
-    try {
-      await moodleUpdateModuleCompletion({
-        moodleUserId: driver.moodle_user_id,
-        cmid: parseInt(moduleId, 10),
-        completed: true,
-      });
-    } catch (err) {
-      console.error("[PROGRESS] Failed to update Moodle completion:", err);
-    }
-  })();
-
-  await Promise.all([partialProgressPromise, moodleCompletionPromise]);
-
-  // Generate a signed autologin URL so the CLIENT can trigger Moodle's
-  // native completion tracking (server-side fetches lack user cookies).
-  let moodleAutoLoginUrl: string | null = null;
-  if (foundModule && moduleUrl && driver.moodle_user_id) {
-    try {
-      moodleAutoLoginUrl = await generateMoodleAutoLoginUrl({
-        moodleUserId: driver.moodle_user_id,
-        redirectUrl: moduleUrl,
-      });
-    } catch (err) {
-      console.error("[PROGRESS] Failed to generate autologin URL:", err);
-    }
-  }
-
-  return NextResponse.json({ success: true, moodleUrl: moodleAutoLoginUrl });
 }

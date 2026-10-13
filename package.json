@@ -7,7 +7,8 @@
     "build": "NODE_ENV=production next build",
     "start": "next start",
     "lint": "next lint",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test:learning-integrity": "node --experimental-strip-types tests/unit/moodle-learning-integrity.test.mjs"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.1.2",

@@ -4,7 +4,9 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import {
   generateMoodleAutoLoginUrl,
-  moodleGetCourseModules,
+  isMoodleModuleComplete,
+  isMoodleModuleLocked,
+  moodleGetLearningSnapshot,
   normalizeProgrammeSlug,
 } from "@/lib/moodle";
 
@@ -42,7 +44,7 @@ export async function POST(req: NextRequest) {
       .single(),
     supabaseAdmin
       .from("enrolments")
-      .select("programme_slug, modules_completed")
+      .select("programme_slug")
       .eq("driver_id", session.driverId)
       .in("status", ACTIVE_ENROLMENT_STATUSES)
       .order("created_at", { ascending: false })
@@ -69,10 +71,11 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const modules = await moodleGetCourseModules({
+    const snapshot = await moodleGetLearningSnapshot({
       moodleUserId: driver.moodle_user_id,
       programmeSlug: normalizeProgrammeSlug(enrolment.programme_slug ?? "professional-truck-driver"),
     });
+    const modules = snapshot.modules;
 
     const moduleIndex = modules.findIndex((module) => String(module.id) === moduleId);
     const module = moduleIndex >= 0 ? modules[moduleIndex] : null;
@@ -81,12 +84,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "This learning module is not available for launch" }, { status: 404 });
     }
 
-    const completedModules = enrolment.modules_completed ?? 0;
-    const moduleCompleted = module.completionstate === 1 || module.completionstate === 2 || moduleIndex < completedModules;
-    const previousIncomplete = modules.slice(0, moduleIndex).some((candidate, index) => {
-      const completed = candidate.completionstate === 1 || candidate.completionstate === 2 || index < completedModules;
-      return !completed;
-    });
+    const moduleCompleted = isMoodleModuleComplete(module);
+    const previousIncomplete = isMoodleModuleLocked(modules, moduleIndex);
 
     if (!moduleCompleted && previousIncomplete) {
       return NextResponse.json({ error: "Complete the previous module before opening this one" }, { status: 403 });

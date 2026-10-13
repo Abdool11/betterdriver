@@ -3,7 +3,9 @@ import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import {
-  moodleGetCourseModules,
+  isMoodleModuleComplete,
+  isMoodleModuleLocked,
+  moodleGetLearningSnapshot,
   normalizeProgrammeSlug,
   pickMoodleDownloadFile,
   getBunnyVideoUrl,
@@ -89,16 +91,24 @@ export async function GET(req: NextRequest) {
     .limit(1)
     .maybeSingle();
 
-  const programmeSlug = enrolment?.programme_slug ?? "ptdp";
+  if (!enrolment) {
+    return NextResponse.json(
+      { error: "No active training programme is assigned to this driver profile" },
+      { status: 403 }
+    );
+  }
+
+  const programmeSlug = enrolment.programme_slug ?? "ptdp";
   const canonicalSlug = normalizeProgrammeSlug(programmeSlug);
 
-  // Fetch modules from Moodle and find the requested one
-  let modules: Awaited<ReturnType<typeof moodleGetCourseModules>> = [];
+  // Fetch the driver-specific learning snapshot before authorising a download.
+  let modules: Awaited<ReturnType<typeof moodleGetLearningSnapshot>>["modules"] = [];
   try {
-    modules = await moodleGetCourseModules({
+    const snapshot = await moodleGetLearningSnapshot({
       moodleUserId: driver.moodle_user_id,
       programmeSlug: canonicalSlug,
     });
+    modules = snapshot.modules;
   } catch (err) {
     console.error("[DOWNLOAD] Moodle fetch failed:", err);
     return NextResponse.json(
@@ -107,11 +117,19 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const mod = modules.find((m) => String(m.id) === moduleId);
+  const moduleIndex = modules.findIndex((module) => String(module.id) === moduleId);
+  const mod = moduleIndex >= 0 ? modules[moduleIndex] : null;
   if (!mod) {
     return NextResponse.json(
       { error: "Module not found in your programme" },
       { status: 404 }
+    );
+  }
+
+  if (!isMoodleModuleComplete(mod) && isMoodleModuleLocked(modules, moduleIndex)) {
+    return NextResponse.json(
+      { error: "Complete the previous module before downloading this material" },
+      { status: 403 }
     );
   }
 

@@ -10,13 +10,13 @@ Key platform capabilities include:
 - **Persistent Magic Link Authentication** — drivers authenticate through the canonical `/join/{token}` opaque-link route (no passwords or registration screens); the token resolves to a 30-day JWT session that is safely renewed for active drivers during its final seven days; invitation links remain subject to their configured expiry or operator revocation
 - **Language Selection on First Access** — drivers choose English or IsiZulu on their first visit; preference is stored and applied throughout the portal
 - **Welcome Video on First Access** — after language selection, drivers see a personalised welcome screen with the programme invite video before entering the portal
-- **Moodle Integration (Webhook + Polling)** — Moodle handles all video delivery, quizzes, and completion logic; BD syncs progress via real-time webhooks (primary) and a polling cron job (fallback); see `MOODLE_SETUP.md` for full configuration instructions
+- **Moodle Integration (Driver-Specific Completion)** — Moodle handles video delivery, quizzes and completion logic; BetterDriver reads completion per assigned Moodle user and activity, then uses the same snapshot for Course, Tasks, Dashboard, webhook sync and polling recovery; see `MOODLE_SETUP.md` for minimum service capability and configuration instructions
 - **WhatsApp Notifications** — automated messages sent via Meta Graph API at key milestones: welcome on first access, module completion, programme completion, and inactivity nudges at 7 and 14 days
 - **Secure Moodle Module Handoff** — each assigned module is launched through a five-minute, signed Moodle handoff generated only after BetterDriver validates the signed-in driver, their active enrolment, the requested Moodle module and sequential access
 - **Live Driver-Scoped Portal Data** — course, progress, CPD, profile, tasks and company bulletin views use authenticated driver/company data; drivers without an assignment see explicit empty states rather than representative demo data
 - **GFA-Authoritative Certificates** — BetterDriver does not issue public certificates, host a public certificate registry or present itself as the verification destination; driver certificate access must be routed to GFA through the approved contract
 - **Responsive Mobile Navigation** — the five primary mobile portal tabs use concise visible labels, full accessible labels, overflow protection and safe-area-aware spacing on narrow screens
-- **Offline Download** — drivers can download course content over WiFi for offline viewing
+- **Truthful Offline Download** — drivers can download only approved direct video or PDF assets over WiFi; Moodle HTML/player wrappers are never presented as offline content
 - **Driver Bulletins** — company-scoped safety and operational bulletins delivered to authenticated drivers; read acknowledgement is stored only for the signed-in driver
 - **Installable Driver Portal** — the BetterDriver PWA provides branded home-screen icons and an Android install prompt after a driver has entered the portal
 - **Opt-in Push Foundation** — browser push subscriptions and delivery audit records are available behind a disabled-by-default flag; WhatsApp remains the driver fallback channel
@@ -82,7 +82,7 @@ app/
 components/                   # Shared React components
 lib/                          # Utilities, constants, Supabase client, Moodle client
   auth.ts                     # Hybrid token auth: resolveInvitationToken, issueDriverSession, requireDriverSession
-  moodle.ts                   # Moodle REST API client: moodleGetProgress, moodleCreateUser, moodleCourseUrl
+  moodle.ts                   # Moodle REST API client and driver-specific activity completion snapshot
   whatsapp.ts                 # Meta Graph API WhatsApp client: all 5 BD message templates
 public/                       # Static assets
 supabase/migrations/          # SQL migration files (apply via Supabase SQL editor)
@@ -112,10 +112,17 @@ cp .env.local.example .env.local
 #   supabase/migrations/20260504_moodle_integration.sql
 #   supabase/migrations/20260820_rbd2_driver_reaccess.sql
 #   supabase/migrations/20260822_rbd4_push_notifications.sql
+#   supabase/migrations/20261013_learning_progress_integrity.sql
 npm run dev
 ```
 
 > **Database migrations:** Each file in `supabase/migrations/` is a standalone SQL script. Apply them in filename order via the Supabase dashboard SQL editor or the Supabase CLI (`supabase db push`).
+
+### Learning Progress Integrity Repair (2026-10-13)
+
+The `20261013_learning_progress_integrity.sql` migration adds only replay-safe audit fields for BetterDriver's existing Moodle webhook log. It does not create certificates, alter GFA data, provide cross-product database access or copy any sister-site schema.
+
+Before a Preview retest, the BetterDriver Moodle external service must include `core_completion_get_activities_completion_status` and have only the minimum `report/progress:view` capability in the BetterDriver programme course context. BetterDriver joins that response to Moodle course structure by course-module ID, so module completion, locks and totals are driver-specific and agree across the portal. The signed Moodle webhook must send `contextinstanceid` and `timecreated`; duplicate event keys are stored once only.
 
 ### Authentication Flow
 

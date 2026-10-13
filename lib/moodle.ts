@@ -26,6 +26,7 @@
  *    - enrol_manual_enrol_users
  *    - core_course_get_courses
  *    - core_completion_get_course_completion_status
+ *    - core_completion_get_activities_completion_status
  *    - core_course_get_contents
  *    - gradereport_user_get_grade_items
  *    - mod_quiz_get_quizzes_by_courses   (native quiz player)
@@ -34,7 +35,6 @@
  *    - mod_quiz_get_attempt_data         (native quiz player)
  *    - mod_quiz_process_attempt          (native quiz player)
  *    - mod_quiz_get_attempt_review       (native quiz player)
- *    - core_completion_update_activity_completion_status_manually
  *
  * 4. Add to .env.local:
  *    MOODLE_URL=https://your-moodle-domain.com
@@ -115,6 +115,12 @@ export interface MoodleCompletionStatus {
   progressPercent: number;
 }
 
+export interface MoodleActivityCompletionStatus {
+  cmid: number;
+  state: 0 | 1 | 2 | 3;
+  tracking: number;
+}
+
 export interface MoodleFile {
   type: string; // e.g. "file" | "url"
   filename: string;
@@ -130,6 +136,7 @@ export interface MoodleModule {
   modname: string; // e.g. "scorm", "page", "url", "resource"
   instance: number;
   completionstate: number; // 0 = incomplete, 1 = complete
+  completionTracked: boolean;
   url?: string;
   files?: MoodleFile[];
   bunnyVideoId?: string;
@@ -137,15 +144,48 @@ export interface MoodleModule {
   videoUrl?: string; // direct video file URL (not Bunny) for native playback
 }
 
-/** Return the best on-disk file for a module (prefer video, fallback to first file). */
+export interface MoodleLearningSnapshot {
+  modules: MoodleModule[];
+  completedModules: number;
+  totalModules: number;
+  progressPercent: number;
+  completed: boolean;
+}
+
+/** Completion states 1 and 2 are complete; state 3 is retryable. */
+export function isMoodleModuleComplete(module: MoodleModule): boolean {
+  return module.completionTracked && (module.completionstate === 1 || module.completionstate === 2);
+}
+
+/** A later module is locked while an earlier tracked activity is incomplete. */
+export function isMoodleModuleLocked(modules: MoodleModule[], moduleIndex: number): boolean {
+  return modules
+    .slice(0, moduleIndex)
+    .some((candidate) => candidate.completionTracked && !isMoodleModuleComplete(candidate));
+}
+
+/**
+ * Return only a self-contained, supported offline learning asset. Moodle page
+ * wrappers such as index.html are excluded because they do not include the
+ * player, video, styles, scripts, or dependent files needed offline.
+ */
 export function pickMoodleDownloadFile(files: MoodleFile[] | undefined): MoodleFile | undefined {
   if (!files || files.length === 0) return undefined;
-  const onDisk = files.filter((f) => f.type === "file" && f.fileurl);
-  if (onDisk.length === 0) return undefined;
-  const video = onDisk.find(
+  const approved = files.filter((file) => {
+    if (file.type !== "file" || !file.fileurl) return false;
+    const filename = file.filename.toLowerCase();
+    const mimetype = file.mimetype?.toLowerCase() ?? "";
+    return (
+      mimetype.startsWith("video/") ||
+      mimetype === "application/pdf" ||
+      /\.(mp4|webm|mov|mkv|avi|m4v|ogv|pdf)$/i.test(filename)
+    );
+  });
+  if (approved.length === 0) return undefined;
+  const video = approved.find(
     (f) => f.mimetype?.startsWith("video/") || /\.(mp4|webm|mov|mkv|avi|m4v)(\?|$)/i.test(f.filename)
   );
-  return video ?? onDisk[0];
+  return video ?? approved[0];
 }
 
 /** Check whether a URL points to a video file we can play natively. */
@@ -296,87 +336,93 @@ export async function moodleEnrolUser(params: {
 // ─── Progress Tracking ────────────────────────────────────────────────────────
 
 /**
- * MOODLE_STUB: Get a driver's course completion progress.
- * Called by /api/portal/dashboard to populate the portal home progress bar.
- *
- * Moodle API: core_completion_get_course_completion_status
- * GET ?wsfunction=core_completion_get_course_completion_status&courseid={courseId}&userid={userId}
- *
- * NOTE: Course completion tracking must be enabled in Moodle:
- *   Site Admin → Advanced features → Enable completion tracking → ON
- *   Course settings → Completion tracking → Enabled, control via completion and activity settings
+ * Get per-activity completion for one driver. Unlike course-content metadata,
+ * this Moodle API explicitly accepts the driver's user ID and is therefore the
+ * only source used for BetterDriver module ticks and sequential access.
  */
-export async function moodleGetProgress(params: {
+export async function moodleGetActivityCompletionStatuses(params: {
   moodleUserId: number;
   programmeSlug: "professional-truck-driver" | "eco-driver";
-}): Promise<MoodleCompletionStatus> {
+}): Promise<MoodleActivityCompletionStatus[]> {
   const courseId = MOODLE_COURSE_IDS[params.programmeSlug];
+  if (!courseId) {
+    throw new Error(`[Moodle] No course ID configured for programme: ${params.programmeSlug}`);
+  }
 
-  const url = moodleUrl("core_completion_get_course_completion_status", {
+  const url = moodleUrl("core_completion_get_activities_completion_status", {
     courseid: courseId,
     userid: params.moodleUserId,
   });
   const res = await fetch(url);
   const data = await res.json();
   if (data.exception) {
-    console.error(`[Moodle] moodleGetProgress failed: ${data.message}`);
-    return { completed: false, completiongrade: null, completedmodules: 0, totalmodules: 0, progressPercent: 0 };
+    throw new Error(`[Moodle] moodleGetActivityCompletionStatuses failed: ${data.message}`);
   }
-  const status = data.completionstatus;
-  const completions: { complete: boolean }[] = status.completions ?? [];
-  const totalmodules = completions.length;
-  const completedmodules = completions.filter((c) => c.complete).length;
-  const progressPercent = totalmodules > 0 ? Math.round((completedmodules / totalmodules) * 100) : 0;
+  if (!Array.isArray(data.statuses)) {
+    throw new Error("[Moodle] moodleGetActivityCompletionStatuses returned an unexpected response");
+  }
+
+  return data.statuses
+    .filter((status: unknown) => {
+      const candidate = status as { cmid?: unknown; state?: unknown; tracking?: unknown };
+      return typeof candidate.cmid === "number" && typeof candidate.state === "number" && typeof candidate.tracking === "number";
+    })
+    .map((status: { cmid: number; state: number; tracking: number }) => ({
+      cmid: status.cmid,
+      state: ([0, 1, 2, 3].includes(status.state) ? status.state : 0) as 0 | 1 | 2 | 3,
+      tracking: status.tracking,
+    }));
+}
+
+/**
+ * Build the sole per-driver learning snapshot used by BetterDriver course,
+ * dashboard, webhook and poller code. Progress counts only activities with
+ * Moodle completion tracking enabled.
+ */
+export async function moodleGetLearningSnapshot(params: {
+  moodleUserId: number;
+  programmeSlug: "professional-truck-driver" | "eco-driver";
+}): Promise<MoodleLearningSnapshot> {
+  const modules = await moodleGetCourseModules(params);
+  const trackedModules = modules.filter((module) => module.completionTracked);
+  const completedModules = trackedModules.filter(isMoodleModuleComplete).length;
+  const totalModules = trackedModules.length;
+  const progressPercent = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
+
   return {
-    completed: status.completed as boolean,
-    completiongrade: null,
-    completedmodules,
-    totalmodules,
+    modules,
+    completedModules,
+    totalModules,
     progressPercent,
+    completed: totalModules > 0 && completedModules === totalModules,
+  };
+}
+
+/** @deprecated Use moodleGetLearningSnapshot for driver portal progress. */
+export async function moodleGetProgress(params: {
+  moodleUserId: number;
+  programmeSlug: "professional-truck-driver" | "eco-driver";
+}): Promise<MoodleCompletionStatus> {
+  const snapshot = await moodleGetLearningSnapshot(params);
+  return {
+    completed: snapshot.completed,
+    completiongrade: null,
+    completedmodules: snapshot.completedModules,
+    totalmodules: snapshot.totalModules,
+    progressPercent: snapshot.progressPercent,
   };
 }
 
 /**
- * MOODLE_STUB: Mark a course module as complete (or incomplete) for a user.
- * Called from /api/portal/progress when the driver finishes a video or quiz.
- *
- * Moodle API: core_completion_update_activity_completion_status_manually
- * POST body: cmid, userid, completed (1 or 0)
- *
- * NOTE: The activity in Moodle must have completion tracking enabled and
- *       allow manual completion marking.
- */
-export async function moodleUpdateModuleCompletion(params: {
-  moodleUserId: number;
-  cmid: number;
-  completed: boolean;
-}): Promise<boolean> {
-  checkMoodleConfig();
-  const body = new URLSearchParams({
-    wstoken: MOODLE_TOKEN,
-    wsfunction: "core_completion_update_activity_completion_status_manually",
-    moodlewsrestformat: "json",
-    cmid: String(params.cmid),
-    userid: String(params.moodleUserId),
-    completed: params.completed ? "1" : "0",
-  });
-  const res = await fetch(`${MOODLE_URL}/webservice/rest/server.php`, { method: "POST", body });
-  const data = await res.json();
-  if (data && data.exception) {
-    console.error(`[Moodle] moodleUpdateModuleCompletion failed: ${data.message}`);
-    return false;
-  }
-  return true;
-}
-
-/**
- * MOODLE_STUB: Get the list of modules/activities in a course with completion state.
- * Used by Driver University page to show module list with tick/untick.
+ * Get structural course modules and join them to the authenticated driver's
+ * activity-completion states. core_course_get_contents is never used as a
+ * completion source because its state belongs to the API token user.
  *
  * Moodle API: core_course_get_contents
  * GET ?wsfunction=core_course_get_contents&courseid={courseId}
  *
- * Returns course sections with modules. Each module has completionstate:
+ * Returns course sections with modules. Driver completion comes from
+ * core_completion_get_activities_completion_status and uses these states:
  *   0 = incomplete, 1 = complete, 2 = complete (pass), 3 = complete (fail)
  */
 export async function moodleGetCourseModules(params: {
@@ -384,14 +430,19 @@ export async function moodleGetCourseModules(params: {
   programmeSlug: "professional-truck-driver" | "eco-driver";
 }): Promise<MoodleModule[]> {
   const courseId = MOODLE_COURSE_IDS[params.programmeSlug];
-
-  const url = moodleUrl("core_course_get_contents", { courseid: courseId });
-  const res = await fetch(url);
-  const sections = await res.json();
-  if (!Array.isArray(sections)) {
-    console.error(`[Moodle] moodleGetCourseModules failed: ${sections?.message ?? "unexpected response"}`);
-    return [];
+  if (!courseId) {
+    throw new Error(`[Moodle] No course ID configured for programme: ${params.programmeSlug}`);
   }
+
+  const [sectionsResponse, activityStatuses] = await Promise.all([
+    fetch(moodleUrl("core_course_get_contents", { courseid: courseId })),
+    moodleGetActivityCompletionStatuses(params),
+  ]);
+  const sections = await sectionsResponse.json();
+  if (!Array.isArray(sections)) {
+    throw new Error(`[Moodle] moodleGetCourseModules failed: ${sections?.message ?? "unexpected response"}`);
+  }
+  const activityStatusByCmid = new Map(activityStatuses.map((status) => [status.cmid, status]));
   const modules: MoodleModule[] = [];
   for (const section of sections) {
     const sectionModules = (section.modules ?? []).slice().sort((a: any, b: any) => {
@@ -427,12 +478,14 @@ export async function moodleGetCourseModules(params: {
         (f) => f.type === "file" && f.fileurl && isVideoFileUrl(f.fileurl)
       );
 
+      const activityStatus = activityStatusByCmid.get(mod.id as number);
       modules.push({
         id: mod.id as number,
         name: mod.name as string,
         modname: (mod.modname ?? "page") as string,
         instance: (mod.instance ?? mod.id) as number,
-        completionstate: (mod.completiondata?.state ?? 0) as number,
+        completionstate: activityStatus?.state ?? 0,
+        completionTracked: Boolean(activityStatus && activityStatus.tracking > 0),
         url: (mod.url as string | undefined) || undefined,
         files,
         videoUrl: videoFile?.fileurl,

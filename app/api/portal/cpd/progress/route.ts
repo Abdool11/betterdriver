@@ -24,8 +24,9 @@ function formatDate(value?: string | null) {
 
 /**
  * GET /api/portal/cpd/progress
- * Returns CPD statistics and records for the authenticated driver only.
- * The client must never provide a driver ID; session.driverId is the sole scope.
+ * Returns CPD delivery records for the authenticated driver only. The fallback
+ * supports existing BetterDriver deployments where an authorised CPD due-date
+ * field has not yet been provisioned, without hiding the driver's course data.
  */
 export async function GET() {
   const session = await getSession();
@@ -33,28 +34,36 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: rows, error } = await supabaseAdmin
+  const detailedQuery = await supabaseAdmin
     .from("driver_cpd_participation")
-    .select(
-      `id, completed_at,
-       cpd_modules(id, title, due_date)`
-    )
+    .select("id, completed_at, cpd_modules(id, title, due_date)")
     .eq("driver_id", session.driverId);
 
-  if (error) {
-    console.error("[CPD_PROGRESS] Fetch error:", error.message);
-    return NextResponse.json({ error: "Could not load CPD records" }, { status: 500 });
+  let rows = detailedQuery.data as CpdParticipationRow[] | null;
+  let dueDatesAvailable = !detailedQuery.error;
+
+  if (detailedQuery.error) {
+    console.warn("[CPD_PROGRESS] Due-date query unavailable; retrying without due dates:", detailedQuery.error.message);
+    const fallbackQuery = await supabaseAdmin
+      .from("driver_cpd_participation")
+      .select("id, completed_at, cpd_modules(id, title)")
+      .eq("driver_id", session.driverId);
+    if (fallbackQuery.error) {
+      console.error("[CPD_PROGRESS] Fallback fetch failed:", fallbackQuery.error.message);
+      return NextResponse.json({ error: "Could not load CPD records" }, { status: 500 });
+    }
+    rows = fallbackQuery.data as CpdParticipationRow[] | null;
+    dueDatesAvailable = false;
   }
 
   const now = new Date();
   const fourteenDays = new Date();
   fourteenDays.setDate(now.getDate() + 14);
-
   let completed = 0;
   let overdue = 0;
   let upcoming = 0;
 
-  const records = ((rows ?? []) as CpdParticipationRow[])
+  const records = (rows ?? [])
     .map((row) => {
       const module = row.cpd_modules;
       const dueDate = module?.due_date ? new Date(module.due_date) : null;
@@ -93,6 +102,7 @@ export async function GET() {
     completed,
     overdue,
     upcoming,
+    dueDatesAvailable,
     records,
   });
 }
