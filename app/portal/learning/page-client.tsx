@@ -122,7 +122,7 @@ export default function LearningPage() {
         </div>
         <h2 style={{ marginBottom: "0.25rem" }}>{prog.title || "…"}</h2>
         <p style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>
-          Work through each module at your own pace. Complete all units to earn your certificate.
+          Work through each module at your own pace. Green Freight Academy manages official certificate issuance after verified completion.
         </p>
       </div>
 
@@ -135,7 +135,7 @@ export default function LearningPage() {
       )}
 
       {/* WiFi download banner */}
-      {showDownloadBanner && prog.modules.some((m) => m.downloadable) && (
+      {showDownloadBanner && prog.modules.some((m) => m.downloadable && m.status !== "locked") && (
         <div style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: "0.875rem", padding: "1rem" }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
             <div style={{ width: 32, height: 32, background: "rgba(59,130,246,0.15)", borderRadius: "0.5rem", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -145,7 +145,7 @@ export default function LearningPage() {
               <p style={{ fontWeight: 700, fontSize: "0.875rem", color: "var(--text-primary)", margin: "0 0 0.25rem" }}>Save data — download on WiFi</p>
               <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: "0 0 0.625rem", lineHeight: 1.5 }}>Download your course materials now while on WiFi so you can study without using mobile data.</p>
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                {prog.modules.filter((m) => m.downloadable).map((mod) => (
+                {prog.modules.filter((m) => m.downloadable && m.status !== "locked").map((mod) => (
                   <button key={mod.id} type="button"
                     style={{ display: "inline-flex", alignItems: "center", gap: "0.375rem", padding: "0.375rem 0.625rem", background: "rgba(59,130,246,0.12)", border: "1px solid rgba(59,130,246,0.25)", borderRadius: "0.5rem", color: "#3B82F6", fontSize: "0.75rem", fontWeight: 600, cursor: "pointer" }}
                     onClick={() => startDownload(mod)}
@@ -180,7 +180,7 @@ export default function LearningPage() {
           <div style={{ flex: 1 }}>
             <h3 style={{ marginBottom: "0.25rem", fontSize: "1rem" }}>{prog.title || "…"}</h3>
             <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", lineHeight: 1.5 }}>
-              Work through each module at your own pace. Complete all units to earn your certificate.
+              Work through each module at your own pace. Green Freight Academy manages official certificate issuance after verified completion.
             </p>
           </div>
         </div>
@@ -204,7 +204,7 @@ export default function LearningPage() {
         <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
             <Award size={13} style={{ color: "var(--success)" }} />
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Certificate on completion</span>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Official certificate managed by GFA</span>
           </div>
         </div>
       </div>
@@ -319,7 +319,7 @@ export default function LearningPage() {
             <div>
               <div style={{ fontWeight: 700, color: "var(--text-primary)" }}>Programme Complete!</div>
               <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)" }}>
-                Your certificate is ready to download.
+                Your learning completion has been recorded. Green Freight Academy will issue and manage any official certificate.
               </div>
             </div>
             <ChevronRight size={18} style={{ color: "var(--amber)", marginLeft: "auto", flexShrink: 0 }} />
