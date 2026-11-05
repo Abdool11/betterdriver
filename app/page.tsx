@@ -132,12 +132,11 @@ export default function HomePage() {
             Verify a driver certificate
           </h2>
           <p style={{ color: "#9ca3af", fontSize: "1rem", lineHeight: 1.7, marginBottom: "2rem" }}>
-            Employers and fleet managers can verify the certification status of any BetterDriver-trained driver
-            using their certificate number or ID number.
+            Employers and fleet managers can use the Green Freight Academy verification service to check official qualification status using the authorised certificate details.
           </p>
           <Link href="/registry" style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem", padding: "0.75rem 1.75rem", background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.25)", color: "#f59e0b", borderRadius: "0.75rem", fontWeight: 700, fontSize: "0.9375rem", textDecoration: "none" }}>
             <Search size={16} />
-            Verify a certificate
+            Open official verification
           </Link>
         </div>
       </section>
@@ -147,7 +146,7 @@ export default function HomePage() {
         <div style={{ maxWidth: 900, margin: "0 auto" }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem" }}>
             {[
-              { icon: <CheckCircle2 size={18} color="#22c55e" />, text: "Verifiable digital certificates" },
+              { icon: <CheckCircle2 size={18} color="#22c55e" />, text: "GFA-authoritative digital certificates" },
               { icon: <CheckCircle2 size={18} color="#22c55e" />, text: "Works offline — save data" },
               { icon: <CheckCircle2 size={18} color="#22c55e" />, text: "Mobile-first — built for drivers" },
               { icon: <CheckCircle2 size={18} color="#22c55e" />, text: "CV builder included" },

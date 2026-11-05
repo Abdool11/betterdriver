@@ -11,7 +11,7 @@ Moodle acts as the backend learning engine. BetterDriver acts as the frontend po
 1. **Driver Creation:** When a driver taps their magic link for the first time, BD automatically creates a Moodle user account for them via the Moodle REST API.
 2. **Enrolment:** BD automatically enrols the driver in the correct Moodle course based on their GFA campaign.
 3. **SSO Launch:** When the driver clicks "Start Learning" in BD, they are seamlessly logged into Moodle using a secure token.
-4. **Progress Sync:** As the driver completes modules in Moodle, Moodle sends a webhook back to BD. BD updates the database and triggers WhatsApp notifications.
+4. **Progress Sync:** BetterDriver reads driver-specific activity completion from Moodle. Moodle sends authenticated module-completion events back to BD so it can refresh the same driver snapshot and send permitted WhatsApp notifications.
 
 ---
 
@@ -39,15 +39,17 @@ You must enable Web Services in Moodle and create a dedicated service account fo
 2. Click **Add**.
 3. Name: `BetterDriver Integration`.
 4. Check **Enabled** and **Authorized users only**.
-5. Click **Add functions** and add exactly these 7 functions:
+5. Click **Add functions** and add these functions:
    - `core_user_create_users`
    - `core_user_get_users_by_field`
    - `enrol_manual_enrol_users`
    - `core_course_get_courses`
    - `core_completion_get_course_completion_status`
+   - `core_completion_get_activities_completion_status`
    - `core_course_get_contents`
    - `gradereport_user_get_grade_items`
 6. Go to **Authorized users** for this service and add the `bd_api_user`.
+7. Give the API role the minimum course-context capability required for the completion lookup: `report/progress:view`. Limit the role to BetterDriver programme courses and intended driver groups. Do not assign Moodle site-administrator privileges.
 
 ### Step 2.4: Generate the Token
 1. Go to **Site administration > Plugins > Web services > Manage tokens**.
@@ -59,14 +61,14 @@ You must enable Web Services in Moodle and create a dedicated service account fo
 
 ## 3. Webhook Configuration (Moodle → BD)
 
-Moodle needs to tell BD when a driver completes a module or course.
+Moodle needs to tell BD when a driver completes a module.
 
 1. Install a webhook plugin in Moodle (e.g., `local_webhooks` or similar).
-2. Configure the plugin to fire on the following events:
+2. Configure the plugin to fire on this event:
    - `\core\event\course_module_completion_updated`
-   - `\core\event\course_completed`
 3. Set the payload URL to: `https://betterdriver.co.za/api/moodle/webhook`
-4. Set the secret/token in the plugin configuration. **Copy this secret** — you will need it for the `.env.local` file.
+4. Set the secret/token in the plugin configuration. **Copy this secret** — you will need it for the `.env.local` file. The payload must include `event`, `userid`, `courseid`, `contextinstanceid`, `completionstate` and `timecreated`.
+5. Replayed events are safe: BetterDriver stores a deterministic event key and does not apply the same completion event twice.
 
 ---
 
@@ -116,8 +118,9 @@ If you are hosting on a standard Linux server, add these to your crontab:
 For the integration to work correctly, the Moodle courses must be structured as follows:
 
 1. **Course Completion:** Must be enabled in the course settings.
-2. **Activity Completion:** Must be enabled for all modules/quizzes that count towards progress.
+2. **Activity Completion:** Must be enabled for every module/quiz that counts towards BetterDriver progress and sequential access. Configure each activity to record the intended evidence (for example, video watched or quiz passed); simply opening a different activity must not mark it complete.
 3. **Module Naming:** The BD frontend expects 7 modules for the Professional Truck Driver programme. Ensure the Moodle course is divided into 7 distinct sections or topics.
+4. **Driver isolation:** Test with two synthetic Moodle drivers. Each driver must receive only their own `core_completion_get_activities_completion_status` result.
 
 ---
 

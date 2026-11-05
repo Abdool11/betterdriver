@@ -1,70 +1,47 @@
-/**
- * POST /api/moodle/webhook
- * ========================
- * Receives completion events from Moodle via the Moodle Outgoing Webhooks plugin
- * (or the custom event handler Asif configures in Moodle).
- *
- * SETUP (Asif — see MOODLE_SETUP.md for full instructions):
- * ----------------------------------------------------------
- * 1. Install the "Outgoing webhooks" plugin in Moodle:
- *    https://moodle.org/plugins/local_outgoing_webhooks
- *    OR use Moodle's built-in "Event monitoring" with a custom handler.
- *
- * 2. Configure the webhook URL in Moodle:
- *    Site Admin → Plugins → Local → Outgoing webhooks → Add rule
- *    Event: \core\event\course_module_completion_updated
- *    URL:   https://betterdriver.co.za/api/moodle/webhook
- *    Secret: set MOODLE_WEBHOOK_SECRET in .env.local (same value in Moodle)
- *
- * 3. Add to .env.local:
- *    MOODLE_WEBHOOK_SECRET=your_shared_secret_here
- *
- * PAYLOAD SHAPE (from Moodle outgoing webhooks plugin):
- * {
- *   "event": "\\core\\event\\course_module_completion_updated",
- *   "userid": 42,
- *   "courseid": 5,
- *   "contextinstanceid": 123,   // the course module (activity) ID
- *   "completionstate": 1,       // 1 = complete, 2 = complete (pass), 3 = complete (fail)
- *   "timecreated": 1714900000
- * }
- */
-
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { moodleGetProgress, MOODLE_COURSE_IDS } from "@/lib/moodle";
+import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
+import { MOODLE_COURSE_IDS, moodleGetLearningSnapshot } from "@/lib/moodle";
 import { sendWhatsAppMessage } from "@/lib/whatsapp";
 
-// Lazy initialize to avoid build-time errors when env vars are missing
-const getSupabase = () => createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://localhost:54321",
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? "dummy"
-);
+const getSupabase = () =>
+  createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL ?? "http://localhost:54321",
+    process.env.SUPABASE_SERVICE_ROLE_KEY ?? "dummy"
+  );
 
 const WEBHOOK_SECRET = process.env.MOODLE_WEBHOOK_SECRET ?? "";
 
-// Map Moodle course IDs back to programme slugs
-const COURSE_ID_TO_SLUG: Record<number, string> = {
-  [parseInt(process.env.MOODLE_DRIVER_PROGRAMME_COURSE_ID ?? "0")]: "professional-truck-driver",
-  [parseInt(process.env.MOODLE_ECO_DRIVER_COURSE_ID ?? "0")]: "eco-driver",
+const COURSE_ID_TO_SLUG: Record<number, "professional-truck-driver" | "eco-driver"> = {
+  [parseInt(process.env.MOODLE_DRIVER_PROGRAMME_COURSE_ID ?? "0", 10)]: "professional-truck-driver",
+  [parseInt(process.env.MOODLE_ECO_DRIVER_COURSE_ID ?? "0", 10)]: "eco-driver",
 };
 
+function validCompletionState(value: unknown): value is 0 | 1 | 2 | 3 {
+  return value === 0 || value === 1 || value === 2 || value === 3;
+}
+
+/**
+ * POST /api/moodle/webhook
+ * Receives authenticated Moodle activity-completion events. The event is first
+ * recorded with a deterministic key, then BetterDriver re-reads the complete
+ * driver-specific Moodle snapshot. Browser input never controls completion.
+ */
 export async function POST(req: NextRequest) {
-  // ── 1. Verify shared secret ──────────────────────────────────────────────
   const authHeader = req.headers.get("x-moodle-secret") ?? req.headers.get("authorization") ?? "";
   const secret = authHeader.replace("Bearer ", "").trim();
-  if (WEBHOOK_SECRET && secret !== WEBHOOK_SECRET) {
-    console.warn("[MOODLE_WEBHOOK] Invalid secret — rejecting request");
+  if (!WEBHOOK_SECRET || secret !== WEBHOOK_SECRET) {
+    console.warn("[MOODLE_WEBHOOK] Unauthorized request");
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // ── 2. Parse payload ─────────────────────────────────────────────────────
   let payload: {
-    event?: string;
-    userid?: number;
-    courseid?: number;
-    completionstate?: number;
-    timecreated?: number;
+    event?: unknown;
+    userid?: unknown;
+    courseid?: unknown;
+    contextinstanceid?: unknown;
+    completionstate?: unknown;
+    timecreated?: unknown;
   };
   try {
     payload = await req.json();
@@ -72,137 +49,147 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { userid: moodleUserId, courseid, completionstate } = payload;
+  const moodleUserId = typeof payload.userid === "number" ? payload.userid : null;
+  const courseId = typeof payload.courseid === "number" ? payload.courseid : null;
+  const moduleCmid = typeof payload.contextinstanceid === "number" ? payload.contextinstanceid : null;
+  const eventType = typeof payload.event === "string" ? payload.event : "";
+  const completionState = payload.completionstate;
+  const timeCreated = typeof payload.timecreated === "number" ? payload.timecreated : null;
 
-  // We only care about completion events
-  if (!moodleUserId || !courseid) {
-    return NextResponse.json({ ok: true, skipped: "missing fields" });
+  if (!moodleUserId || !courseId || !moduleCmid || !eventType || !validCompletionState(completionState)) {
+    return NextResponse.json({ error: "Invalid Moodle completion event" }, { status: 400 });
   }
 
-  const programmeSlug = COURSE_ID_TO_SLUG[courseid];
-  if (!programmeSlug) {
-    // Not a course we track — ignore silently
-    return NextResponse.json({ ok: true, skipped: "unknown course" });
+  const programmeSlug = COURSE_ID_TO_SLUG[courseId];
+  if (!programmeSlug || !Object.values(MOODLE_COURSE_IDS).includes(courseId)) {
+    return NextResponse.json({ ok: true, skipped: "untracked course" });
   }
 
-  // ── 3. Find the driver in our DB by moodle_user_id ───────────────────────
+  const eventKey = `${eventType}:${moodleUserId}:${courseId}:${moduleCmid}:${completionState}:${timeCreated ?? "unknown"}`;
   const supabase = getSupabase();
-  const { data: driver, error: driverErr } = await supabase
+  const { data: logEntry, error: logError } = await supabase
+    .from("moodle_webhook_log")
+    .insert({
+      moodle_user_id: moodleUserId,
+      course_id: courseId,
+      module_cmid: moduleCmid,
+      event_type: eventType,
+      completion_state: completionState,
+      event_key: eventKey,
+      payload,
+      processed: false,
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (logError) {
+    if (logError.code === "23505") {
+      return NextResponse.json({ ok: true, duplicate: true });
+    }
+    console.error("[MOODLE_WEBHOOK] Audit insert failed:", logError.message);
+    return NextResponse.json({ error: "Could not record Moodle event" }, { status: 500 });
+  }
+
+  const { data: driver, error: driverError } = await supabase
     .from("drivers")
     .select("id, first_name, mobile, language_preference")
     .eq("moodle_user_id", moodleUserId)
     .single();
-
-  if (driverErr || !driver) {
-    console.warn("[MOODLE_WEBHOOK] Driver not found for moodle_user_id:", moodleUserId);
+  if (driverError || !driver) {
+    await supabase.from("moodle_webhook_log").update({ processed: true, error: "Driver not found" }).eq("id", logEntry?.id);
     return NextResponse.json({ ok: true, skipped: "driver not found" });
   }
 
-  // ── 4. Fetch full progress from Moodle to get accurate module count ───────
-  const progress = await moodleGetProgress({ moodleUserId, programmeSlug: programmeSlug as "professional-truck-driver" | "eco-driver" });
-
-  // ── 5. Update progress in Supabase ───────────────────────────────────────
-  const { data: enrolment } = await supabase
+  const { data: enrolment, error: enrolmentError } = await supabase
     .from("enrolments")
-    .select("id, completed_at, modules_completed")
+    .select("id, progress_percent, modules_completed, completed_at")
     .eq("driver_id", driver.id)
     .eq("programme_slug", programmeSlug)
-    .eq("status", "active")
-    .single();
-
-  if (enrolment) {
-    const isNowComplete = progress.completed && !enrolment.completed_at;
-
+    .in("status", ACTIVE_ENROLMENT_STATUSES)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (enrolmentError || !enrolment) {
     await supabase
-      .from("enrolments")
-      .update({
-        progress_percent: progress.progressPercent,
-        modules_completed: progress.completedmodules,
-        completed_at: isNowComplete ? new Date().toISOString() : enrolment.completed_at,
-        last_activity_at: new Date().toISOString(),
-      })
-      .eq("id", enrolment.id);
-
-    // ── 5b. Auto-create certification record on first completion ────────────
-    if (isNowComplete) {
-      // Check if a certification already exists for this enrolment
-      const { data: existingCert } = await supabase
-        .from("certifications")
-        .select("id")
-        .eq("driver_id", driver.id)
-        .eq("enrolment_id", enrolment.id)
-        .maybeSingle();
-
-      if (!existingCert) {
-        // Generate unique certificate number: BD-YYYY-NNNNN
-        const year = new Date().getFullYear();
-        const { count: certCount } = await supabase
-          .from("certifications")
-          .select("id", { count: "exact", head: true });
-        const seqNum = String((certCount ?? 0) + 1).padStart(5, "0");
-        const certificateNumber = `BD-${year}-${seqNum}`;
-
-        const programmeShort = programmeSlug === "eco-driver" ? "p2" : "p1";
-
-        await supabase.from("certifications").insert({
-          driver_id: driver.id,
-          enrolment_id: enrolment.id,
-          certificate_number: certificateNumber,
-          programme: programmeShort,
-          issued_at: new Date().toISOString(),
-          status: "active",
-        });
-
-        // Mark enrolment as certified
-        await supabase
-          .from("enrolments")
-          .update({ status: "certified", certified: true, certified_at: new Date().toISOString() })
-          .eq("id", enrolment.id);
-      }
-    }
-
-    // ── 6. Fire WhatsApp notifications ─────────────────────────────────────
-    if (driver.mobile) {
-      const lang = (driver.language_preference ?? "en") as "en" | "zu";
-
-      if (isNowComplete) {
-        // TRIGGER 6 — Programme complete
-        // Template: bd_programme_complete
-        //   {{1}} = driver first name
-        //   {{2}} = programme name
-        //   (portal URL is hardcoded in the Meta template body)
-        await sendWhatsAppMessage({
-          to: driver.mobile,
-          templateName: "bd_programme_complete",
-          language: lang,
-          components: [
-            { type: "body", parameters: [
-              { type: "text", text: driver.first_name },
-              { type: "text", text: programmeSlug === "professional-truck-driver" ? "Program 1: The Professional Truck Driver" : "Program 2: Eco-Driving Mastery" },
-            ]},
-          ],
-        });
-      } else if (completionstate === 1 || completionstate === 2) {
-        // TRIGGER 3 — Module complete (activity completion event)
-        // Template: bd_module_complete
-        //   {{1}} = driver first name
-        //   {{2}} = module number
-        //   (portal URL is hardcoded in the Meta template body)
-        const moduleNum = progress.completedmodules;
-        await sendWhatsAppMessage({
-          to: driver.mobile,
-          templateName: "bd_module_complete",
-          language: lang,
-          components: [
-            { type: "body", parameters: [
-              { type: "text", text: driver.first_name },
-              { type: "text", text: String(moduleNum) },
-            ]},
-          ],
-        });
-      }
-    }
+      .from("moodle_webhook_log")
+      .update({ processed: true, error: enrolmentError?.message ?? "Active enrolment not found" })
+      .eq("id", logEntry?.id);
+    return NextResponse.json({ ok: true, skipped: "active enrolment not found" });
   }
 
-  return NextResponse.json({ ok: true, processed: true });
+  try {
+    const snapshot = await moodleGetLearningSnapshot({ moodleUserId, programmeSlug });
+    const eventModule = snapshot.modules.find((module) => module.id === moduleCmid);
+    if (!eventModule) {
+      throw new Error("Moodle event module is not part of the assigned programme");
+    }
+
+    const justCompleted = snapshot.completed && !enrolment.completed_at;
+    const progressIncreased = snapshot.completedModules > enrolment.modules_completed;
+    const changed =
+      snapshot.progressPercent !== enrolment.progress_percent ||
+      snapshot.completedModules !== enrolment.modules_completed ||
+      justCompleted;
+
+    if (changed) {
+      const { error: updateError } = await supabase
+        .from("enrolments")
+        .update({
+          progress_percent: snapshot.progressPercent,
+          modules_completed: snapshot.completedModules,
+          completed_at: justCompleted ? new Date().toISOString() : enrolment.completed_at,
+          last_activity_at: new Date().toISOString(),
+        })
+        .eq("id", enrolment.id);
+      if (updateError) throw new Error(updateError.message);
+    }
+
+    if (driver.mobile && justCompleted) {
+      const language = (driver.language_preference ?? "en") as "en" | "zu";
+      await sendWhatsAppMessage({
+        to: driver.mobile,
+        templateName: "bd_programme_complete",
+        language,
+        components: [
+          {
+            type: "body",
+            parameters: [
+              { type: "text", text: driver.first_name ?? "Driver" },
+              {
+                type: "text",
+                text:
+                  programmeSlug === "professional-truck-driver"
+                    ? "Program 1: The Professional Truck Driver"
+                    : "Program 2: Eco-Driving Mastery",
+              },
+            ],
+          },
+        ],
+      });
+    } else if (driver.mobile && progressIncreased && (completionState === 1 || completionState === 2)) {
+      const language = (driver.language_preference ?? "en") as "en" | "zu";
+      await sendWhatsAppMessage({
+        to: driver.mobile,
+        templateName: "bd_module_complete",
+        language,
+        components: [
+          {
+            type: "body",
+            parameters: [
+              { type: "text", text: driver.first_name ?? "Driver" },
+              { type: "text", text: String(snapshot.completedModules) },
+            ],
+          },
+        ],
+      });
+    }
+
+    await supabase.from("moodle_webhook_log").update({ processed: true, error: null }).eq("id", logEntry?.id);
+    return NextResponse.json({ ok: true, processed: true });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown Moodle processing error";
+    console.error("[MOODLE_WEBHOOK] Processing failed:", message);
+    await supabase.from("moodle_webhook_log").update({ error: message }).eq("id", logEntry?.id);
+    return NextResponse.json({ error: "Could not process Moodle completion event" }, { status: 502 });
+  }
 }
