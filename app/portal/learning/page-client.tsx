@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
+import ProgressRefreshControl from "@/components/portal/ProgressRefreshControl";
+import { usePortalRefresh } from "@/components/portal/usePortalRefresh";
 
 import {
   BookOpen,
@@ -18,7 +20,7 @@ import {
 interface Module {
   id: string;
   title: string;
-  status: "completed" | "in_progress" | "locked" | "available";
+  status: "completed" | "locked" | "available";
   unit: number;
   downloadable: boolean;
 }
@@ -42,8 +44,7 @@ const INITIAL_PROGRAMME: Programme = {
 
 const statusConfig = {
   completed: { icon: CheckCircle2, color: "var(--success)", label: "Completed", bg: "var(--success-subtle)" },
-  in_progress: { icon: PlayCircle, color: "var(--amber)", label: "In Progress", bg: "var(--amber-subtle)" },
-  available: { icon: PlayCircle, color: "var(--info)", label: "Start", bg: "var(--info-subtle)" },
+  available: { icon: PlayCircle, color: "var(--info)", label: "Available", bg: "var(--info-subtle)" },
   locked: { icon: Lock, color: "var(--text-muted)", label: "Locked", bg: "rgba(255,255,255,0.04)" },
 };
 
@@ -58,7 +59,7 @@ interface CourseApiResponse {
   modules: Array<{
     id: string;
     name: string;
-    status: "completed" | "in_progress" | "available";
+    status: "completed" | "available" | "locked";
     locked: boolean;
     order: number;
     downloadable: boolean;
@@ -67,47 +68,38 @@ interface CourseApiResponse {
 
 export default function LearningPage() {
   const [showDownloadBanner, setShowDownloadBanner] = useState(true);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [prog, setProg] = useState<Programme>(INITIAL_PROGRAMME);
+  const [confirmed, setConfirmed] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/portal/course")
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
-      .then((d) => {
-        if (d.programme && Array.isArray(d.modules)) {
-          setProg({
-            title: d.programme.title,
-            progress: d.programme.progressPercent,
-            totalModules: d.programme.totalModules,
-            completedModules: d.programme.completedModules,
-            modules: d.modules.map(
-              (m: {
-                id: string;
-                name: string;
-                status: "completed" | "in_progress" | "available";
-                locked: boolean;
-                order: number;
-                downloadable: boolean;
-              }) => ({
-                id: m.id,
-                title: m.name,
-                status: m.locked ? "locked" : m.status,
-                unit: m.order,
-                downloadable: m.downloadable,
-              })
-            ),
-          });
-        } else {
-          setLoadError(true);
-        }
-      })
-      .catch(() => setLoadError(true))
-      .finally(() => setLoading(false));
+  const loadCourse = useCallback(async (signal: AbortSignal) => {
+    try {
+      const response = await fetch("/api/portal/course", { cache: "no-store", signal });
+      if (signal.aborted) return;
+      if (response.status === 401) { window.location.assign("/start"); return; }
+      if (!response.ok) throw new Error("Could not confirm your latest course progress. Please refresh to try again.");
+      const data = (await response.json()) as CourseApiResponse;
+      if (!data.programme || !Array.isArray(data.modules)) throw new Error("Could not read your course information.");
+      if (!signal.aborted) {
+        setProg({
+          title: data.programme.title,
+          progress: data.programme.progressPercent,
+          totalModules: data.programme.totalModules,
+          completedModules: data.programme.completedModules,
+          modules: data.modules.map((module) => ({
+            id: module.id, title: module.name,
+            status: module.locked ? "locked" : module.status,
+            unit: module.order, downloadable: module.downloadable,
+          })),
+        });
+        setLoadError("");
+        setConfirmed(true);
+      }
+    } catch (error) {
+      if (!signal.aborted) setLoadError(error instanceof Error ? error.message : "Could not load your course.");
+    }
   }, []);
+  const { refresh, refreshing: loading } = usePortalRefresh(loadCourse);
 
   const startDownload = (mod: Module) => {
     window.location.href = `/api/portal/download?moduleId=${encodeURIComponent(mod.id)}`;
@@ -126,13 +118,7 @@ export default function LearningPage() {
         </p>
       </div>
 
-      {loadError && (
-        <div style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.25)", borderRadius: "0.875rem", padding: "1rem" }}>
-          <p style={{ fontWeight: 600, fontSize: "0.875rem", color: "var(--text-primary)", margin: 0 }}>
-            Unable to load your course right now. Please try again later.
-          </p>
-        </div>
-      )}
+      <ProgressRefreshControl refreshing={loading} onRefresh={() => void refresh()} error={loadError ? `${loadError}${confirmed ? " Showing the last confirmed course information." : ""}` : undefined} />
 
       {/* WiFi download banner */}
       {showDownloadBanner && prog.modules.some((m) => m.downloadable && m.status !== "locked") && (
@@ -189,10 +175,10 @@ export default function LearningPage() {
         <div style={{ marginBottom: "0.75rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
             <span style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", fontWeight: 600 }}>
-              {loading ? "…" : `${prog.completedModules} of ${prog.totalModules} modules complete`}
+              {confirmed ? `${prog.completedModules} of ${prog.totalModules} modules complete` : "Progress not yet confirmed"}
             </span>
             <span style={{ fontSize: "0.8125rem", fontWeight: 700, color: "var(--amber)" }}>
-              {loading ? "…" : `${prog.progress}%`}
+              {confirmed ? `${prog.progress}%` : "—"}
             </span>
           </div>
           <div className="progress-track">
@@ -213,7 +199,7 @@ export default function LearningPage() {
       <div>
         <div className="section-header">
           <span className="section-title">Modules</span>
-          {!loading && (
+          {confirmed && (
             <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
               {prog.completedModules}/{prog.totalModules} done
             </span>
@@ -240,8 +226,8 @@ export default function LearningPage() {
                   opacity: mod.status === "locked" ? 0.55 : 1,
                   cursor: isClickable ? "pointer" : "default",
                   transition: "border-color 0.15s",
-                  borderLeft: mod.status === "in_progress"
-                    ? "3px solid var(--amber)"
+                  borderLeft: mod.status === "available"
+                    ? "3px solid var(--info)"
                     : mod.status === "completed"
                     ? "3px solid var(--success)"
                     : "3px solid transparent",
@@ -277,17 +263,14 @@ export default function LearningPage() {
                   >
                     {mod.unit}. {mod.title}
                   </div>
-                  {mod.status === "in_progress" && (
-                    <div style={{ fontSize: "0.75rem", color: "var(--amber)", fontWeight: 600, marginTop: "0.125rem" }}>
-                      In progress
+                  {mod.status === "available" && (
+                    <div style={{ fontSize: "0.75rem", color: "var(--info)", fontWeight: 600, marginTop: "0.125rem" }}>
+                      Available / Ready to start
                     </div>
                   )}
                 </div>
 
                 {/* Action */}
-                {mod.status === "in_progress" && (
-                  <span className="badge badge-amber">Continue</span>
-                )}
                 {mod.status === "available" && (
                   <span className="badge badge-info">Start</span>
                 )}

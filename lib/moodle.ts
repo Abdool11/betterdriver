@@ -164,6 +164,18 @@ export function isMoodleModuleLocked(modules: MoodleModule[], moduleIndex: numbe
     .some((candidate) => candidate.completionTracked && !isMoodleModuleComplete(candidate));
 }
 
+export type MoodleModuleDisplayState = "completed" | "available" | "locked";
+
+/** Incomplete is not evidence of starting; preserve existing sequential access. */
+export function getMoodleModuleDisplayState(
+  module: MoodleModule,
+  modules: MoodleModule[],
+  moduleIndex: number
+): MoodleModuleDisplayState {
+  if (isMoodleModuleComplete(module)) return "completed";
+  return isMoodleModuleLocked(modules, moduleIndex) ? "locked" : "available";
+}
+
 /**
  * Return only a self-contained, supported offline learning asset. Moodle page
  * wrappers such as index.html are excluded because they do not include the

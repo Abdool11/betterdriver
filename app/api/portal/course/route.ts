@@ -3,8 +3,7 @@ import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import {
-  isMoodleModuleComplete,
-  isMoodleModuleLocked,
+  getMoodleModuleDisplayState,
   moodleGetLearningSnapshot,
   normalizeProgrammeSlug,
   pickMoodleDownloadFile,
@@ -80,13 +79,8 @@ export async function GET() {
     });
 
     const mappedModules = snapshot.modules.map((module, index) => {
-      const completed = isMoodleModuleComplete(module);
-      const locked = !completed && isMoodleModuleLocked(snapshot.modules, index);
-      const status = completed
-        ? "completed"
-        : locked || !module.completionTracked
-          ? "available"
-          : "in_progress";
+      const status = getMoodleModuleDisplayState(module, snapshot.modules, index);
+      const locked = status === "locked";
       const downloadFile = pickMoodleDownloadFile(module.files);
       const hasBunnyVideo = Boolean(module.bunnyVideoId);
 

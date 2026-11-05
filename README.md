@@ -124,6 +124,14 @@ The `20261013_learning_progress_integrity.sql` migration adds only replay-safe a
 
 Before a Preview retest, the BetterDriver Moodle external service must include `core_completion_get_activities_completion_status` and have only the minimum `report/progress:view` capability in the BetterDriver programme course context. BetterDriver joins that response to Moodle course structure by course-module ID, so module completion, locks and totals are driver-specific and agree across the portal. The signed Moodle webhook must send `contextinstanceid` and `timecreated`; duplicate event keys are stored once only.
 
+### Available states and return-from-learning refresh (2026-11-05)
+
+Course, Progress, Learning and Module pages show `completed`, `available` or `locked` from the existing driver-specific Moodle activity snapshot. Incomplete is not proof of starting: an unlocked incomplete activity says **Available / Ready to start**, never an inferred **In progress**. Existing launch/download authorisation is unchanged.
+
+`components/portal/usePortalRefresh.ts` and `ProgressRefreshControl.tsx` add a **Refresh progress** retry action and re-read the authorised APIs on focus, visibility return and page restoration from browser history. Requests are deduplicated and aborted on unmount; refresh never writes or increments learning completion. Failed refreshes label previously confirmed information as stale instead of claiming success. Course and CPD remain independently loaded.
+
+Run `npm run test:learning-integrity` (pure status/download assertions plus fully mocked, no-network two-driver snapshots), `npm run type-check` and `npm run build` before Preview QA. The follow-up adds **no** migration, environment variable, production data operation or GFA/SafeFreight change. Parent PR #4 still requires its existing BD non-production webhook audit migration and Moodle capability check before real integration sign-off. A Ready build is not a completed Moodle/driver test or permission to launch the cohort.
+
 ### Authentication Flow
 
 1. GFA deploys training → creates a `driver_invitations` row with a UUID opaque token and sets `expires_at` to the campaign end date

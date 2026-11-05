@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import ProgressRefreshControl from "@/components/portal/ProgressRefreshControl";
+import { usePortalRefresh } from "@/components/portal/usePortalRefresh";
+import { useCallback, useMemo, useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -15,7 +17,7 @@ type CourseModule = {
   id: string;
   name: string;
   url?: string;
-  status: "completed" | "in_progress" | "available";
+  status: "completed" | "available" | "locked";
   locked: boolean;
   order: number;
 };
@@ -40,31 +42,23 @@ export default function ModulePageClient({ moduleId }: ModulePageClientProps) {
   const [launchError, setLaunchError] = useState("");
   const [launching, setLaunching] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-
-    async function loadCourse() {
-      try {
-        const response = await fetch("/api/portal/course", { cache: "no-store" });
-        if (response.status === 401) {
-          window.location.assign("/start");
-          return;
-        }
-        if (!response.ok) throw new Error("Could not load this learning module.");
-        const data = (await response.json()) as CourseResponse;
-        if (active) setCourse(data);
-      } catch (loadError) {
-        if (active) {
-          setError(loadError instanceof Error ? loadError.message : "Could not load this learning module.");
-        }
+  const loadCourse = useCallback(async (signal: AbortSignal) => {
+    try {
+      const response = await fetch("/api/portal/course", { cache: "no-store", signal });
+      if (signal.aborted) return;
+      if (response.status === 401) {
+        window.location.assign("/start");
+        return;
       }
+      if (!response.ok) throw new Error("Could not confirm your latest module progress. Please refresh to try again.");
+      const data = (await response.json()) as CourseResponse;
+      if (!signal.aborted) { setCourse(data); setError(""); }
+    } catch (loadError) {
+      if (!signal.aborted) setError(loadError instanceof Error ? loadError.message : "Could not load this learning module.");
     }
-
-    void loadCourse();
-    return () => {
-      active = false;
-    };
   }, []);
+  const { refresh, refreshing } = usePortalRefresh(loadCourse);
+  const refreshControl = <ProgressRefreshControl refreshing={refreshing} onRefresh={() => void refresh()} error={error ? `${error}${course ? " Showing the last confirmed module information." : ""}` : undefined} />;
 
   const module = useMemo(
     () => course?.modules.find((candidate) => candidate.id === moduleId) ?? null,
@@ -104,7 +98,7 @@ export default function ModulePageClient({ moduleId }: ModulePageClientProps) {
     }
   }
 
-  if (error) {
+  if (error && !course) {
     return (
       <div className="page-content">
         <Link href="/portal/course" className="portal-back-link">← Back to my course</Link>
@@ -113,6 +107,7 @@ export default function ModulePageClient({ moduleId }: ModulePageClientProps) {
           <AlertCircle size={20} />
           <p>{error}</p>
         </div>
+        {refreshControl}
       </div>
     );
   }
@@ -122,6 +117,7 @@ export default function ModulePageClient({ moduleId }: ModulePageClientProps) {
       <div className="page-content">
         <Link href="/portal/course" className="portal-back-link">← Back to my course</Link>
         <h1 className="portal-page-title">Loading module…</h1>
+        {refreshControl}
       </div>
     );
   }
@@ -131,6 +127,7 @@ export default function ModulePageClient({ moduleId }: ModulePageClientProps) {
       <div className="page-content">
         <Link href="/portal/course" className="portal-back-link">← Back to my course</Link>
         <h1 className="portal-page-title">Module not available</h1>
+        {refreshControl}
         <div className="portal-status-card">
           <p>This module is not part of your currently assigned programme.</p>
         </div>
@@ -152,6 +149,8 @@ export default function ModulePageClient({ moduleId }: ModulePageClientProps) {
           Open your assigned learning content to continue your programme. Your progress is recorded against your signed-in driver profile.
         </p>
       </div>
+
+      {refreshControl}
 
       {module.locked ? (
         <section className="portal-status-card" style={{ marginBottom: "1.25rem" }}>
