@@ -11,14 +11,12 @@ async function getStats() {
     { count: activatedDrivers },
     { count: activeEnrolments },
     { count: completedEnrolments },
-    { count: totalCerts },
     { count: pendingInvitations },
   ] = await Promise.all([
     supabaseAdmin.from("drivers").select("*", { count: "exact", head: true }),
     supabaseAdmin.from("drivers").select("*", { count: "exact", head: true }).eq("activation_status", "activated"),
     supabaseAdmin.from("enrolments").select("*", { count: "exact", head: true }).eq("status", "active"),
     supabaseAdmin.from("enrolments").select("*", { count: "exact", head: true }).eq("status", "completed"),
-    supabaseAdmin.from("certifications").select("*", { count: "exact", head: true }).eq("status", "active"),
     supabaseAdmin.from("driver_invitations").select("*", { count: "exact", head: true }).eq("status", "pending"),
   ]);
 
@@ -27,7 +25,6 @@ async function getStats() {
     activatedDrivers: activatedDrivers ?? 0,
     activeEnrolments: activeEnrolments ?? 0,
     completedEnrolments: completedEnrolments ?? 0,
-    totalCerts: totalCerts ?? 0,
     pendingInvitations: pendingInvitations ?? 0,
   };
 }
@@ -121,8 +118,7 @@ export default async function BDAdminDashboardPage() {
               { label: "Total Drivers", value: stats.totalDrivers, color: "text-white", sub: "registered" },
               { label: "Activated", value: stats.activatedDrivers, color: "text-[#f97316]", sub: `${activationRate}% activation rate` },
               { label: "In Training", value: stats.activeEnrolments, color: "text-blue-400", sub: "active enrolments" },
-              { label: "Completed", value: stats.completedEnrolments, color: "text-green-400", sub: `${completionRate}% completion rate` },
-              { label: "Certificates", value: stats.totalCerts, color: "text-amber-400", sub: "issued" },
+              { label: "Completed", value: stats.completedEnrolments, color: "text-green-400", sub: `${completionRate}% learning completion rate` },
               { label: "Pending Invites", value: stats.pendingInvitations, color: stats.pendingInvitations > 0 ? "text-cyan-400" : "text-slate-500", sub: "not yet activated" },
             ].map((stat) => (
               <div key={stat.label} className="bg-[#161b22] border border-slate-700/50 rounded-xl p-5">
@@ -163,7 +159,6 @@ export default async function BDAdminDashboardPage() {
                         <td className="py-3 text-slate-400">{company?.name ?? "—"}</td>
                         <td className="py-3">
                           <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            d.activation_status === "certified" ? "bg-green-500/20 text-green-400" :
                             d.activation_status === "activated" ? "bg-[#f97316]/20 text-[#f97316]" :
                             "bg-slate-700 text-slate-400"
                           }`}>

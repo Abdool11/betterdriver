@@ -3,27 +3,27 @@ import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import {
-  moodleGetProgress,
-  moodleGetCourseModules,
+  isMoodleModuleComplete,
+  isMoodleModuleLocked,
   moodleCreateUser,
   moodleEnrolUser,
+  moodleGetLearningSnapshot,
   moodleGetUserByEmail,
   normalizeProgrammeSlug,
 } from "@/lib/moodle";
-import { ensureCertificate } from "@/lib/certificate";
 
 /**
  * GET /api/portal/dashboard
- * Returns the driver's dashboard stats by combining Supabase enrolment data
- * with live Moodle progress.
+ * Returns dashboard information for the authenticated driver. Course totals,
+ * next module and certificate-pending state all use one driver-specific Moodle
+ * activity snapshot so they agree with My Course and My Progress.
  */
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // 1. Fetch driver + active enrolment from Supabase
   const { data: driver, error: driverErr } = await supabaseAdmin
     .from("drivers")
     .select("id, first_name, last_name, email, mobile, language_preference, moodle_user_id, company_id")
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
 
   const { data: enrolment, error: enrolmentErr } = await supabaseAdmin
     .from("enrolments")
-    .select("id, programme_slug, status, progress_percent, modules_completed, completed_at, cpd_completions")
+    .select("id, programme_slug, progress_percent, modules_completed, completed_at")
     .eq("driver_id", session.driverId)
     .in("status", ACTIVE_ENROLMENT_STATUSES)
     .order("created_at", { ascending: false })
@@ -50,19 +50,15 @@ export async function GET(req: NextRequest) {
   const programmeSlug = enrolment?.programme_slug ?? "ptdp";
   const canonicalSlug = normalizeProgrammeSlug(programmeSlug);
 
-  // 2. Lazy Moodle provisioning — create user / enrol if missing
+  // Lazy Moodle provisioning remains scoped to the signed-in BetterDriver driver.
   let moodleUserId = driver.moodle_user_id ?? null;
   if (!moodleUserId && driver.email) {
     try {
       const existing = await moodleGetUserByEmail(driver.email);
       if (existing) {
         moodleUserId = existing.id;
-        await supabaseAdmin
-          .from("drivers")
-          .update({ moodle_user_id: existing.id })
-          .eq("id", driver.id);
+        await supabaseAdmin.from("drivers").update({ moodle_user_id: existing.id }).eq("id", driver.id);
       } else {
-        // Generate a secure random password for Moodle
         const password = `Bd${Math.random().toString(36).slice(2)}${Date.now()}!`;
         const cleanEmail = driver.email.toLowerCase().replace(/[^a-z0-9]/g, "");
         const username = cleanEmail.slice(0, 20) + Date.now().toString().slice(-6);
@@ -74,36 +70,21 @@ export async function GET(req: NextRequest) {
           email: driver.email,
         });
         moodleUserId = newUser.id;
-        await supabaseAdmin
-          .from("drivers")
-          .update({ moodle_user_id: newUser.id })
-          .eq("id", driver.id);
+        await supabaseAdmin.from("drivers").update({ moodle_user_id: newUser.id }).eq("id", driver.id);
       }
-    } catch (err) {
-      console.error("[DASHBOARD] Moodle provisioning failed:", err);
+    } catch (error) {
+      console.error("[DASHBOARD] Moodle provisioning failed:", error);
     }
   }
 
-  // 3. Enrol in course if not yet enrolled
   if (moodleUserId && enrolment) {
     try {
       await moodleEnrolUser({ moodleUserId, programmeSlug: canonicalSlug });
-    } catch {
-      // enrolment may already exist — safe to ignore
+    } catch (error) {
+      console.error("[DASHBOARD] Moodle enrolment check failed:", error);
     }
   }
 
-  // 4. Fetch live progress from Moodle + CPD stats + bulletins in parallel
-  let progress = {
-    completed: false,
-    completiongrade: null as number | null,
-    completedmodules: 0,
-    totalmodules: 0,
-    progressPercent: 0,
-  };
-  let moodleModules: Awaited<ReturnType<typeof moodleGetCourseModules>> = [];
-
-  // CPD stats query (independent of Moodle)
   const cpdPromise = (async () => {
     let overdue = 0;
     let upcoming = 0;
@@ -112,7 +93,6 @@ export async function GET(req: NextRequest) {
       const fourteenDays = new Date();
       fourteenDays.setDate(fourteenDays.getDate() + 14);
       const fourteenStr = fourteenDays.toISOString();
-
       const { data: cpdRows } = await supabaseAdmin
         .from("driver_cpd_participation")
         .select("completed_at, cpd_modules(due_date)")
@@ -120,85 +100,75 @@ export async function GET(req: NextRequest) {
 
       for (const row of cpdRows ?? []) {
         if (row.completed_at) continue;
-        const mod = row.cpd_modules as unknown as { due_date?: string } | null;
-        const due = mod?.due_date ? new Date(mod.due_date) : null;
-        if (due) {
-          if (due.toISOString() < now) {
-            overdue++;
-          } else if (due.toISOString() <= fourteenStr) {
-            upcoming++;
-          }
-        }
+        const module = row.cpd_modules as unknown as { due_date?: string } | null;
+        const due = module?.due_date ? new Date(module.due_date) : null;
+        if (!due) continue;
+        if (due.toISOString() < now) overdue++;
+        else if (due.toISOString() <= fourteenStr) upcoming++;
       }
-    } catch (err) {
-      console.error("[DASHBOARD] CPD stats fetch failed:", err);
+    } catch (error) {
+      console.error("[DASHBOARD] CPD stats fetch failed:", error);
     }
     return { overdue, upcoming };
   })();
 
-  // Bulletins query (independent of Moodle)
   const bulletinsPromise = (async () => {
     let unread = 0;
     try {
       if (driver.company_id) {
-        const { data: bRows } = await supabaseAdmin
+        const { data: bulletinRows } = await supabaseAdmin
           .from("bulletins")
           .select("id")
           .eq("company_id", driver.company_id)
           .eq("status", "disseminated");
-        const bIds = (bRows ?? []).map((r) => r.id);
-        if (bIds.length > 0) {
-          const { data: readR } = await supabaseAdmin
+        const bulletinIds = (bulletinRows ?? []).map((row) => row.id);
+        if (bulletinIds.length > 0) {
+          const { data: readRows } = await supabaseAdmin
             .from("driver_bulletin_interactions")
             .select("bulletin_id")
             .eq("driver_id", session.driverId)
             .not("read_at", "is", null)
-            .in("bulletin_id", bIds);
-          const readSet = new Set((readR ?? []).map((r) => r.bulletin_id));
-          unread = bIds.filter((id) => !readSet.has(id)).length;
+            .in("bulletin_id", bulletinIds);
+          const readSet = new Set((readRows ?? []).map((row) => row.bulletin_id));
+          unread = bulletinIds.filter((id) => !readSet.has(id)).length;
         }
       }
-    } catch (err) {
-      console.error("[DASHBOARD] Bulletins unread count failed:", err);
+    } catch (error) {
+      console.error("[DASHBOARD] Bulletins unread count failed:", error);
     }
     return unread;
   })();
 
-  // Moodle progress + modules in parallel with CPD + bulletins
-  const moodlePromise = (async () => {
-    if (!moodleUserId) return { progress, moodleModules };
+  const learningPromise = (async () => {
+    if (!moodleUserId || !enrolment) return null;
     try {
-      const [progressResult, modulesResult] = await Promise.all([
-        moodleGetProgress({ moodleUserId, programmeSlug: canonicalSlug }),
-        moodleGetCourseModules({ moodleUserId, programmeSlug: canonicalSlug }),
-      ]);
-      return { progress: progressResult, moodleModules: modulesResult };
-    } catch (err) {
-      console.error("[DASHBOARD] Moodle fetch failed:", err);
-      return { progress, moodleModules };
+      return await moodleGetLearningSnapshot({ moodleUserId, programmeSlug: canonicalSlug });
+    } catch (error) {
+      console.error("[DASHBOARD] Moodle learning snapshot failed:", error);
+      return null;
     }
   })();
 
-  const [{ progress: moodleProgress, moodleModules: moodleMods }, cpdResult, unreadBulletins] =
-    await Promise.all([moodlePromise, cpdPromise, bulletinsPromise]);
+  const [learningSnapshot, cpdResult, unreadBulletins] = await Promise.all([
+    learningPromise,
+    cpdPromise,
+    bulletinsPromise,
+  ]);
 
-  progress = moodleProgress;
-  moodleModules = moodleMods;
-  const cpdOverdueCount = cpdResult.overdue;
-  const cpdUpcomingCount = cpdResult.upcoming;
-
-  // 5. Use the most up-to-date completed count. The progress API updates
-  // Supabase immediately when a video finishes, while Moodle may lag.
-  const supabaseCompleted = enrolment?.modules_completed ?? 0;
-  const completedModules = Math.max(progress.completedmodules, supabaseCompleted);
-  const totalModules = moodleModules.length > 0 ? moodleModules.length : progress.totalmodules;
-  const progressPercent = totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0;
-  const courseCompleted = completedModules >= totalModules && totalModules > 0;
-
-  // 6. Sync the latest progress back to Supabase
+  const completedModules = learningSnapshot?.completedModules ?? 0;
+  const totalModules = learningSnapshot?.totalModules ?? 0;
+  const progressPercent = learningSnapshot?.progressPercent ?? 0;
+  const courseCompleted = learningSnapshot?.completed ?? false;
   const justCompleted = courseCompleted && !enrolment?.completed_at;
-  if (enrolment && (progressPercent !== enrolment.progress_percent || completedModules !== enrolment.modules_completed || courseCompleted !== !!enrolment.completed_at)) {
-    await supabaseAdmin
+
+  if (
+    enrolment &&
+    learningSnapshot &&
+    (progressPercent !== enrolment.progress_percent ||
+      completedModules !== enrolment.modules_completed ||
+      justCompleted)
+  ) {
+    const { error: updateError } = await supabaseAdmin
       .from("enrolments")
       .update({
         progress_percent: progressPercent,
@@ -207,31 +177,14 @@ export async function GET(req: NextRequest) {
         last_activity_at: new Date().toISOString(),
       })
       .eq("id", enrolment.id);
-  }
-
-  // 6b. Auto-create certificate when the course is first detected as complete
-  let certificateNumber: string | null = null;
-  let certificateIssuedAt: string | null = null;
-  if (courseCompleted && enrolment) {
-    const cert = await ensureCertificate({
-      driverId: session.driverId,
-      enrolmentId: enrolment.id,
-      companyId: driver.company_id ?? null,
-      programme: canonicalSlug === "professional-truck-driver" ? "p1" : "p2",
-      enrolmentSlug: canonicalSlug,
-    });
-    if (cert) {
-      certificateNumber = cert.certificate_number;
-      certificateIssuedAt = cert.issued_at;
-    } else {
-      console.error("[DASHBOARD] ensureCertificate returned null for driver", session.driverId);
+    if (updateError) {
+      console.error("[DASHBOARD] Enrolment summary update failed:", updateError.message);
     }
   }
 
-  // 7. Determine next module (first incomplete module in order)
-  const nextModule = moodleModules.find((m) => m.completionstate === 0) ?? null;
-
-  // 8. Build dashboard response
+  const nextModule = learningSnapshot?.modules.find(
+    (module, index, modules) => !isMoodleModuleComplete(module) && !isMoodleModuleLocked(modules, index)
+  ) ?? null;
   const programmeTitle =
     canonicalSlug === "professional-truck-driver"
       ? "The Professional Truck Driver Programme"
@@ -245,20 +198,16 @@ export async function GET(req: NextRequest) {
       progressPercent,
       completedModules,
       totalModules,
-      cpdDue: cpdOverdueCount > 0 || cpdUpcomingCount > 0,
-      cpdOverdueCount,
-      cpdUpcomingCount,
-      certificateReady: courseCompleted,
-      certificateNumber,
-      certificateIssuedAt,
+      cpdDue: cpdResult.overdue > 0 || cpdResult.upcoming > 0,
+      cpdOverdueCount: cpdResult.overdue,
+      cpdUpcomingCount: cpdResult.upcoming,
+      certificateReady: false,
+      certificatePendingGfa: courseCompleted,
       unreadBulletins,
+      learningStatus: learningSnapshot ? "available" : (enrolment ? "unavailable" : "not_assigned"),
     },
     nextModule: nextModule
-      ? {
-          id: String(nextModule.id),
-          name: nextModule.name,
-          url: nextModule.url,
-        }
+      ? { id: String(nextModule.id), name: nextModule.name, url: nextModule.url }
       : null,
     moodleUserId,
   });
