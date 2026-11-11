@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import {
   PlayCircle,
@@ -16,8 +16,15 @@ import {
 } from "lucide-react";
 import { useLanguage, type Lang } from "@/hooks/useLanguage";
 import PushNotificationOptIn from "@/components/PushNotificationOptIn";
+import ProgressRefreshControl from "@/components/portal/ProgressRefreshControl";
+import { usePortalRefresh } from "@/components/portal/usePortalRefresh";
+import { readPortalJson, isDashboardData, learningErrorText } from "@/lib/portal-read";
 
 interface DriverStats {
+  learningStatus?: "available" | "unavailable" | "not_assigned";
+  learningError?: { code: string; requestId: string } | null;
+  cpdStatus?: "available" | "unavailable";
+  bulletinStatus?: "available" | "unavailable";
   firstName: string;
   lastName: string;
   programmeTitle: string;
@@ -154,19 +161,21 @@ const COPY: Record<Lang, {
 
 export default function PortalHomePage() {
   const [stats, setStats] = useState<DriverStats>(INITIAL_STATS);
-  const [loading, setLoading] = useState(true);
+  const [confirmed, setConfirmed] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const lang = useLanguage();
   const copy = COPY[lang];
 
-  useEffect(() => {
-    fetch("/api/portal/dashboard")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.stats) setStats(d.stats);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+  const loadDashboard = useCallback(async (signal: AbortSignal) => {
+    try {
+      const data = await readPortalJson("/api/portal/dashboard", signal, isDashboardData);
+      if (!signal.aborted) { setStats(data.stats as unknown as DriverStats); setConfirmed(true); setLoadError(""); }
+    } catch (error) {
+      if (!signal.aborted) setLoadError(error instanceof Error ? error.message : "Your learning dashboard could not be checked.");
+    }
   }, []);
+  const { refresh, refreshing: loading } = usePortalRefresh(loadDashboard);
+  const learningConfirmed = confirmed && !loadError && stats.learningStatus !== "unavailable";
 
   const hour = new Date().getHours();
   const greeting =
@@ -194,6 +203,7 @@ export default function PortalHomePage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <PushNotificationOptIn />
+      <ProgressRefreshControl refreshing={loading} onRefresh={() => void refresh()} error={loadError ? `${loadError}${confirmed ? " Showing the last confirmed dashboard information." : ""}` : stats.learningStatus === "unavailable" ? learningErrorText(stats.learningError) : undefined} />
       {/* Welcome banner */}
       <div
         style={{
@@ -215,7 +225,7 @@ export default function PortalHomePage() {
             margin: "0 0 1rem",
           }}
         >
-          {loading ? copy.loading : `${stats.firstName} ${stats.lastName}`}
+          {!confirmed ? (loading ? copy.loading : "Driver dashboard") : `${stats.firstName} ${stats.lastName}`}
         </h2>
 
         {/* Progress bar */}
@@ -232,7 +242,7 @@ export default function PortalHomePage() {
               {stats.programmeTitle}
             </span>
             <span style={{ fontSize: "0.8125rem", fontWeight: 700, color: "#14b8a6" }}>
-              {stats.progressPercent}%
+              {learningConfirmed ? `${stats.progressPercent}%` : "Unavailable"}
             </span>
           </div>
           <div
@@ -246,7 +256,7 @@ export default function PortalHomePage() {
             <div
               style={{
                 height: "100%",
-                width: `${stats.progressPercent}%`,
+                width: learningConfirmed ? `${stats.progressPercent}%` : "0%",
                 background: "linear-gradient(90deg, #14b8a6, #34d399)",
                 borderRadius: 9999,
                 transition: "width 0.6s ease",
@@ -254,7 +264,7 @@ export default function PortalHomePage() {
             />
           </div>
           <p style={{ fontSize: "0.75rem", color: "#6B7280", marginTop: "0.375rem" }}>
-            {copy.modulesOf(stats.completedModules, stats.totalModules)}
+            {learningConfirmed ? copy.modulesOf(stats.completedModules, stats.totalModules) : "Your learning progress has not been confirmed."}
           </p>
         </div>
       </div>
@@ -318,10 +328,10 @@ export default function PortalHomePage() {
                   margin: "0 0 0.25rem",
                 }}
               >
-                {trainLabel}
+                {learningConfirmed ? trainLabel : "Check training"}
               </p>
               <p style={{ fontSize: "0.75rem", color: "#9CA3AF", margin: 0 }}>
-                {trainSub}
+                {learningConfirmed ? trainSub : "Open course and retry the learning check"}
               </p>
             </div>
           </Link>
@@ -392,7 +402,7 @@ export default function PortalHomePage() {
                   margin: 0,
                 }}
               >
-                {stats.cpdDue ? copy.cpdDue : copy.cpdOk}
+                {stats.cpdStatus !== "available" || loadError ? "CPD status unavailable" : stats.cpdDue ? copy.cpdDue : copy.cpdOk}
               </p>
             </div>
           </Link>
@@ -451,7 +461,7 @@ export default function PortalHomePage() {
                   margin: 0,
                 }}
               >
-                {stats.certificateReady ? copy.certReady : stats.certificatePendingGfa ? copy.certAwaitingGfa : copy.certPending}
+                {!learningConfirmed ? "Certificate status not confirmed" : stats.certificateReady ? copy.certReady : stats.certificatePendingGfa ? copy.certAwaitingGfa : copy.certPending}
               </p>
             </div>
           </Link>

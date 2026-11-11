@@ -46,6 +46,8 @@
  *   {MOODLE_URL}/webservice/rest/server.php?wstoken={MOODLE_TOKEN}&moodlewsrestformat=json&wsfunction={FUNCTION}
  */
 
+import { MoodleReadError, moodleReadJson, moodleReadOptionalText } from "./moodle-read";
+
 export const MOODLE_URL = process.env.MOODLE_URL ?? "";
 const MOODLE_TOKEN = process.env.MOODLE_TOKEN ?? "";
 
@@ -66,6 +68,52 @@ export const MOODLE_COURSE_IDS: Record<string, number> = {
   "p1": parseInt(process.env.MOODLE_DRIVER_PROGRAMME_COURSE_ID ?? "0"),
   "p2": parseInt(process.env.MOODLE_ECO_DRIVER_COURSE_ID ?? "0"),
 };
+
+const readCourseConfig: Record<string, string> = {
+  "professional-truck-driver": process.env.MOODLE_DRIVER_PROGRAMME_COURSE_ID ?? "",
+  "eco-driver": process.env.MOODLE_ECO_DRIVER_COURSE_ID ?? "",
+};
+
+function readCourseId(programmeSlug: string, operation: string): number {
+  const raw = readCourseConfig[programmeSlug];
+  const courseId = MOODLE_COURSE_IDS[programmeSlug];
+  if (!raw || !/^\d+$/.test(raw) || !Number.isSafeInteger(courseId) || courseId <= 0) {
+    throw new MoodleReadError("MOODLE_COURSE_CONFIG", operation);
+  }
+  return courseId;
+}
+
+function moodleReadBase(operation: string): URL {
+  try {
+    const base = new URL(MOODLE_URL);
+    if (!MOODLE_TOKEN || !["http:", "https:"].includes(base.protocol) || base.username || base.password || base.search || base.hash) {
+      throw new Error();
+    }
+    return base;
+  } catch {
+    throw new MoodleReadError("MOODLE_CONFIG", operation);
+  }
+}
+
+function moodleReadUrl(operation: string, params: Record<string, number>): string {
+  const base = moodleReadBase(operation);
+  const url = new URL(`${base.toString().replace(/\/$/, "")}/webservice/rest/server.php`);
+  url.search = new URLSearchParams({
+    wstoken: MOODLE_TOKEN,
+    moodlewsrestformat: "json",
+    wsfunction: operation,
+    ...Object.fromEntries(Object.entries(params).map(([key, value]) => [key, String(value)])),
+  }).toString();
+  return url.toString();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function positiveId(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
+}
 
 /** Normalize a programme slug to a canonical Moodle key */
 export function normalizeProgrammeSlug(slug: string): "professional-truck-driver" | "eco-driver" {
@@ -222,14 +270,19 @@ export function getBunnyVideoUrl(videoId: string): string {
   return `https://${hostname}/${videoId}/play_720p.mp4`;
 }
 
-function ensureDownloadUrl(fileurl: string): string {
-  let absolute = fileurl;
-  if (absolute.startsWith("/")) {
-    absolute = `${MOODLE_URL.replace(/\/$/, "")}${absolute}`;
+/** Malformed optional metadata must not invalidate core course/completion data. */
+function normalizeMediaUrl(fileurl: unknown, download = false): string | undefined {
+  if (typeof fileurl !== "string" || !fileurl.trim()) return undefined;
+  try {
+    const base = new URL(`${MOODLE_URL.replace(/\/$/, "")}/`);
+    const url = new URL(fileurl, base);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return undefined;
+    if (url.origin !== base.origin && [...url.searchParams.keys()].some((key) => /^(?:token|wstoken)$/i.test(key))) return undefined;
+    if (download) url.searchParams.set("forcedownload", "1");
+    return url.toString();
+  } catch {
+    return undefined;
   }
-  const url = new URL(absolute);
-  url.searchParams.set("forcedownload", "1");
-  return url.toString();
 }
 
 /** Append the Moodle web service token to a pluginfile URL for server-side fetches.
@@ -237,9 +290,13 @@ function ensureDownloadUrl(fileurl: string): string {
  *  keep it — it is the user-specific token Moodle generated for that file.
  */
 export function withMoodleToken(fileurl: string): string {
-  const url = new URL(fileurl);
+  const operation = "moodle_optional_html";
+  const base = moodleReadBase(operation);
+  const normalized = normalizeMediaUrl(fileurl);
+  if (!normalized) throw new MoodleReadError("MOODLE_ACCESS", operation);
+  const url = new URL(normalized);
+  if (url.origin !== base.origin) throw new MoodleReadError("MOODLE_ACCESS", operation);
   if (!url.searchParams.get("token")) {
-    checkMoodleConfig();
     url.searchParams.set("token", MOODLE_TOKEN);
   }
   return url.toString();
@@ -356,34 +413,28 @@ export async function moodleGetActivityCompletionStatuses(params: {
   moodleUserId: number;
   programmeSlug: "professional-truck-driver" | "eco-driver";
 }): Promise<MoodleActivityCompletionStatus[]> {
-  const courseId = MOODLE_COURSE_IDS[params.programmeSlug];
-  if (!courseId) {
-    throw new Error(`[Moodle] No course ID configured for programme: ${params.programmeSlug}`);
-  }
-
-  const url = moodleUrl("core_completion_get_activities_completion_status", {
+  const operation = "core_completion_get_activities_completion_status";
+  const courseId = readCourseId(params.programmeSlug, operation);
+  if (!positiveId(params.moodleUserId)) throw new MoodleReadError("MOODLE_PAYLOAD", operation);
+  const url = moodleReadUrl(operation, {
     courseid: courseId,
     userid: params.moodleUserId,
   });
-  const res = await fetch(url);
-  const data = await res.json();
-  if (data.exception) {
-    throw new Error(`[Moodle] moodleGetActivityCompletionStatuses failed: ${data.message}`);
-  }
-  if (!Array.isArray(data.statuses)) {
-    throw new Error("[Moodle] moodleGetActivityCompletionStatuses returned an unexpected response");
+  const data = await moodleReadJson(url, operation);
+  if (!isRecord(data) || !Array.isArray(data.statuses)) {
+    throw new MoodleReadError("MOODLE_PAYLOAD", operation);
   }
 
-  return data.statuses
-    .filter((status: unknown) => {
-      const candidate = status as { cmid?: unknown; state?: unknown; tracking?: unknown };
-      return typeof candidate.cmid === "number" && typeof candidate.state === "number" && typeof candidate.tracking === "number";
-    })
-    .map((status: { cmid: number; state: number; tracking: number }) => ({
-      cmid: status.cmid,
-      state: ([0, 1, 2, 3].includes(status.state) ? status.state : 0) as 0 | 1 | 2 | 3,
-      tracking: status.tracking,
-    }));
+  const seen = new Set<number>();
+  return data.statuses.map((status: unknown) => {
+    if (!isRecord(status) || !positiveId(status.cmid) || seen.has(status.cmid) ||
+        typeof status.state !== "number" || ![0, 1, 2, 3].includes(status.state) ||
+        typeof status.tracking !== "number" || ![0, 1, 2].includes(status.tracking)) {
+      throw new MoodleReadError("MOODLE_PAYLOAD", operation);
+    }
+    seen.add(status.cmid);
+    return { cmid: status.cmid, state: status.state as 0 | 1 | 2 | 3, tracking: status.tracking };
+  });
 }
 
 /**
@@ -441,25 +492,38 @@ export async function moodleGetCourseModules(params: {
   moodleUserId: number;
   programmeSlug: "professional-truck-driver" | "eco-driver";
 }): Promise<MoodleModule[]> {
-  const courseId = MOODLE_COURSE_IDS[params.programmeSlug];
-  if (!courseId) {
-    throw new Error(`[Moodle] No course ID configured for programme: ${params.programmeSlug}`);
-  }
-
-  const [sectionsResponse, activityStatuses] = await Promise.all([
-    fetch(moodleUrl("core_course_get_contents", { courseid: courseId })),
+  const operation = "core_course_get_contents";
+  const courseId = readCourseId(params.programmeSlug, operation);
+  const [sections, activityStatuses] = await Promise.all([
+    moodleReadJson(moodleReadUrl(operation, { courseid: courseId }), operation),
     moodleGetActivityCompletionStatuses(params),
   ]);
-  const sections = await sectionsResponse.json();
   if (!Array.isArray(sections)) {
-    throw new Error(`[Moodle] moodleGetCourseModules failed: ${sections?.message ?? "unexpected response"}`);
+    throw new MoodleReadError("MOODLE_PAYLOAD", operation);
   }
   const activityStatusByCmid = new Map(activityStatuses.map((status) => [status.cmid, status]));
+  const sectionIds = new Set<number>();
+  const moduleIds = new Set<number>();
   const modules: MoodleModule[] = [];
   for (const section of sections) {
-    const sectionModules = (section.modules ?? []).slice().sort((a: any, b: any) => {
-      const aIsQuiz = (a.modname ?? "") === "quiz";
-      const bIsQuiz = (b.modname ?? "") === "quiz";
+    if (!isRecord(section) || !positiveId(section.id) || sectionIds.has(section.id) ||
+        typeof section.name !== "string" || !Array.isArray(section.modules)) {
+      throw new MoodleReadError("MOODLE_PAYLOAD", operation);
+    }
+    sectionIds.add(section.id);
+    const sectionModules: Record<string, unknown>[] = section.modules.map((mod: unknown) => {
+      if (!isRecord(mod) || !positiveId(mod.id) || moduleIds.has(mod.id) ||
+          typeof mod.name !== "string" || !mod.name.trim() ||
+          typeof mod.modname !== "string" || !/^[a-z][a-z0-9_]*$/i.test(mod.modname) ||
+          (mod.instance !== undefined && !positiveId(mod.instance)) ||
+          (mod.completion !== undefined && (typeof mod.completion !== "number" || ![0, 1, 2].includes(mod.completion)))) {
+        throw new MoodleReadError("MOODLE_PAYLOAD", operation);
+      }
+      moduleIds.add(mod.id);
+      return mod;
+    }).sort((a, b) => {
+      const aIsQuiz = a.modname === "quiz";
+      const bIsQuiz = b.modname === "quiz";
       if (aIsQuiz && !bIsQuiz) return 1;
       if (!aIsQuiz && bIsQuiz) return -1;
       return 0;
@@ -473,16 +537,14 @@ export async function moodleGetCourseModules(params: {
       if (mod.visibleoncoursepage === 0) continue;
       if ((mod.modname ?? "") === "qbank") continue;
 
-      const rawFiles: unknown[] = mod.contents ?? [];
-      const files: MoodleFile[] = rawFiles.map((content: any) => ({
-        type: (content.type ?? "file") as string,
-        filename: (content.filename ?? "") as string,
-        fileurl: content.fileurl
-          ? ensureDownloadUrl(content.fileurl as string)
-          : undefined,
-        filesize: (content.filesize as number | undefined) ?? undefined,
-        mimetype: (content.mimetype as string | undefined) ?? undefined,
-        content: (content.content as string | undefined) ?? undefined,
+      const rawFiles: unknown[] = Array.isArray(mod.contents) ? mod.contents : [];
+      const files: MoodleFile[] = rawFiles.filter(isRecord).map((content) => ({
+        type: typeof content.type === "string" ? content.type : "file",
+        filename: typeof content.filename === "string" ? content.filename : "",
+        fileurl: normalizeMediaUrl(content.fileurl, true),
+        filesize: typeof content.filesize === "number" && Number.isFinite(content.filesize) && content.filesize >= 0 ? content.filesize : undefined,
+        mimetype: typeof content.mimetype === "string" ? content.mimetype : undefined,
+        content: typeof content.content === "string" ? content.content : undefined,
       }));
 
       // Detect direct video files for native playback
@@ -491,22 +553,25 @@ export async function moodleGetCourseModules(params: {
       );
 
       const activityStatus = activityStatusByCmid.get(mod.id as number);
+      // A known tracked structural activity cannot disappear from driver completion
+      // or be silently downgraded to an untracked reference on a partial payload.
+      // Unknown structural tracking is not evidence that completion is disabled.
+      if ((!activityStatus || activityStatus.tracking === 0) && mod.completion !== 0) {
+        throw new MoodleReadError("MOODLE_PAYLOAD", "core_completion_get_activities_completion_status");
+      }
       modules.push({
         id: mod.id as number,
         name: mod.name as string,
-        modname: (mod.modname ?? "page") as string,
+        modname: mod.modname as string,
         instance: (mod.instance ?? mod.id) as number,
         completionstate: activityStatus?.state ?? 0,
         completionTracked: Boolean(activityStatus && activityStatus.tracking > 0),
-        url: (mod.url as string | undefined) || undefined,
+        url: normalizeMediaUrl(mod.url),
         files,
         videoUrl: videoFile?.fileurl,
       });
     }
   }
-
-  // Debug: log all modules with their types
-  console.log(`[Moodle] Course ${courseId} modules:`, modules.map((m) => ({ id: m.id, name: m.name, modname: m.modname, bunnyVideoId: m.bunnyVideoId, videoUrl: m.videoUrl })));
 
   // Fetch Bunny embed data for page modules in parallel and detect Bunny URLs in url modules
   await Promise.all(
@@ -531,19 +596,18 @@ export async function moodleGetCourseModules(params: {
         const htmlFile = (mod.files ?? []).find((f) => f.filename === "index.html" && f.fileurl);
         if (!htmlFile?.fileurl) return;
 
-        const htmlUrl = withMoodleToken(htmlFile.fileurl);
         try {
-          const htmlRes = await fetch(htmlUrl);
-          if (htmlRes.ok) {
-            const html = await htmlRes.text();
-            const bunny = extractBunnyEmbedUrl(html);
-            if (bunny) {
-              mod.bunnyLibraryId = bunny.libraryId;
-              mod.bunnyVideoId = bunny.videoId;
-            }
+          // URL construction/token checks are optional too. Tokens never leave
+          // Moodle's origin and the read helper refuses authenticated redirects.
+          const htmlUrl = withMoodleToken(htmlFile.fileurl);
+          const html = await moodleReadOptionalText(htmlUrl);
+          const bunny = extractBunnyEmbedUrl(html);
+          if (bunny) {
+            mod.bunnyLibraryId = bunny.libraryId;
+            mod.bunnyVideoId = bunny.videoId;
           }
-        } catch (err) {
-          console.error(`[Moodle] Failed to fetch HTML for module ${mod.id}:`, err);
+        } catch {
+          // Media enrichment is best effort. Never log raw URLs or exceptions.
         }
       })
   );

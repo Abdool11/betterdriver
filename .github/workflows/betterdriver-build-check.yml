@@ -41,6 +41,9 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Offline learning and actual-route regressions
+        run: npm run test:learning-integrity
+
       - name: Type-check
         run: npm run type-check
 

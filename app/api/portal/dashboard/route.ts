@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
+import { learningDbRead } from "@/lib/learning-db-read";
+import { learningDiagnostic, learningFailure, learningRequestId, LEARNING_READ_VERSION } from "@/lib/learning-response";
 import {
   isMoodleModuleComplete,
   isMoodleModuleLocked,
@@ -19,32 +21,38 @@ import {
  * activity snapshot so they agree with My Course and My Progress.
  */
 export async function GET(_req: NextRequest) {
+  const requestId = learningRequestId();
+  let stage = "session";
+  try {
   const session = await getSession();
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: driver, error: driverErr } = await supabaseAdmin
+  stage = "driver_lookup";
+  const { data: driver, error: driverErr } = await learningDbRead((signal) => supabaseAdmin
     .from("drivers")
     .select("id, first_name, last_name, email, mobile, language_preference, moodle_user_id, company_id")
     .eq("id", session.driverId)
-    .single();
+    .abortSignal(signal).single());
 
   if (driverErr || !driver) {
-    return NextResponse.json({ error: "Driver not found" }, { status: 404 });
+    const absent = !driverErr || driverErr.code === "PGRST116";
+    return learningFailure(driverErr, stage, requestId, absent ? 404 : 503, absent ? "DRIVER_NOT_FOUND" : "DRIVER_LOOKUP");
   }
 
-  const { data: enrolment, error: enrolmentErr } = await supabaseAdmin
+  stage = "assignment_lookup";
+  const { data: enrolment, error: enrolmentErr } = await learningDbRead((signal) => supabaseAdmin
     .from("enrolments")
     .select("id, programme_slug, progress_percent, modules_completed, completed_at")
     .eq("driver_id", session.driverId)
     .in("status", ACTIVE_ENROLMENT_STATUSES)
     .order("created_at", { ascending: false })
     .limit(1)
-    .maybeSingle();
+    .abortSignal(signal).maybeSingle());
 
   if (enrolmentErr) {
-    console.error("[DASHBOARD] Enrolment fetch error:", enrolmentErr.message);
+    return learningFailure(enrolmentErr, stage, requestId, 503, "ASSIGNMENT_LOOKUP");
   }
 
   const programmeSlug = enrolment?.programme_slug ?? "ptdp";
@@ -73,7 +81,7 @@ export async function GET(_req: NextRequest) {
         await supabaseAdmin.from("drivers").update({ moodle_user_id: newUser.id }).eq("id", driver.id);
       }
     } catch (error) {
-      console.error("[DASHBOARD] Moodle provisioning failed:", error);
+      learningDiagnostic(error, "provisioning", requestId);
     }
   }
 
@@ -81,7 +89,7 @@ export async function GET(_req: NextRequest) {
     try {
       await moodleEnrolUser({ moodleUserId, programmeSlug: canonicalSlug });
     } catch (error) {
-      console.error("[DASHBOARD] Moodle enrolment check failed:", error);
+      learningDiagnostic(error, "enrolment_check", requestId);
     }
   }
 
@@ -93,11 +101,12 @@ export async function GET(_req: NextRequest) {
       const fourteenDays = new Date();
       fourteenDays.setDate(fourteenDays.getDate() + 14);
       const fourteenStr = fourteenDays.toISOString();
-      const { data: cpdRows } = await supabaseAdmin
+      const { data: cpdRows, error: cpdError } = await learningDbRead((signal) => supabaseAdmin
         .from("driver_cpd_participation")
         .select("completed_at, cpd_modules(due_date)")
-        .eq("driver_id", session.driverId);
+        .eq("driver_id", session.driverId).abortSignal(signal));
 
+      if (cpdError) throw cpdError;
       for (const row of cpdRows ?? []) {
         if (row.completed_at) continue;
         const module = row.cpd_modules as unknown as { due_date?: string } | null;
@@ -107,49 +116,57 @@ export async function GET(_req: NextRequest) {
         else if (due.toISOString() <= fourteenStr) upcoming++;
       }
     } catch (error) {
-      console.error("[DASHBOARD] CPD stats fetch failed:", error);
+      learningDiagnostic(error, "cpd_read", requestId);
+      return { overdue: null, upcoming: null, available: false };
     }
-    return { overdue, upcoming };
+    return { overdue, upcoming, available: true };
   })();
 
   const bulletinsPromise = (async () => {
     let unread = 0;
     try {
       if (driver.company_id) {
-        const { data: bulletinRows } = await supabaseAdmin
+        const { data: bulletinRows, error: bulletinError } = await learningDbRead((signal) => supabaseAdmin
           .from("bulletins")
           .select("id")
           .eq("company_id", driver.company_id)
-          .eq("status", "disseminated");
+          .eq("status", "disseminated").abortSignal(signal));
+        if (bulletinError) throw bulletinError;
         const bulletinIds = (bulletinRows ?? []).map((row) => row.id);
         if (bulletinIds.length > 0) {
-          const { data: readRows } = await supabaseAdmin
+          const { data: readRows, error: readError } = await learningDbRead((signal) => supabaseAdmin
             .from("driver_bulletin_interactions")
             .select("bulletin_id")
             .eq("driver_id", session.driverId)
             .not("read_at", "is", null)
-            .in("bulletin_id", bulletinIds);
+            .in("bulletin_id", bulletinIds).abortSignal(signal));
+          if (readError) throw readError;
           const readSet = new Set((readRows ?? []).map((row) => row.bulletin_id));
           unread = bulletinIds.filter((id) => !readSet.has(id)).length;
         }
       }
     } catch (error) {
-      console.error("[DASHBOARD] Bulletins unread count failed:", error);
+      learningDiagnostic(error, "bulletin_read", requestId);
+      return { unread: null, available: false };
     }
-    return unread;
+    return { unread, available: true };
   })();
 
+  let learningError: { code: string; requestId: string; version: string } | null = null;
   const learningPromise = (async () => {
-    if (!moodleUserId || !enrolment) return null;
+    if (!enrolment) return null;
+    if (!moodleUserId) { learningError = learningDiagnostic(null, "learning_account", requestId, "LEARNING_ACCOUNT_PENDING"); return null; }
     try {
-      return await moodleGetLearningSnapshot({ moodleUserId, programmeSlug: canonicalSlug });
+      const snapshot = await moodleGetLearningSnapshot({ moodleUserId, programmeSlug: canonicalSlug });
+      if (snapshot.modules.length === 0) { learningError = learningDiagnostic(null, "course_contents", requestId, "COURSE_EMPTY"); return null; }
+      return snapshot;
     } catch (error) {
-      console.error("[DASHBOARD] Moodle learning snapshot failed:", error);
+      learningError = learningDiagnostic(error, "moodle_snapshot", requestId);
       return null;
     }
   })();
 
-  const [learningSnapshot, cpdResult, unreadBulletins] = await Promise.all([
+  const [learningSnapshot, cpdResult, bulletinResult] = await Promise.all([
     learningPromise,
     cpdPromise,
     bulletinsPromise,
@@ -178,7 +195,7 @@ export async function GET(_req: NextRequest) {
       })
       .eq("id", enrolment.id);
     if (updateError) {
-      console.error("[DASHBOARD] Enrolment summary update failed:", updateError.message);
+      learningDiagnostic(updateError, "summary_update", requestId);
     }
   }
 
@@ -191,24 +208,31 @@ export async function GET(_req: NextRequest) {
       : "Eco-Driver Training";
 
   return NextResponse.json({
+    version: LEARNING_READ_VERSION,
     stats: {
       firstName: driver.first_name ?? session.firstName,
       lastName: driver.last_name ?? session.lastName,
       programmeTitle,
-      progressPercent,
-      completedModules,
-      totalModules,
-      cpdDue: cpdResult.overdue > 0 || cpdResult.upcoming > 0,
+      progressPercent: enrolment && !learningSnapshot ? null : progressPercent,
+      completedModules: enrolment && !learningSnapshot ? null : completedModules,
+      totalModules: enrolment && !learningSnapshot ? null : totalModules,
+      cpdDue: cpdResult.available ? (cpdResult.overdue ?? 0) > 0 || (cpdResult.upcoming ?? 0) > 0 : null,
+      cpdStatus: cpdResult.available ? "available" : "unavailable",
+      bulletinStatus: bulletinResult.available ? "available" : "unavailable",
       cpdOverdueCount: cpdResult.overdue,
       cpdUpcomingCount: cpdResult.upcoming,
       certificateReady: false,
       certificatePendingGfa: courseCompleted,
-      unreadBulletins,
+      unreadBulletins: bulletinResult.unread,
+      learningError,
       learningStatus: learningSnapshot ? "available" : (enrolment ? "unavailable" : "not_assigned"),
     },
     nextModule: nextModule
       ? { id: String(nextModule.id), name: nextModule.name, url: nextModule.url }
       : null,
     moodleUserId,
-  });
+  }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) {
+    return learningFailure(error, stage, requestId, 503, stage === "driver_lookup" ? "DRIVER_LOOKUP" : stage === "assignment_lookup" ? "ASSIGNMENT_LOOKUP" : "LEARNING_UNAVAILABLE");
+  }
 }

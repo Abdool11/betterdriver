@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CheckCircle2, PlayCircle, ArrowRight, Lock } from "lucide-react";
 import ProgressRefreshControl from "@/components/portal/ProgressRefreshControl";
 import { usePortalRefresh } from "@/components/portal/usePortalRefresh";
+import { readPortalJson, isCourseData } from "@/lib/portal-read";
 
 type CourseModule = {
   id: string;
@@ -29,14 +30,7 @@ export default function CoursePageClient() {
   const [error, setError] = useState("");
   const loadCourse = useCallback(async (signal: AbortSignal) => {
     try {
-      const response = await fetch("/api/portal/course", { cache: "no-store", signal });
-      if (signal.aborted) return;
-      if (response.status === 401) {
-        window.location.assign("/start");
-        return;
-      }
-      if (!response.ok) throw new Error("Could not confirm your latest training progress. Please refresh to try again.");
-      const nextData = (await response.json()) as CourseResponse;
+      const nextData = await readPortalJson("/api/portal/course", signal, isCourseData);
       if (!signal.aborted) { setData(nextData); setError(""); }
     } catch (loadError) {
       if (!signal.aborted) setError(loadError instanceof Error ? loadError.message : "Could not load your training information.");
@@ -56,7 +50,7 @@ export default function CoursePageClient() {
   }
 
   const { programme, modules } = data;
-  const nextModule = modules.find((module) => !module.locked && module.status === "available");
+  const nextModule = !error && modules.find((module) => !module.locked && module.status === "available");
 
   if (modules.length === 0) {
     return (
@@ -100,8 +94,9 @@ export default function CoursePageClient() {
         {modules.map((module) => {
           const isCompleted = module.status === "completed";
           const isAvailable = !module.locked && module.status === "available";
+          const cannotOpen = module.locked || Boolean(error);
           return (
-            <Link key={module.id} href={module.locked ? "#" : `/portal/module/${module.id}`} aria-disabled={module.locked} style={{ background: "#1C2333", border: `1px solid ${isAvailable ? "rgba(59,130,246,0.35)" : "#2d3a4f"}`, borderRadius: "0.875rem", padding: "1rem 1.25rem", display: "flex", alignItems: "center", gap: "1rem", opacity: module.locked ? 0.5 : 1, cursor: module.locked ? "default" : "pointer", textDecoration: "none", pointerEvents: module.locked ? "none" : "auto" }}>
+            <Link key={module.id} href={cannotOpen ? "#" : `/portal/module/${module.id}`} aria-disabled={cannotOpen} style={{ background: "#1C2333", border: `1px solid ${isAvailable ? "rgba(59,130,246,0.35)" : "#2d3a4f"}`, borderRadius: "0.875rem", padding: "1rem 1.25rem", display: "flex", alignItems: "center", gap: "1rem", opacity: cannotOpen ? 0.5 : 1, cursor: cannotOpen ? "default" : "pointer", textDecoration: "none", pointerEvents: cannotOpen ? "none" : "auto" }}>
               <div style={{ width: 36, height: 36, background: isCompleted ? "rgba(16,185,129,0.12)" : isAvailable ? "rgba(59,130,246,0.12)" : "#243044", border: `1px solid ${isCompleted ? "rgba(16,185,129,0.25)" : isAvailable ? "rgba(59,130,246,0.25)" : "#2d3a4f"}`, borderRadius: "0.625rem", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 {isCompleted ? <CheckCircle2 size={16} style={{ color: "#10B981" }} /> : isAvailable ? <PlayCircle size={16} style={{ color: "#3B82F6" }} /> : <Lock size={14} style={{ color: "#6B7280" }} />}
               </div>
