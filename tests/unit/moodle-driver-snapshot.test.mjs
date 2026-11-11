@@ -198,11 +198,11 @@ try {
 
   // No successful snapshot (including token-user progress) is allowed on API failure.
   activityFailure = "unavailable";
-  await assert.rejects(read(DRIVER_A), /Activity completion API unavailable/, "Unavailable activity API must reject");
+  await assert.rejects(read(DRIVER_A), /MOODLE_ACCESS/, "Unavailable activity API must reject");
   activityFailure = "malformed";
-  await assert.rejects(read(DRIVER_B), /unexpected response/, "Missing statuses must reject, not become pretend success");
+  await assert.rejects(read(DRIVER_B), /MOODLE_PAYLOAD/, "Missing statuses must reject, not become pretend success");
   activityFailure = "transport";
-  await assert.rejects(read(DRIVER_A), /Mock activity completion transport failure/, "Transport failure must propagate");
+  await assert.rejects(read(DRIVER_A), /MOODLE_NETWORK/, "Transport failure must propagate");
 
   assert.ok(requests.every(({ fn }) => fn === CONTENTS_API || fn === ACTIVITY_API));
   console.log("BetterDriver driver-snapshot regressions passed: isolated drivers, display states 0/1/2/3, untracked counts, fresh unlock, both programmes, and API failures.");

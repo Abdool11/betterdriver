@@ -5,6 +5,7 @@ import { CheckCircle2, TrendingUp, Calendar } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
 import ProgressRefreshControl from "@/components/portal/ProgressRefreshControl";
 import { usePortalRefresh } from "@/components/portal/usePortalRefresh";
+import { readPortalJson, isCourseData, isCpdData } from "@/lib/portal-read";
 
 type CourseModule = {
   id: string;
@@ -37,42 +38,25 @@ export default function ProgressPageClient() {
   const [courseError, setCourseError] = useState("");
   const [cpdError, setCpdError] = useState("");
   const loadProgress = useCallback(async (signal: AbortSignal) => {
-    try {
-      const [courseResult, cpdResult] = await Promise.allSettled([
-        fetch("/api/portal/course", { cache: "no-store", signal }),
-        fetch("/api/portal/cpd/progress", { cache: "no-store", signal }),
-      ]);
-      if (signal.aborted) return;
-      const responses = [courseResult, cpdResult]
-        .filter((result): result is PromiseFulfilledResult<Response> => result.status === "fulfilled")
-        .map((result) => result.value);
-      if (responses.some((response) => response.status === 401)) {
-        window.location.assign("/start");
-        return;
-      }
-      if (courseResult.status === "fulfilled" && courseResult.value.ok) {
+    // Course is displayed as soon as it settles; a hung CPD service cannot mask it.
+    await Promise.allSettled([
+      (async () => {
         try {
-          const data = (await courseResult.value.json()) as CourseResponse;
+          const data = await readPortalJson("/api/portal/course", signal, isCourseData);
           if (!signal.aborted) { setCourse(data); setCourseError(""); }
-        } catch {
-          if (!signal.aborted) setCourseError("Could not read your current course progress.");
+        } catch (error) {
+          if (!signal.aborted) setCourseError(error instanceof Error ? error.message : "Could not confirm course progress.");
         }
-      } else {
-        setCourseError("Could not confirm your latest course progress. Please refresh to try again.");
-      }
-      if (cpdResult.status === "fulfilled" && cpdResult.value.ok) {
+      })(),
+      (async () => {
         try {
-          const data = (await cpdResult.value.json()) as CpdResponse;
-          if (!signal.aborted) { setCpd(data); setCpdError(""); }
+          const data = await readPortalJson("/api/portal/cpd/progress", signal, isCpdData);
+          if (!signal.aborted) { setCpd(data as CpdResponse); setCpdError(""); }
         } catch {
-          if (!signal.aborted) setCpdError("CPD history is temporarily unavailable.");
+          if (!signal.aborted) setCpdError("CPD history is temporarily unavailable. Please refresh to retry.");
         }
-      } else {
-        setCpdError("CPD history is temporarily unavailable.");
-      }
-    } catch {
-      if (!signal.aborted) setCourseError("Could not confirm your latest course progress. Please refresh to try again.");
-    }
+      })(),
+    ]);
   }, []);
   const { refresh, refreshing } = usePortalRefresh(loadProgress);
   const refreshControl = <ProgressRefreshControl refreshing={refreshing} onRefresh={() => void refresh()} error={courseError ? `${courseError}${course ? " Showing the last confirmed course information." : ""}` : undefined} />;
