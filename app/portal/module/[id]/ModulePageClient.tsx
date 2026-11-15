@@ -3,6 +3,7 @@
 import Link from "next/link";
 import ProgressRefreshControl from "@/components/portal/ProgressRefreshControl";
 import { usePortalRefresh } from "@/components/portal/usePortalRefresh";
+import { readPortalJson, isCourseData } from "@/lib/portal-read";
 import { useCallback, useMemo, useState } from "react";
 import {
   AlertCircle,
@@ -44,15 +45,8 @@ export default function ModulePageClient({ moduleId }: ModulePageClientProps) {
 
   const loadCourse = useCallback(async (signal: AbortSignal) => {
     try {
-      const response = await fetch("/api/portal/course", { cache: "no-store", signal });
-      if (signal.aborted) return;
-      if (response.status === 401) {
-        window.location.assign("/start");
-        return;
-      }
-      if (!response.ok) throw new Error("Could not confirm your latest module progress. Please refresh to try again.");
-      const data = (await response.json()) as CourseResponse;
-      if (!signal.aborted) { setCourse(data); setError(""); }
+      const nextData = await readPortalJson("/api/portal/course", signal, isCourseData);
+      if (!signal.aborted) { setCourse(nextData); setError(""); }
     } catch (loadError) {
       if (!signal.aborted) setError(loadError instanceof Error ? loadError.message : "Could not load this learning module.");
     }
@@ -189,7 +183,7 @@ export default function ModulePageClient({ moduleId }: ModulePageClientProps) {
             type="button"
             className="btn-primary"
             onClick={() => void openLearning()}
-            disabled={launching || !module.url}
+            disabled={launching || !module.url || Boolean(error)}
             style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", opacity: module.url ? 1 : 0.6 }}
           >
             <ExternalLink size={17} />
@@ -209,9 +203,9 @@ export default function ModulePageClient({ moduleId }: ModulePageClientProps) {
           {course.modules.map((candidate) => (
             <Link
               key={candidate.id}
-              href={candidate.locked ? "#" : `/portal/module/${candidate.id}`}
-              aria-disabled={candidate.locked}
-              style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.875rem 1rem", background: candidate.id === module.id ? "rgba(245,158,11,0.08)" : "#1C2333", border: `1px solid ${candidate.id === module.id ? "rgba(245,158,11,0.3)" : "#2d3a4f"}`, borderRadius: "0.75rem", color: "inherit", textDecoration: "none", opacity: candidate.locked ? 0.55 : 1, pointerEvents: candidate.locked ? "none" : "auto" }}
+              href={candidate.locked || error ? "#" : `/portal/module/${candidate.id}`}
+              aria-disabled={candidate.locked || Boolean(error)}
+              style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.875rem 1rem", background: candidate.id === module.id ? "rgba(245,158,11,0.08)" : "#1C2333", border: `1px solid ${candidate.id === module.id ? "rgba(245,158,11,0.3)" : "#2d3a4f"}`, borderRadius: "0.75rem", color: "inherit", textDecoration: "none", opacity: candidate.locked || error ? 0.55 : 1, pointerEvents: candidate.locked || error ? "none" : "auto" }}
             >
               {candidate.status === "completed" ? <CheckCircle2 size={16} style={{ color: "#10B981" }} /> : candidate.locked ? <Lock size={15} style={{ color: "#6B7280" }} /> : <PlayCircle size={16} style={{ color: "#F59E0B" }} />}
               <span style={{ flex: 1, color: "#F9FAFB", fontSize: "0.875rem" }}>{candidate.order}. {candidate.name}</span>

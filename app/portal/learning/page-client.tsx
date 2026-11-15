@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import Link from "next/link";
 import ProgressRefreshControl from "@/components/portal/ProgressRefreshControl";
 import { usePortalRefresh } from "@/components/portal/usePortalRefresh";
+import { readPortalJson, isCourseData } from "@/lib/portal-read";
 
 import {
   BookOpen,
@@ -74,12 +75,7 @@ export default function LearningPage() {
 
   const loadCourse = useCallback(async (signal: AbortSignal) => {
     try {
-      const response = await fetch("/api/portal/course", { cache: "no-store", signal });
-      if (signal.aborted) return;
-      if (response.status === 401) { window.location.assign("/start"); return; }
-      if (!response.ok) throw new Error("Could not confirm your latest course progress. Please refresh to try again.");
-      const data = (await response.json()) as CourseApiResponse;
-      if (!data.programme || !Array.isArray(data.modules)) throw new Error("Could not read your course information.");
+      const data = await readPortalJson("/api/portal/course", signal, isCourseData);
       if (!signal.aborted) {
         setProg({
           title: data.programme.title,
@@ -89,7 +85,7 @@ export default function LearningPage() {
           modules: data.modules.map((module) => ({
             id: module.id, title: module.name,
             status: module.locked ? "locked" : module.status,
-            unit: module.order, downloadable: module.downloadable,
+            unit: module.order, downloadable: Boolean(module.downloadable),
           })),
         });
         setLoadError("");
@@ -121,7 +117,7 @@ export default function LearningPage() {
       <ProgressRefreshControl refreshing={loading} onRefresh={() => void refresh()} error={loadError ? `${loadError}${confirmed ? " Showing the last confirmed course information." : ""}` : undefined} />
 
       {/* WiFi download banner */}
-      {showDownloadBanner && prog.modules.some((m) => m.downloadable && m.status !== "locked") && (
+      {!loadError && showDownloadBanner && prog.modules.some((m) => m.downloadable && m.status !== "locked") && (
         <div style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: "0.875rem", padding: "1rem" }}>
           <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
             <div style={{ width: 32, height: 32, background: "rgba(59,130,246,0.15)", borderRadius: "0.5rem", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -214,7 +210,7 @@ export default function LearningPage() {
           {prog.modules.map((mod) => {
             const cfg = statusConfig[mod.status];
             const Icon = cfg.icon;
-            const isClickable = mod.status !== "locked";
+            const isClickable = mod.status !== "locked" && !loadError;
 
             const content = (
               <div

@@ -1,12 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Bell, BookOpen, CheckCircle2, ChevronRight, RefreshCw } from "lucide-react";
 import TranslatedPageHeader from "@/components/portal/TranslatedPageHeader";
+import ProgressRefreshControl from "@/components/portal/ProgressRefreshControl";
+import { usePortalRefresh } from "@/components/portal/usePortalRefresh";
+import { readPortalJson, isDashboardData, learningErrorText } from "@/lib/portal-read";
 
 type DashboardResponse = {
   stats?: {
+    learningStatus?: "available" | "unavailable" | "not_assigned";
+    learningError?: { code: string; requestId: string } | null;
+    cpdStatus?: "available" | "unavailable";
+    bulletinStatus?: "available" | "unavailable";
     firstName?: string;
     programmeTitle?: string;
     progressPercent?: number;
@@ -34,39 +41,28 @@ export default function TasksPageClient() {
   const [data, setData] = useState<DashboardResponse | null>(null);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    let active = true;
-
-    async function loadTasks() {
-      try {
-        const response = await fetch("/api/portal/dashboard", { cache: "no-store" });
-        if (response.status === 401) {
-          window.location.assign("/start");
-          return;
-        }
-        if (!response.ok) throw new Error("Could not load your current actions.");
-        const nextData = (await response.json()) as DashboardResponse;
-        if (active) setData(nextData);
-      } catch (loadError) {
-        if (active) setError(loadError instanceof Error ? loadError.message : "Could not load your current actions.");
-      }
+  const loadTasks = useCallback(async (signal: AbortSignal) => {
+    try {
+      const nextData = await readPortalJson("/api/portal/dashboard", signal, isDashboardData);
+      if (!signal.aborted) { setData(nextData as DashboardResponse); setError(""); }
+    } catch (error) {
+      if (!signal.aborted) setError(error instanceof Error ? error.message : "Could not load your current actions.");
     }
-
-    void loadTasks();
-    return () => { active = false; };
   }, []);
-
-  if (error) return <div className="page-content"><TranslatedPageHeader pageKey="tasks" /><p style={{ color: "#fca5a5" }}>{error}</p></div>;
-  if (!data) return <div className="page-content"><TranslatedPageHeader pageKey="tasks" /><p style={{ color: "#9CA3AF" }}>Loading your current actions…</p></div>;
+  const { refresh, refreshing } = usePortalRefresh(loadTasks);
+  const refreshControl = <ProgressRefreshControl refreshing={refreshing} onRefresh={() => void refresh()} error={error ? `${error}${data ? " Showing the last confirmed task information." : ""}` : undefined} />;
+  if (!data) return <div className="page-content"><TranslatedPageHeader pageKey="tasks" />{!error && <p style={{ color: "#9CA3AF" }}>Loading your current actions…</p>}{refreshControl}</div>;
 
   const stats = data.stats ?? {};
   const tasks: DriverTask[] = [];
+  const learningUnavailable = stats.learningStatus === "unavailable";
+  const sourcesConfirmed = !error && !learningUnavailable && stats.cpdStatus === "available" && stats.bulletinStatus === "available";
 
-  if (data.nextModule && (stats.totalModules ?? 0) > 0) {
+  if (!error && !learningUnavailable && data.nextModule) {
     tasks.push({
       id: "learning",
       title: data.nextModule.name,
-      description: `${stats.completedModules ?? 0} of ${stats.totalModules ?? 0} programme modules completed.`,
+      description: (stats.totalModules ?? 0) > 0 ? `${stats.completedModules ?? 0} of ${stats.totalModules ?? 0} programme modules completed.` : "Open your assigned learning material. Completion is not assumed for untracked reference content.",
       actionLabel: (stats.completedModules ?? 0) > 0 ? "Continue learning" : "Start learning",
       href: `/portal/module/${data.nextModule.id}`,
       icon: "learning",
@@ -74,7 +70,7 @@ export default function TasksPageClient() {
     });
   }
 
-  if (stats.cpdDue) {
+  if (!error && stats.cpdStatus === "available" && stats.cpdDue) {
     const outstanding = (stats.cpdOverdueCount ?? 0) + (stats.cpdUpcomingCount ?? 0);
     tasks.push({
       id: "cpd",
@@ -87,7 +83,7 @@ export default function TasksPageClient() {
     });
   }
 
-  if ((stats.unreadBulletins ?? 0) > 0) {
+  if (!error && stats.bulletinStatus === "available" && (stats.unreadBulletins ?? 0) > 0) {
     const unread = stats.unreadBulletins ?? 0;
     tasks.push({
       id: "bulletins",
@@ -105,15 +101,18 @@ export default function TasksPageClient() {
   return (
     <div className="page-content">
       <TranslatedPageHeader pageKey="tasks" driverFirstName={stats.firstName} />
+      {refreshControl}
+      {learningUnavailable && <p role="status" style={{ color: "#fca5a5" }}>{learningErrorText(stats.learningError)}</p>}
+      {(stats.cpdStatus === "unavailable" || stats.bulletinStatus === "unavailable") && <p style={{ color: "#fbbf24" }}>Some CPD or company-update actions could not be checked. Please refresh to retry.</p>}
       <p style={{ color: "#9CA3AF", fontSize: "0.875rem", margin: "0 0 1.25rem" }}>Actions shown here are based on your current assigned learning, CPD and company updates.</p>
 
-      {tasks.length === 0 ? (
+      {tasks.length === 0 && sourcesConfirmed ? (
         <section style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)", borderRadius: "1rem", padding: "1.5rem", textAlign: "center" }}>
           <CheckCircle2 size={30} style={{ color: "#10B981", marginBottom: "0.75rem" }} />
           <h2 style={{ color: "#F9FAFB", fontSize: "1.125rem", margin: "0 0 0.375rem" }}>You are up to date</h2>
           <p style={{ color: "#9CA3AF", margin: 0 }}>There are no current training, CPD or company-update actions for this driver profile.</p>
         </section>
-      ) : (
+      ) : tasks.length > 0 ? (
         <div style={{ display: "grid", gap: "0.75rem" }}>
           {tasks.map((task) => (
             <Link key={task.id} href={task.href} style={{ textDecoration: "none", color: "inherit" }}>
@@ -125,7 +124,7 @@ export default function TasksPageClient() {
             </Link>
           ))}
         </div>
-      )}
+      ) : <p style={{ color: "#9CA3AF" }}>Your current training actions have not been confirmed. No completion or up-to-date status is assumed.</p>}
     </div>
   );
 }
