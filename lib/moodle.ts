@@ -838,8 +838,45 @@ function parseChoicesFromHtml(html: string): { id: number; text: string; fractio
       }
     }
 
+    // Fallback: newer Moodle/Boost markup puts the choice text in a separate
+    // element referenced by aria-labelledby — typically <div id="{inputId}_label">
+    // containing an <span class="answernumber">a. </span> badge plus the text.
+    if (!labelText) {
+      const labelledByMatch = inputTag.match(/aria-labelledby=["']([^"']+)["']/i);
+      const labelIds = [labelledByMatch?.[1], idMatch ? `${idMatch[1]}_label` : undefined]
+        .filter((v): v is string => Boolean(v));
+      for (const labelId of labelIds) {
+        const esc = labelId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const labelledMatch =
+          html.match(new RegExp(`id=["']${esc}["'][^>]*>([\\s\\S]*?)</div>\\s*</div>`, "i")) ??
+          html.match(new RegExp(`id=["']${esc}["'][^>]*>([\\s\\S]*?)</div>`, "i"));
+        if (labelledMatch) {
+          labelText = labelledMatch[1]
+            .replace(/<span[^>]*class=["'][^"']*answernumber[^"']*["'][^>]*>[\s\S]*?<\/span>/gi, "")
+            .replace(/<[^>]*>/g, "")
+            .replace(/^[a-z]\.\s*/i, "")
+            .trim();
+          if (labelText) break;
+        }
+      }
+    }
+
     if (labelText) {
       answers.push({ id: value, text: labelText, fraction: 0 });
+    }
+  }
+
+  // Moodle dropdown-style multichoice renders a <select name="..._answer">
+  // with <option value="N"> entries instead of radio inputs.
+  if (answers.length === 0) {
+    const selectMatch = html.match(/<select[^>]*name=["'][^"']*_answer["'][^>]*>([\s\S]*?)<\/select>/i);
+    if (selectMatch) {
+      const optRegex = /<option[^>]*value=["'](\d+)["'][^>]*>([\s\S]*?)<\/option>/gi;
+      let optMatch: RegExpExecArray | null;
+      while ((optMatch = optRegex.exec(selectMatch[1]))) {
+        const text = optMatch[2].replace(/<[^>]*>/g, "").trim();
+        if (text) answers.push({ id: parseInt(optMatch[1], 10), text, fraction: 0 });
+      }
     }
   }
 
@@ -911,18 +948,18 @@ export async function moodleGetAttemptData(
     const isChoiceType = type === "multichoice" || type === "truefalse";
 
     if (isChoiceType) {
-      // Try to extract answers from the API options first.
-      // Moodle uses "answer" as the field name for answer text, not "text".
-      let answers = ((rawOptions?.answers ?? []) as any[]).map((a, idx) => ({
-        id: (a.id ?? a.choice ?? idx) as number,
-        text: (a.answer ?? a.text ?? "") as string,
-        fraction: (a.fraction ?? 0) as number,
-      }));
-
-      // Fallback: if no answers came from the API, parse them from the HTML.
-      // Moodle embeds radio/checkbox inputs with labels in the question HTML.
+      // Prefer choices parsed from the rendered HTML: the input value is
+      // exactly what Moodle expects back in process_attempt and it respects
+      // option shuffle order. The API's options.answers (when present) may
+      // carry DB answer ids instead of choice indexes, so it is the fallback.
+      let answers = parseChoicesFromHtml(html);
       if (answers.length === 0) {
-        answers = parseChoicesFromHtml(html);
+        // Moodle uses "answer" as the field name for answer text, not "text".
+        answers = ((rawOptions?.answers ?? []) as any[]).map((a, idx) => ({
+          id: (a.id ?? a.choice ?? idx) as number,
+          text: (a.answer ?? a.text ?? "") as string,
+          fraction: (a.fraction ?? 0) as number,
+        }));
       }
 
       return {

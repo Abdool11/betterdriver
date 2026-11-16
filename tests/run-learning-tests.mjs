@@ -14,6 +14,7 @@ const tests = [
   ["moodle-load-recovery", "moodle-load-recovery.test.mjs"],
   ["learning-routes", "learning-routes.test.mjs"],
   ["portal-read", "portal-read.test.mjs"],
+  ["moodle-quiz-choices", "moodle-quiz-choices.test.mjs"],
 ];
 const requested = process.argv.slice(2);
 const selected = requested.length
