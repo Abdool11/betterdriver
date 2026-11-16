@@ -1,6 +1,6 @@
 export type CourseData = {
   programme: { title: string; progressPercent: number; totalModules: number; completedModules: number };
-  modules: Array<{ id: string; name: string; status: "completed" | "available" | "locked"; locked: boolean; order: number; url?: string; downloadable?: boolean }>;
+  modules: Array<{ id: string; name: string; status: "completed" | "available" | "locked"; locked: boolean; order: number; url?: string; downloadable?: boolean; modname?: string; instance?: number; bunnyVideoId?: string; bunnyLibraryId?: string; videoUrl?: string }>;
 };
 
 export const LEARNING_ERROR_MESSAGES: Record<string, string> = {
@@ -38,7 +38,13 @@ export function isCourseData(value: unknown): value is CourseData {
   return value.modules.every((module) => {
     if (!object(module) || typeof module.id !== "string" || !module.id || ids.has(module.id) || typeof module.name !== "string" || !["completed", "available", "locked"].includes(String(module.status)) || typeof module.locked !== "boolean" || !count(module.order) || module.order < 1 || (module.status === "locked") !== module.locked) return false;
     ids.add(module.id);
-    return (module.url === undefined || typeof module.url === "string") && (module.downloadable === undefined || typeof module.downloadable === "boolean");
+    if (!((module.url === undefined || typeof module.url === "string") && (module.downloadable === undefined || typeof module.downloadable === "boolean"))) return false;
+    if (module.modname !== undefined && typeof module.modname !== "string") return false;
+    if (module.instance !== undefined && (typeof module.instance !== "number" || !Number.isInteger(module.instance) || module.instance < 1)) return false;
+    if (module.bunnyVideoId !== undefined && typeof module.bunnyVideoId !== "string") return false;
+    if (module.bunnyLibraryId !== undefined && typeof module.bunnyLibraryId !== "string") return false;
+    if (module.videoUrl !== undefined && (typeof module.videoUrl !== "string" || !/^https:\/\//i.test(module.videoUrl))) return false;
+    return true;
   });
 }
 export function isCpdData(value: unknown): value is { completed: number; records: Array<Record<string, unknown>> } {

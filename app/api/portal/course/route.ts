@@ -36,6 +36,9 @@ export async function GET() {
       return {
         id: String(module.id), name: module.name, url: module.url, completionstate: module.completionstate,
         status, locked: status === "locked", order: index + 1,
+        modname: module.modname, instance: module.instance,
+        bunnyVideoId: module.bunnyVideoId, bunnyLibraryId: module.bunnyLibraryId,
+        videoUrl: module.videoUrl,
         downloadable: Boolean(downloadFile) || hasBunnyVideo, downloadSize: downloadFile?.filesize,
         downloadFilename: downloadFile?.filename ?? (hasBunnyVideo ? `${module.name.replace(/[^a-zA-Z0-9\s]/g, "").trim()}.mp4` : undefined),
       };

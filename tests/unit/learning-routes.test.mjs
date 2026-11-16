@@ -287,7 +287,7 @@ const failures = [];
 const uiFixtures = {};
 try {
   const routes = {};
-  for (const name of ["course", "dashboard"]) {
+  for (const name of ["course", "dashboard", "progress"]) {
     const outfile = resolve(output, `${name}.cjs`);
     const result = await build({
       entryPoints: [resolve(root, `app/api/portal/${name}/route.ts`)],
@@ -302,7 +302,7 @@ try {
     assert.ok(imports.some((entry) => entry.path === "next/server" && entry.external), "Use actual next/server dependency");
     assert.ok(!imports.some((entry) => entry.path.startsWith("@/")), "All internal aliases must resolve using the root tsconfig");
     routes[name] = createRequire(resolve(root, "package.json"))(outfile);
-    assert.equal(typeof routes[name].GET, "function");
+    assert.equal(typeof routes[name][name === "progress" ? "POST" : "GET"], "function");
   }
   globalThis.fetch = fakeFetch;
   for (const method of Object.keys(originalConsole)) {
@@ -321,6 +321,21 @@ try {
       assert.equal(f.writes.length, 0, "Course endpoint is strictly read-only");
       assert.ok(f.requests.every(({ method }) => method === "GET"));
     }
+    return { response, body, f };
+  }
+  async function invokeProgress(options = {}) {
+    const { moduleId = "10", ...fixtureOptions } = options;
+    const f = fixture(fixtureOptions);
+    globalThis[fixtureKey] = f;
+    const response = await routes.progress.POST(new Request("https://portal.example.test/api/portal/progress", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ moduleId }),
+    }));
+    assert.ok(response instanceof Response, "Real NextResponse must be a Response");
+    const body = await response.json();
+    assert.deepEqual(f.violations, [], "Every fetch must meet the strict no-network fixture contract");
+    assertSafe(f.logs);
     return { response, body, f };
   }
   async function test(name, callback) {
@@ -567,6 +582,48 @@ try {
       });
     }
   }
+  await test("progress: unauthorized never reads DB or Moodle", async () => {
+    const result = await invokeProgress({ session: null });
+    assert.equal(result.response.status, 401);
+    assert.equal(result.f.queries.length, 0);
+    assert.equal(result.f.requests.length, 0);
+  });
+  await test("progress: module outside the assigned programme cannot be marked", async () => {
+    const result = await invokeProgress({ moduleId: "999" });
+    assert.equal(result.response.status, 404);
+    assert.equal(result.f.writes.length, 0);
+  });
+  await test("progress: confirmed tracked completion refreshes the enrolment summary", async () => {
+    const result = await invokeProgress({ moduleId: "10" });
+    assert.equal(result.response.status, 200);
+    assert.equal(result.body.confirmed, true);
+    assert.equal(result.body.untracked, false);
+    assert.equal(result.body.progress.completedModules, 1);
+    assert.equal(result.body.progress.totalModules, 3);
+    assert.equal(result.f.writes.length, 1, "Confirmed completion persists the Moodle-verified summary only");
+  });
+  await test("progress: tracked-unconfirmed stays honest and writes nothing", async () => {
+    const result = await invokeProgress({ moduleId: "11" });
+    assert.equal(result.response.status, 200);
+    assert.equal(result.body.confirmed, false);
+    assert.equal(result.body.untracked, false);
+    assert.equal(result.f.writes.length, 0);
+  });
+  await test("progress: untracked module is reported untracked, never completed", async () => {
+    const result = await invokeProgress({
+      moduleId: "10",
+      sections: [{ id: 1, name: "Scoped fixture course", modules: [resource(10, 0), resource(11), resource(12)] }],
+      statuses: [
+        { cmid: 10, state: 0, tracking: 0 },
+        { cmid: 11, state: 0, tracking: 2 },
+        { cmid: 12, state: 0, tracking: 2 },
+      ],
+    });
+    assert.equal(result.response.status, 200);
+    assert.equal(result.body.confirmed, false);
+    assert.equal(result.body.untracked, true);
+    assert.equal(result.f.writes.length, 0);
+  });
   await test("course: safe correlated support IDs are fresh per failure", async () => {
     const first = await invoke("course", { failure: "network" });
     const second = await invoke("course", { failure: "network" });

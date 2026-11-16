@@ -3,8 +3,10 @@ import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import {
+  generateMoodleAutoLoginUrl,
   isMoodleModuleComplete,
   moodleGetLearningSnapshot,
+  MOODLE_URL,
   normalizeProgrammeSlug,
 } from "@/lib/moodle";
 
@@ -76,11 +78,28 @@ export async function POST(req: NextRequest) {
     if (!module) {
       return NextResponse.json({ error: "Module not found in your programme" }, { status: 404 });
     }
+
     if (!isMoodleModuleComplete(module)) {
-      return NextResponse.json(
-        { error: "Moodle has not confirmed completion for this module yet. Please complete it in the learning player." },
-        { status: 409 }
-      );
+      // Moodle has not recorded this activity as complete for the driver yet.
+      // Return a signed handoff URL so the client can replay the module view in
+      // a hidden iframe (server-side fetches carry no driver session cookies)
+      // and then retry the confirmation.
+      let moodleUrl: string | undefined;
+      try {
+        const viewUrl = module.url ?? `${MOODLE_URL}/mod/${module.modname}/view.php?id=${module.id}`;
+        moodleUrl = (await generateMoodleAutoLoginUrl({
+          moodleUserId: driver.moodle_user_id,
+          redirectUrl: viewUrl,
+        })) ?? undefined;
+      } catch (urlError) {
+        console.error("[PROGRESS] Autologin URL generation failed:", urlError);
+      }
+      return NextResponse.json({
+        success: true,
+        confirmed: false,
+        untracked: !module.completionTracked,
+        moodleUrl,
+      });
     }
 
     const justCompleted = snapshot.completed && !enrolment.completed_at;
@@ -107,6 +126,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      confirmed: true,
+      untracked: false,
       progress: {
         completedModules: snapshot.completedModules,
         totalModules: snapshot.totalModules,

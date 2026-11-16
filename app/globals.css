@@ -605,3 +605,7 @@ h3 { font-size: clamp(1.125rem, 2.5vw, 1.5rem); }
     padding: 2rem;
   }
 }
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
