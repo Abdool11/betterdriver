@@ -47,6 +47,19 @@ export async function POST(req: NextRequest) {
   }
   const moduleCmid = typeof cmid === "string" ? cmid : String(attemptId);
 
+  // The quiz GET route pins the issued attempt id in an httpOnly cookie;
+  // reject submissions for a different attempt when a pin exists.
+  const pinned = Number.parseInt(
+    req.cookies.get(`bd_quiz_att_${moduleCmid}`)?.value ?? "",
+    10
+  );
+  if (Number.isInteger(pinned) && pinned !== attemptId) {
+    return NextResponse.json(
+      { error: "This quiz attempt is no longer active. Reload the quiz and try again." },
+      { status: 409 }
+    );
+  }
+
   // Normalize sequenceChecks to numeric keys
   const seqMap: Record<number, number> = {};
   if (sequenceChecks && typeof sequenceChecks === "object") {

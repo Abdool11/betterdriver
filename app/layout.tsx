@@ -10,6 +10,13 @@ export const metadata: Metadata = {
   description:
     "BetterDriver is where professional truck drivers enrol in training, complete programmes, earn certification, and build their professional record.",
   manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/icon-192.png",
+  },
   keywords: [
     "truck driver training",
     "professional driver certification",

@@ -105,6 +105,7 @@ export async function GET(
   });
   res.cookies.set(cookieName, String(attemptData.attempt.id), {
     httpOnly: true,
+    secure: true,
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 30,
