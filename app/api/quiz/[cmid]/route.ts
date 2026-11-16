@@ -3,10 +3,8 @@ import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import {
   moodleGetQuizForModule,
-  moodleGetQuizAttempts,
   moodleStartQuizAttempt,
   moodleGetAttemptData,
-  moodleGetAttemptReview,
 } from "@/lib/moodle";
 
 export const dynamic = "force-dynamic";
@@ -63,42 +61,37 @@ export async function GET(
 
   const retry = req.nextUrl.searchParams.get("retry") === "1";
 
-  // Check existing attempts
-  const attempts = await moodleGetQuizAttempts(quizId, driver.moodle_user_id);
-  const finishedAttempt = attempts.find((a) => a.state === "finished");
+  // Attempts are owned by the Moodle service user (the token's identity), and
+  // this token's service lacks mod_quiz_get_user_attempts, so attempts cannot
+  // be listed. Critically, every mod_quiz_start_attempt(forcenew) DELETES the
+  // previous in-progress attempt for the service user — so re-fetching this
+  // endpoint used to orphan the attempt the quiz UI was about to submit,
+  // producing HTTP 500 from process_attempt. We pin the live attempt id in an
+  // httpOnly cookie and reuse it while it is still in progress.
+  const cookieName = `bd_quiz_att_${cmid}`;
+  const pinned = Number.parseInt(req.cookies.get(cookieName)?.value ?? "", 10);
 
-  if (finishedAttempt && !retry) {
-    const review = await moodleGetAttemptReview(finishedAttempt.id);
-    const freeTextTypes = ["essay", "shortanswer", "numerical"];
-    const hasFreeText = (review?.questionTypes ?? []).some((t) => freeTextTypes.includes(t));
-    return NextResponse.json({
-      quiz: { id: quizId, name: quiz?.name ?? "Quiz", intro: quiz?.intro, grade: quiz?.grade ?? 0 },
-      finished: true,
-      attempt: finishedAttempt,
-      grade: review?.grade ?? finishedAttempt.sumgrades,
-      questions: (review?.questionTypes ?? []).map((type, i) => ({ slot: i + 1, type })),
-      hasFreeText,
-    });
-  }
-
-  // Look for an in-progress attempt first
-  let attempt = attempts.find((a) => a.state === "inprogress") ?? null;
-
-  // If no in-progress attempt, start a new one
-  if (!attempt) {
-    attempt = await moodleStartQuizAttempt(quizId);
-    if (!attempt) {
-      return NextResponse.json({ error: "Unable to start quiz attempt" }, { status: 500 });
+  let attemptData = null;
+  if (!retry && Number.isInteger(pinned)) {
+    const existing = await moodleGetAttemptData(pinned, 0);
+    if (existing?.attempt?.state === "inprogress") {
+      attemptData = existing;
     }
   }
 
-  // Fetch attempt data (questions)
-  const attemptData = await moodleGetAttemptData(attempt.id, 0);
+  if (!attemptData) {
+    const attempt = await moodleStartQuizAttempt(quizId);
+    if (!attempt) {
+      return NextResponse.json({ error: "Unable to start quiz attempt" }, { status: 500 });
+    }
+    attemptData = await moodleGetAttemptData(attempt.id, 0);
+  }
+
   if (!attemptData) {
     return NextResponse.json({ error: "Unable to load quiz questions" }, { status: 500 });
   }
 
-  return NextResponse.json({
+  const res = NextResponse.json({
     quiz: { id: quizId, name: quiz?.name ?? "Quiz", intro: quiz?.intro, grade: quiz?.grade ?? 0 },
     finished: false,
     attempt: attemptData.attempt,
@@ -110,4 +103,11 @@ export async function GET(
       options: q.options,
     })),
   });
+  res.cookies.set(cookieName, String(attemptData.attempt.id), {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 60 * 60 * 24 * 30,
+  });
+  return res;
 }
