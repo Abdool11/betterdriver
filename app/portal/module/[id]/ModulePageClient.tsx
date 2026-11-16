@@ -221,7 +221,7 @@ export default function ModulePageClient({ moduleId }: ModulePageClientProps) {
       <Link href="/portal/course" className="portal-back-link">← Back to my course</Link>
 
       <div style={{ marginBottom: "1.5rem" }}>
-        <span className="pill pill-amber">Module {module.order} of {course.programme.totalModules}</span>
+        <span className="pill pill-amber">Module {module.order} of {course.modules.length}</span>
         <h1 className="portal-page-title" style={{ marginTop: "0.75rem" }}>{module.name}</h1>
       </div>
 
