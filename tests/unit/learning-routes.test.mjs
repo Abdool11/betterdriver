@@ -16,6 +16,7 @@ const PRIVATE = `upstream private data ${TOKEN} ${EMAIL} ${MOBILE}`;
 const MOODLE_ORIGIN = "https://moodle.example.test";
 const CONTENTS_API = "core_course_get_contents";
 const ACTIVITY_API = "core_completion_get_activities_completion_status";
+const CRITERIA_API = "core_completion_get_course_completion_status";
 const ENROL_API = "enrol_manual_enrol_users";
 const DRIVER_A = 7001;
 const DRIVER_B = 7002;
@@ -50,6 +51,20 @@ function sections() {
 function statuses(states) {
   return [10, 11, 12].map((cmid, i) => ({ cmid, state: states[i], tracking: 2 }));
 }
+// Course-completion criteria carry the same driver-specific outcome per cmid.
+function criteriaRows(list) {
+  return list.map(({ cmid, state }) => ({
+    type: 4, title: "Activity completion",
+    status: state === 1 || state === 2 ? "Yes" : "No",
+    complete: state === 1 || state === 2,
+    timecompleted: state ? 1780000000 : null,
+    details: {
+      type: "Activity completion",
+      criteria: `<a href="${MOODLE_ORIGIN}/mod/page/view.php?id=${cmid}">Lesson ${cmid}</a>`,
+      requirement: "Viewing",
+    },
+  }));
+}
 function fixture(options = {}) {
   const driverId = options.driverId ?? "driver-A";
   const moodleId = driverId === "driver-B" ? DRIVER_B : DRIVER_A;
@@ -63,6 +78,7 @@ function fixture(options = {}) {
     errors: {}, throws: {}, failure: null, failureApi: ACTIVITY_API,
     ...options,
   };
+  f.criteria ??= criteriaRows(f.statuses);
   f.db = { from: (table) => queryProxy(f, table) };
   return f;
 }
@@ -178,21 +194,22 @@ async function fakeFetch(input, init = {}) {
       return Response.json(null);
     }
     assert.equal(method, "GET");
-    assert.ok([CONTENTS_API, ACTIVITY_API].includes(fn), `Unexpected Moodle API ${fn}`);
+    assert.ok([CONTENTS_API, ACTIVITY_API, CRITERIA_API].includes(fn), `Unexpected Moodle API ${fn}`);
     assert.equal(Number(params.get("courseid")), expectedCourse);
-    if (fn === ACTIVITY_API) {
+    if (fn === ACTIVITY_API || fn === CRITERIA_API) {
       assert.equal(Number(params.get("userid")), f.driver.moodle_user_id, "Authenticated driver's DB Moodle ID, never session/token metadata");
       assert.ok([DRIVER_A, DRIVER_B].includes(Number(params.get("userid"))));
     }
     f.requests.push({ fn, method, courseid: expectedCourse, userid: Number(params.get("userid")) });
-    if (fn === f.failureApi) {
-      if (f.failure === "http") return Response.json(fn === CONTENTS_API ? f.sections : { statuses: f.statuses }, { status: 500 });
-      if (f.failure === "access") return Response.json({ exception: "webservice_access_exception", errorcode: "accessexception", message: PRIVATE, debuginfo: `${MOODLE_ORIGIN}/?wstoken=${TOKEN}` });
-      if (f.failure === "network") throw new Error(`${PRIVATE} ${MOODLE_ORIGIN}/?wstoken=${TOKEN}`);
-      if (f.failure === "json") return new Response(`<html>${PRIVATE}</html>`, { status: 200 });
-      if (f.failure === "payload") return Response.json({ warnings: [], message: PRIVATE });
-      if (f.failure === "missing_tracked") return Response.json({ statuses: f.statuses.filter((s) => s.cmid !== 11) });
-      if (f.failure === "timeout") {
+    const failureKind = fn === f.failureApi ? f.failure : (fn === CRITERIA_API ? f.criteriaAlso : null);
+    if (failureKind) {
+      if (failureKind === "http") return Response.json(fn === CONTENTS_API ? f.sections : { statuses: f.statuses }, { status: 500 });
+      if (failureKind === "access") return Response.json({ exception: "webservice_access_exception", errorcode: "accessexception", message: PRIVATE, debuginfo: `${MOODLE_ORIGIN}/?wstoken=${TOKEN}` });
+      if (failureKind === "network") throw new Error(`${PRIVATE} ${MOODLE_ORIGIN}/?wstoken=${TOKEN}`);
+      if (failureKind === "json") return new Response(`<html>${PRIVATE}</html>`, { status: 200 });
+      if (failureKind === "payload") return Response.json({ warnings: [], message: PRIVATE });
+      if (failureKind === "missing_tracked") return Response.json({ statuses: f.statuses.filter((s) => s.cmid !== 11) });
+      if (failureKind === "timeout") {
         assert.ok(init.signal, "Real critical reads must supply an abort signal");
         return new Promise((_resolve, reject) => {
           const abort = () => reject(new Error(PRIVATE));
@@ -200,6 +217,9 @@ async function fakeFetch(input, init = {}) {
           else init.signal.addEventListener("abort", abort, { once: true });
         });
       }
+    }
+    if (fn === CRITERIA_API) {
+      return Response.json({ completionstatus: { completed: false, aggregation: 1, completions: structuredClone(f.criteria) }, warnings: [] });
     }
     return Response.json(structuredClone(fn === CONTENTS_API ? f.sections : { statuses: f.statuses }));
   } catch (error) {
@@ -447,20 +467,37 @@ try {
     assert.equal(typeof result.f.writes[0].write.completed_at, "string");
   });
 
+  for (const route of ["course", "dashboard"]) {
+    await test(`${route}: unauthorised activity API recovers via driver criteria`, async () => {
+      const result = await invoke(route, { failure: "access", failureApi: ACTIVITY_API });
+      assert.equal(result.response.status, 200);
+      const stats = route === "course" ? result.body.programme : result.body.stats;
+      assert.equal(stats.completedModules, 1);
+      assert.equal(stats.totalModules, 3, "Structural tracking keeps the full denominator");
+      assert.equal(stats.progressPercent, 33);
+      assert.equal(result.f.requests.filter(({ fn }) => fn === ACTIVITY_API).length, 1, "Authoritative API is tried first");
+      assert.equal(result.f.requests.filter(({ fn }) => fn === CRITERIA_API).length, 1, "Criteria fallback reads the same driver");
+      assert.ok(result.f.requests.every(({ userid }) => !userid || userid === DRIVER_A));
+      if (route === "course") assert.deepEqual(result.body.modules.map((m) => m.status), ["completed", "available", "locked"]);
+    });
+  }
+
   const criticalCases = [
     ["HTTP 500 despite valid course array", "http", CONTENTS_API, "MOODLE_HTTP"],
     ["HTTP 500 despite valid statuses", "http", ACTIVITY_API, "MOODLE_HTTP"],
-    ["access exception with private upstream message", "access", ACTIVITY_API, "MOODLE_ACCESS"],
+    ["access exception with private upstream message", "access", ACTIVITY_API, "MOODLE_ACCESS", { criteriaAlso: "access" }],
+    ["malformed criteria fallback payload", "access", ACTIVITY_API, "MOODLE_PAYLOAD", { criteriaAlso: "payload" }],
     ["transport exception with token URL", "network", ACTIVITY_API, "MOODLE_NETWORK"],
     ["non-JSON critical response", "json", CONTENTS_API, "MOODLE_JSON"],
     ["missing status envelope", "payload", ACTIVITY_API, "MOODLE_PAYLOAD"],
     ["missing tracked driver status", "missing_tracked", ACTIVITY_API, "MOODLE_PAYLOAD"],
     ["aborted critical deadline", "timeout", ACTIVITY_API, "MOODLE_TIMEOUT"],
   ];
-  for (const [name, failure, failureApi, code] of criticalCases) {
+  for (const [name, failure, api, code, extra] of criticalCases) {
+    const failureApi = extra?.failureApi ?? api;
     for (const route of ["course", "dashboard"]) {
       await test(`${route}: ${name}`, async () => {
-        const result = await invoke(route, { failure, failureApi });
+        const result = await invoke(route, { failure, failureApi, ...extra });
         if (route === "course") assertError(result, 502, code);
         else {
           assertUnavailable(result, code);

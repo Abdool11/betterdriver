@@ -15,9 +15,12 @@ const DRIVER_A = 7001;
 const DRIVER_B = 7002;
 const CONTENTS_API = "core_course_get_contents";
 const ACTIVITY_API = "core_completion_get_activities_completion_status";
+const CRITERIA_API = "core_completion_get_course_completion_status";
 const requests = [];
 const responsesByDriver = new Map();
+const criteriaByDriver = new Map();
 let activityFailure = null;
+let criteriaFailure = null;
 
 function resource(id, name, tracking = 2) {
   return {
@@ -59,6 +62,19 @@ function driverStatuses(states) {
 responsesByDriver.set(DRIVER_A, driverStatuses([1, 0, 0]));
 responsesByDriver.set(DRIVER_B, driverStatuses([0, 0, 0]));
 
+// Course-completion criteria: the same driver-specific outcomes, keyed by cmid
+// embedded in each criterion's module link — coverage only, no tracking field.
+function driverCriteria(rows) {
+  return rows.map(([cmid, complete]) => ({
+    type: 4, title: "Activity completion",
+    status: complete ? "Yes" : "No", complete,
+    timecompleted: complete ? 1780000000 : null,
+    details: { type: "Activity completion", criteria: `<a href="https://moodle.example.test/mod/page/view.php?id=${cmid}">Lesson ${cmid}</a>` },
+  }));
+}
+criteriaByDriver.set(DRIVER_A, driverCriteria([[10, true], [11, false], [12, false]]));
+criteriaByDriver.set(DRIVER_B, driverCriteria([[10, false], [11, false], [12, false]]));
+
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (input, init) => {
   // This replacement has NO pass-through to originalFetch, including on errors.
@@ -78,8 +94,14 @@ globalThis.fetch = async (input, init) => {
   if (fn === CONTENTS_API) {
     return Response.json(structuredClone(sections));
   }
-  assert.equal(fn, ACTIVITY_API, "Unexpected fetch: HTML, other APIs, and fallback calls are forbidden");
-  assert.ok(responsesByDriver.has(userid), "Activity completion must explicitly use the requested driver ID");
+  assert.ok([ACTIVITY_API, CRITERIA_API].includes(fn), "Unexpected fetch: HTML, other APIs, and unverified fallbacks are forbidden");
+  assert.ok(responsesByDriver.has(userid), "Completion reads must explicitly use the requested driver ID");
+  if (fn === CRITERIA_API) {
+    if (criteriaFailure === "unavailable") {
+      return Response.json({ exception: "webservice_access_exception", errorcode: "accessexception", message: "Criteria API unavailable in this test fixture" });
+    }
+    return Response.json({ completionstatus: { completed: false, aggregation: 1, completions: structuredClone(criteriaByDriver.get(userid)) }, warnings: [] });
+  }
   if (activityFailure === "unavailable") {
     return Response.json({
       exception: "webservice_access_exception",
@@ -196,15 +218,29 @@ try {
   assert.ok(requests.some(({ fn, courseid, userid }) =>
     fn === ACTIVITY_API && courseid === 101 && userid === DRIVER_A));
 
-  // No successful snapshot (including token-user progress) is allowed on API failure.
+  // An unauthorised activity function recovers through the driver's own
+  // course-completion criteria — still driver-specific, never token-user data.
   activityFailure = "unavailable";
-  await assert.rejects(read(DRIVER_A), /MOODLE_ACCESS/, "Unavailable activity API must reject");
+  const recovered = await read(DRIVER_A);
+  assertProgress(recovered, 1, 3, 33);
+  assert.equal(display(recovered, 10), "completed");
+  assert.equal(display(recovered, 11), "available");
+  assert.equal(display(recovered, 12), "locked");
+  assert.equal(moduleById(recovered, 90).completionTracked, false, "Untracked references never gain tracking");
+  assert.ok(requests.some(({ fn, userid }) => fn === CRITERIA_API && userid === DRIVER_A));
+  const recoveredB = await read(DRIVER_B);
+  assertProgress(recoveredB, 0, 3, 0, false);
+
+  // No successful snapshot (including token-user progress) is allowed on API failure.
+  criteriaFailure = "unavailable";
+  await assert.rejects(read(DRIVER_A), /MOODLE_ACCESS/, "Both completion APIs unauthorised must reject");
+  criteriaFailure = null;
   activityFailure = "malformed";
   await assert.rejects(read(DRIVER_B), /MOODLE_PAYLOAD/, "Missing statuses must reject, not become pretend success");
   activityFailure = "transport";
   await assert.rejects(read(DRIVER_A), /MOODLE_NETWORK/, "Transport failure must propagate");
 
-  assert.ok(requests.every(({ fn }) => fn === CONTENTS_API || fn === ACTIVITY_API));
+  assert.ok(requests.every(({ fn }) => fn === CONTENTS_API || fn === ACTIVITY_API || fn === CRITERIA_API));
   console.log("BetterDriver driver-snapshot regressions passed: isolated drivers, display states 0/1/2/3, untracked counts, fresh unlock, both programmes, and API failures.");
 } finally {
   globalThis.fetch = originalFetch;

@@ -404,6 +404,98 @@ export async function moodleEnrolUser(params: {
 
 // ─── Progress Tracking ────────────────────────────────────────────────────────
 
+interface MoodleCompletionRead {
+  statuses: MoodleActivityCompletionStatus[];
+  /**
+   * True only for the authoritative per-activity API. False for the
+   * course-completion criteria fallback, whose coverage is criteria-scoped:
+   * structural tracking then remains the tracking signal for module totals.
+   */
+  authoritative: boolean;
+}
+
+/**
+ * Recover driver-specific completion through course-completion criteria when
+ * the activity function is not authorised on the service token
+ * (errorcode accessexception). Criteria rows still report THIS driver's
+ * Moodle-verified activity state — never the token user's.
+ */
+async function moodleReadCriteriaCompletion(
+  courseId: number,
+  moodleUserId: number
+): Promise<MoodleActivityCompletionStatus[]> {
+  const operation = "core_completion_get_course_completion_status";
+  const data = await moodleReadJson(
+    moodleReadUrl(operation, { courseid: courseId, userid: moodleUserId }),
+    operation
+  );
+  if (!isRecord(data) || !isRecord(data.completionstatus) || !Array.isArray(data.completionstatus.completions)) {
+    throw new MoodleReadError("MOODLE_PAYLOAD", operation);
+  }
+  const seen = new Set<number>();
+  const statuses: MoodleActivityCompletionStatus[] = [];
+  for (const criterion of data.completionstatus.completions) {
+    if (!isRecord(criterion)) throw new MoodleReadError("MOODLE_PAYLOAD", operation);
+    // Only activity criteria carry course-module evidence; other criterion
+    // types (grade, duration, role, course) never map to a cmid.
+    if (criterion.type !== 4) continue;
+    const details = isRecord(criterion.details) ? criterion.details : {};
+    const criteria = typeof details.criteria === "string" ? details.criteria : "";
+    const match = /\/view\.php\?[^"'<>\s]*\bid=(\d+)/.exec(criteria);
+    if (!match) continue; // Unmappable criterion: under-report, never invent a link.
+    const cmid = Number(match[1]);
+    if (!positiveId(cmid) || seen.has(cmid)) {
+      throw new MoodleReadError("MOODLE_PAYLOAD", operation);
+    }
+    seen.add(cmid);
+    statuses.push({ cmid, state: criterion.complete === true ? 1 : 0, tracking: 2 });
+  }
+  return statuses;
+}
+
+async function moodleReadDriverCompletion(params: {
+  moodleUserId: number;
+  programmeSlug: "professional-truck-driver" | "eco-driver";
+}): Promise<MoodleCompletionRead> {
+  const operation = "core_completion_get_activities_completion_status";
+  const courseId = readCourseId(params.programmeSlug, operation);
+  if (!positiveId(params.moodleUserId)) throw new MoodleReadError("MOODLE_PAYLOAD", operation);
+  const url = moodleReadUrl(operation, {
+    courseid: courseId,
+    userid: params.moodleUserId,
+  });
+  let data: unknown;
+  try {
+    data = await moodleReadJson(url, operation);
+  } catch (error) {
+    // Only an authorisation refusal can recover: the service token is still
+    // valid, this function is simply missing from its authorised list.
+    if (error instanceof MoodleReadError && error.code === "MOODLE_ACCESS" && error.errorcode === "accessexception") {
+      console.warn("[BD_LEARNING_READ]", {
+        operation, code: "MOODLE_ACCESS", errorcode: "accessexception",
+        fallback: "core_completion_get_course_completion_status",
+      });
+      return { statuses: await moodleReadCriteriaCompletion(courseId, params.moodleUserId), authoritative: false };
+    }
+    throw error;
+  }
+  if (!isRecord(data) || !Array.isArray(data.statuses)) {
+    throw new MoodleReadError("MOODLE_PAYLOAD", operation);
+  }
+
+  const seen = new Set<number>();
+  const statuses = data.statuses.map((status: unknown) => {
+    if (!isRecord(status) || !positiveId(status.cmid) || seen.has(status.cmid) ||
+        typeof status.state !== "number" || ![0, 1, 2, 3].includes(status.state) ||
+        typeof status.tracking !== "number" || ![0, 1, 2].includes(status.tracking)) {
+      throw new MoodleReadError("MOODLE_PAYLOAD", operation);
+    }
+    seen.add(status.cmid);
+    return { cmid: status.cmid, state: status.state as 0 | 1 | 2 | 3, tracking: status.tracking };
+  });
+  return { statuses, authoritative: true };
+}
+
 /**
  * Get per-activity completion for one driver. Unlike course-content metadata,
  * this Moodle API explicitly accepts the driver's user ID and is therefore the
@@ -413,28 +505,8 @@ export async function moodleGetActivityCompletionStatuses(params: {
   moodleUserId: number;
   programmeSlug: "professional-truck-driver" | "eco-driver";
 }): Promise<MoodleActivityCompletionStatus[]> {
-  const operation = "core_completion_get_activities_completion_status";
-  const courseId = readCourseId(params.programmeSlug, operation);
-  if (!positiveId(params.moodleUserId)) throw new MoodleReadError("MOODLE_PAYLOAD", operation);
-  const url = moodleReadUrl(operation, {
-    courseid: courseId,
-    userid: params.moodleUserId,
-  });
-  const data = await moodleReadJson(url, operation);
-  if (!isRecord(data) || !Array.isArray(data.statuses)) {
-    throw new MoodleReadError("MOODLE_PAYLOAD", operation);
-  }
-
-  const seen = new Set<number>();
-  return data.statuses.map((status: unknown) => {
-    if (!isRecord(status) || !positiveId(status.cmid) || seen.has(status.cmid) ||
-        typeof status.state !== "number" || ![0, 1, 2, 3].includes(status.state) ||
-        typeof status.tracking !== "number" || ![0, 1, 2].includes(status.tracking)) {
-      throw new MoodleReadError("MOODLE_PAYLOAD", operation);
-    }
-    seen.add(status.cmid);
-    return { cmid: status.cmid, state: status.state as 0 | 1 | 2 | 3, tracking: status.tracking };
-  });
+  const result = await moodleReadDriverCompletion(params);
+  return result.statuses;
 }
 
 /**
@@ -494,14 +566,14 @@ export async function moodleGetCourseModules(params: {
 }): Promise<MoodleModule[]> {
   const operation = "core_course_get_contents";
   const courseId = readCourseId(params.programmeSlug, operation);
-  const [sections, activityStatuses] = await Promise.all([
+  const [sections, completion] = await Promise.all([
     moodleReadJson(moodleReadUrl(operation, { courseid: courseId }), operation),
-    moodleGetActivityCompletionStatuses(params),
+    moodleReadDriverCompletion(params),
   ]);
   if (!Array.isArray(sections)) {
     throw new MoodleReadError("MOODLE_PAYLOAD", operation);
   }
-  const activityStatusByCmid = new Map(activityStatuses.map((status) => [status.cmid, status]));
+  const activityStatusByCmid = new Map(completion.statuses.map((status) => [status.cmid, status]));
   const sectionIds = new Set<number>();
   const moduleIds = new Set<number>();
   const modules: MoodleModule[] = [];
@@ -556,7 +628,10 @@ export async function moodleGetCourseModules(params: {
       // A known tracked structural activity cannot disappear from driver completion
       // or be silently downgraded to an untracked reference on a partial payload.
       // Unknown structural tracking is not evidence that completion is disabled.
-      if ((!activityStatus || activityStatus.tracking === 0) && mod.completion !== 0) {
+      // The criteria fallback is coverage-limited by design, so structural
+      // tracking stays authoritative there: an uncovered tracked activity
+      // remains tracked-incomplete (under-reported), never an error.
+      if (completion.authoritative && (!activityStatus || activityStatus.tracking === 0) && mod.completion !== 0) {
         throw new MoodleReadError("MOODLE_PAYLOAD", "core_completion_get_activities_completion_status");
       }
       modules.push({
@@ -565,7 +640,9 @@ export async function moodleGetCourseModules(params: {
         modname: mod.modname as string,
         instance: (mod.instance ?? mod.id) as number,
         completionstate: activityStatus?.state ?? 0,
-        completionTracked: Boolean(activityStatus && activityStatus.tracking > 0),
+        completionTracked: completion.authoritative
+          ? Boolean(activityStatus && activityStatus.tracking > 0)
+          : Boolean(activityStatus) || mod.completion !== 0,
         url: normalizeMediaUrl(mod.url),
         files,
         videoUrl: videoFile?.fileurl,

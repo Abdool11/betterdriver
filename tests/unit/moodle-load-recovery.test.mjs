@@ -27,6 +27,7 @@ const {
 
 const CONTENTS = "core_course_get_contents";
 const ACTIVITY = "core_completion_get_activities_completion_status";
+const CRITERIA = "core_completion_get_course_completion_status";
 const SECRET = "FAKE_SERVICE_SECRET_123";
 const UPSTREAM_SECRET = "raw upstream https://moodle.example.test/?token=DO_NOT_LOG_THIS";
 const originalFetch = globalThis.fetch;
@@ -41,6 +42,7 @@ let checks = 0;
 let accelerateDeadlines = false;
 let contentsHandler;
 let activityHandler;
+let criteriaHandler;
 let htmlHandler;
 let sections;
 let statuses;
@@ -59,6 +61,7 @@ function reset() {
   statuses = [{ cmid: 10, state: 2, tracking: 2 }, { cmid: 11, state: 3, tracking: 2 }];
   contentsHandler = () => Response.json(structuredClone(sections));
   activityHandler = () => Response.json({ statuses: structuredClone(statuses) });
+  criteriaHandler = () => Response.json({ completionstatus: { completed: false, aggregation: 1, completions: [] }, warnings: [] });
   htmlHandler = () => { throw new Error("Unexpected optional HTML request; no real fetch permitted"); };
 }
 const read = () => moodleGetLearningSnapshot({ moodleUserId: 7001, programmeSlug: "professional-truck-driver" });
@@ -107,6 +110,10 @@ globalThis.fetch = async (input, init) => {
     assert.equal(url.searchParams.get("courseid"), "101");
     const fn = url.searchParams.get("wsfunction");
     if (fn === CONTENTS) return contentsHandler(url, init);
+    if (fn === CRITERIA) {
+      assert.equal(url.searchParams.get("userid"), "7001");
+      return criteriaHandler(url, init);
+    }
     assert.equal(fn, ACTIVITY);
     assert.equal(url.searchParams.get("userid"), "7001");
     return activityHandler(url, init);
@@ -162,6 +169,7 @@ try {
   await rejectsCode(read(), "MOODLE_NETWORK", ACTIVITY);
   reset();
   activityHandler = () => Response.json({ exception: "webservice_access_exception", errorcode: "accessexception", message: UPSTREAM_SECRET });
+  criteriaHandler = activityHandler;
   await assert.rejects(read(), (error) => {
     assert.equal(error.code, "MOODLE_ACCESS");
     assert.equal(error.exception, "webservice_access_exception");
@@ -170,6 +178,49 @@ try {
     return true;
   });
   checks++;
+
+  // An unauthorised activity function recovers through the same driver's
+  // course-completion criteria — never through token-user metadata.
+  const accessDenied = () => Response.json({ exception: "webservice_access_exception", errorcode: "accessexception", message: UPSTREAM_SECRET });
+  const criteriaRow = (cmid, complete) => ({
+    type: 4, title: "Activity completion", status: complete ? "Yes" : "No",
+    complete, timecompleted: complete ? 1780000000 : null,
+    details: { type: "Activity completion", criteria: `<a href="https://moodle.example.test/mod/page/view.php?id=${cmid}">Learning ${cmid}</a>` },
+  });
+  reset();
+  activityHandler = accessDenied;
+  criteriaHandler = () => Response.json({ completionstatus: { completed: false, aggregation: 1, completions: [criteriaRow(10, true), criteriaRow(11, false), { type: 5, complete: true, details: { type: "Duration", criteria: "30 days" } }, { type: 4, complete: true, details: { criteria: "No module link" } }] }, warnings: [] });
+  snapshot = await read();
+  assert.equal(snapshot.completedModules, 1);
+  assert.equal(snapshot.totalModules, 2, "Structural tracking keeps the full denominator");
+  assert.equal(snapshot.progressPercent, 50);
+  assert.equal(snapshot.modules[0].completionstate, 1);
+  assert.equal(snapshot.modules[1].completionstate, 0);
+  assert.equal(snapshot.modules[1].completionTracked, true, "Criteria-covered or structurally tracked stays tracked");
+  assert.equal(snapshot.modules[2].completionTracked, false);
+  assert.equal(getMoodleModuleDisplayState(snapshot.modules[0], snapshot.modules, 0), "completed");
+  assert.equal(getMoodleModuleDisplayState(snapshot.modules[1], snapshot.modules, 1), "available");
+  assert.ok(logs.some(({ key, args }) => key === "warn" && args[0] === "[BD_LEARNING_READ]" && args[1]?.fallback === CRITERIA), "Degraded read is observable without upstream secrets");
+  logs.length = 0;
+  checks++;
+
+  // Uncovered-but-tracked modules under-report instead of failing or vanishing.
+  reset();
+  activityHandler = accessDenied;
+  criteriaHandler = () => Response.json({ completionstatus: { completions: [criteriaRow(10, true)] }, warnings: [] });
+  snapshot = await read();
+  assert.equal(snapshot.totalModules, 2, "Structurally tracked but uncriteried module stays counted");
+  assert.equal(snapshot.completedModules, 1);
+  assert.equal(snapshot.modules[1].completionstate, 0);
+  logs.length = 0;
+  checks++;
+
+  // Fallback payload validation stays strict: envelopes, bad rows, duplicate cmids.
+  for (const payload of [null, {}, { completionstatus: null }, { completionstatus: { completions: null } }, { completionstatus: { completions: [null] } }, { completionstatus: { completions: [criteriaRow(10, true), criteriaRow(10, false)] } }]) {
+    reset(); activityHandler = accessDenied; criteriaHandler = () => Response.json(payload);
+    await rejectsCode(read(), "MOODLE_PAYLOAD", CRITERIA);
+  }
+  logs.length = 0;
   const unsafeError = new MoodleReadError("MOODLE_ACCESS", UPSTREAM_SECRET, { exception: UPSTREAM_SECRET, errorcode: "a".repeat(65), httpStatus: 999 });
   assert.equal(unsafeError.operation, "moodle_read");
   assert.equal(unsafeError.exception, undefined);
