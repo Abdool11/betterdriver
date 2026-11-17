@@ -5,6 +5,7 @@ import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import {
   generateMoodleAutoLoginUrl,
   isMoodleModuleComplete,
+  mergeDriverProgress,
   moodleGetLearningSnapshot,
   MOODLE_URL,
   normalizeProgrammeSlug,
@@ -69,10 +70,17 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const snapshot = await moodleGetLearningSnapshot({
-      moodleUserId: driver.moodle_user_id,
-      programmeSlug: normalizeProgrammeSlug(enrolment.programme_slug ?? "professional-truck-driver"),
-    });
+    const [snapshot, watchedResult] = await Promise.all([
+      moodleGetLearningSnapshot({
+        moodleUserId: driver.moodle_user_id,
+        programmeSlug: normalizeProgrammeSlug(enrolment.programme_slug ?? "professional-truck-driver"),
+      }),
+      supabaseAdmin
+        .from("driver_module_progress")
+        .select("module_id")
+        .eq("driver_id", session.driverId),
+    ]);
+    const watchedIds = new Set((watchedResult.data ?? []).map((row) => String(row.module_id)));
     const module = snapshot.modules.find((candidate) => String(candidate.id) === moduleId);
 
     if (!module) {
@@ -81,9 +89,32 @@ export async function POST(req: NextRequest) {
 
     if (!isMoodleModuleComplete(module)) {
       // Moodle has not recorded this activity as complete for the driver yet.
-      // Return a signed handoff URL so the client can replay the module view in
-      // a hidden iframe (server-side fetches carry no driver session cookies)
-      // and then retry the confirmation.
+      // Tracked activities need their view replayed in the driver's Moodle
+      // session before the state can confirm; untracked activities have no
+      // Moodle state at all, so BetterDriver keeps its own watched record.
+      if (!module.completionTracked) {
+        const { error: watchError } = await supabaseAdmin
+          .from("driver_module_progress")
+          .upsert(
+            {
+              driver_id: session.driverId,
+              module_id: moduleId,
+              percent_watched: 100,
+              last_watched_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "driver_id,module_id" }
+          );
+        if (watchError) {
+          console.error("[PROGRESS] Watched-state write failed:", watchError.message);
+          return NextResponse.json({ error: "Could not save your learning progress" }, { status: 500 });
+        }
+        watchedIds.add(moduleId);
+        const merged = mergeDriverProgress(snapshot.modules, watchedIds);
+        await updateEnrolmentSummary(enrolment, merged);
+        return NextResponse.json({ success: true, confirmed: false, untracked: true, progress: progressPayload(merged) });
+      }
+
       let moodleUrl: string | undefined;
       try {
         const viewUrl = module.url ?? `${MOODLE_URL}/mod/${module.modname}/view.php?id=${module.id}`;
@@ -97,46 +128,78 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         confirmed: false,
-        untracked: !module.completionTracked,
+        untracked: false,
         moodleUrl,
       });
     }
 
-    const justCompleted = snapshot.completed && !enrolment.completed_at;
-    const changed =
-      snapshot.progressPercent !== enrolment.progress_percent ||
-      snapshot.completedModules !== enrolment.modules_completed ||
-      justCompleted;
+    // Confirmed by Moodle; keep the driver's watch record complete as well.
+    await supabaseAdmin
+      .from("driver_module_progress")
+      .upsert(
+        {
+          driver_id: session.driverId,
+          module_id: moduleId,
+          percent_watched: 100,
+          last_watched_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "driver_id,module_id" }
+      )
+      .then(({ error: watchError }) => {
+        if (watchError) console.error("[PROGRESS] Watched-state write failed:", watchError.message);
+      });
+    watchedIds.add(moduleId);
 
-    if (changed) {
-      const { error: updateError } = await supabaseAdmin
-        .from("enrolments")
-        .update({
-          progress_percent: snapshot.progressPercent,
-          modules_completed: snapshot.completedModules,
-          completed_at: justCompleted ? new Date().toISOString() : enrolment.completed_at,
-          last_activity_at: new Date().toISOString(),
-        })
-        .eq("id", enrolment.id);
-      if (updateError) {
-        console.error("[PROGRESS] Enrolment summary update failed:", updateError.message);
-        return NextResponse.json({ error: "Could not save your confirmed learning progress" }, { status: 500 });
-      }
+    const merged = mergeDriverProgress(snapshot.modules, watchedIds);
+    const updateError = await updateEnrolmentSummary(enrolment, merged);
+    if (updateError) {
+      return NextResponse.json({ error: "Could not save your confirmed learning progress" }, { status: 500 });
     }
 
     return NextResponse.json({
       success: true,
       confirmed: true,
       untracked: false,
-      progress: {
-        completedModules: snapshot.completedModules,
-        totalModules: snapshot.totalModules,
-        progressPercent: snapshot.progressPercent,
-        completed: snapshot.completed,
-      },
+      progress: progressPayload(merged),
     });
   } catch (error) {
     console.error("[PROGRESS] Moodle confirmation failed:", error);
     return NextResponse.json({ error: "Could not confirm your learning progress with Moodle" }, { status: 502 });
   }
+}
+
+function progressPayload(merged: ReturnType<typeof mergeDriverProgress>) {
+  return {
+    completedModules: merged.completedModules,
+    totalModules: merged.totalModules,
+    progressPercent: merged.progressPercent,
+    completed: merged.allComplete,
+  };
+}
+
+async function updateEnrolmentSummary(
+  enrolment: { id: string; progress_percent: number | null; modules_completed: number | null; completed_at: string | null },
+  merged: ReturnType<typeof mergeDriverProgress>
+) {
+  const justCompleted = merged.allComplete && !enrolment.completed_at;
+  const changed =
+    merged.progressPercent !== enrolment.progress_percent ||
+    merged.completedModules !== enrolment.modules_completed ||
+    justCompleted;
+  if (!changed) return null;
+  const { error } = await supabaseAdmin
+    .from("enrolments")
+    .update({
+      progress_percent: merged.progressPercent,
+      modules_completed: merged.completedModules,
+      completed_at: justCompleted ? new Date().toISOString() : enrolment.completed_at,
+      last_activity_at: new Date().toISOString(),
+    })
+    .eq("id", enrolment.id);
+  if (error) {
+    console.error("[PROGRESS] Enrolment summary update failed:", error.message);
+    return error;
+  }
+  return null;
 }

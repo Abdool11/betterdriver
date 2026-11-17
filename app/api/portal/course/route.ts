@@ -3,7 +3,7 @@ import { getSession } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import { learningDbRead } from "@/lib/learning-db-read";
-import { getMoodleModuleDisplayState, moodleGetLearningSnapshot, normalizeProgrammeSlug, pickMoodleDownloadFile } from "@/lib/moodle";
+import { getMergedModuleDisplayState, mergeDriverProgress, moodleGetLearningSnapshot, normalizeProgrammeSlug, pickMoodleDownloadFile } from "@/lib/moodle";
 import { LEARNING_READ_VERSION, learningFailure, learningRequestId } from "@/lib/learning-response";
 
 /** Read-only bd-learning-read.v1: same auth/driver assignment, safe correlated errors. */
@@ -27,10 +27,15 @@ export async function GET() {
     if (!enrolment) return NextResponse.json({ version: LEARNING_READ_VERSION, learningStatus: "not_assigned", programme: { slug: canonicalSlug, title: programmeTitle, progressPercent: 0, totalModules: 0, completedModules: 0 }, modules: [] }, { headers: { "Cache-Control": "private, no-store" } });
     if (!driver.moodle_user_id) return learningFailure(null, "learning_account", requestId, 409, "LEARNING_ACCOUNT_PENDING");
     stage = "moodle_snapshot";
-    const snapshot = await moodleGetLearningSnapshot({ moodleUserId: driver.moodle_user_id, programmeSlug: canonicalSlug });
+    const [snapshot, watchedResult] = await Promise.all([
+      moodleGetLearningSnapshot({ moodleUserId: driver.moodle_user_id, programmeSlug: canonicalSlug }),
+      learningDbRead((signal) => supabaseAdmin.from("driver_module_progress").select("module_id").eq("driver_id", session.driverId).abortSignal(signal)),
+    ]);
     if (snapshot.modules.length === 0) return learningFailure(null, "course_contents", requestId, 502, "COURSE_EMPTY");
+    const watchedIds = new Set((watchedResult.error ? [] : watchedResult.data ?? []).map((row) => String(row.module_id)));
+    const merged = mergeDriverProgress(snapshot.modules, watchedIds);
     const mappedModules = snapshot.modules.map((module, index) => {
-      const status = getMoodleModuleDisplayState(module, snapshot.modules, index);
+      const status = getMergedModuleDisplayState(module, snapshot.modules, index, watchedIds);
       const downloadFile = pickMoodleDownloadFile(module.files);
       const hasBunnyVideo = Boolean(module.bunnyVideoId);
       return {
@@ -45,7 +50,7 @@ export async function GET() {
     });
     return NextResponse.json({
       version: LEARNING_READ_VERSION, learningStatus: "available",
-      programme: { slug: canonicalSlug, title: programmeTitle, progressPercent: snapshot.progressPercent, totalModules: snapshot.totalModules, completedModules: snapshot.completedModules },
+      programme: { slug: canonicalSlug, title: programmeTitle, progressPercent: merged.progressPercent, totalModules: merged.totalModules, completedModules: merged.completedModules },
       modules: mappedModules,
     }, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {

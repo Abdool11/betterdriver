@@ -74,6 +74,7 @@ function fixture(options = {}) {
     enrolment: { id: `enrolment-${driverId}`, programme_slug: "ptdp", status: "active", progress_percent: 99, modules_completed: 99, completed_at: null },
     sections: sections(),
     statuses: statuses(driverId === "driver-B" ? [0, 0, 0] : [1, 0, 0]),
+    watched: options.watched ?? [],
     queries: [], writes: [], requests: [], logs: [], violations: [],
     errors: {}, throws: {}, failure: null, failureApi: ACTIVITY_API,
     ...options,
@@ -96,7 +97,7 @@ function queryProxy(f, table) {
           return evaluation.then(onFulfilled, onRejected);
         };
       }
-      if (["select", "eq", "in", "order", "limit", "single", "maybeSingle", "not", "update", "abortSignal"].includes(method)) {
+      if (["select", "eq", "in", "order", "limit", "single", "maybeSingle", "not", "update", "upsert", "abortSignal"].includes(method)) {
         return (...args) => {
           if (method === "abortSignal") {
             assert.ok(args[0] instanceof AbortSignal, "Read deadline passes an actual AbortSignal");
@@ -104,7 +105,7 @@ function queryProxy(f, table) {
             return proxy;
           }
           query.calls.push([method, ...args]);
-          if (method === "update") query.write = structuredClone(args[0]);
+          if (method === "update" || method === "upsert") query.write = { op: method, payload: structuredClone(args[0]), options: args[1] };
           return proxy;
         };
       }
@@ -121,6 +122,14 @@ function answerQuery(f, query) {
   f.queries.push(structuredClone(query));
   const scope = (column, id) => assert.ok(hasCall(query, "eq", column, id), `${query.table} must be scoped by ${column}=${id}`);
   if (query.write) {
+    if (query.table === "driver_module_progress") {
+      assert.equal(query.write.op, "upsert", "Watched-state writes are idempotent upserts only");
+      assert.equal(query.write.payload.driver_id, f.session.driverId, "Watched rows must be scoped to the signed-in driver");
+      assert.equal(typeof query.write.payload.module_id, "string");
+      assert.equal(query.write.payload.percent_watched, 100);
+      f.writes.push(structuredClone(query));
+      return { data: null, error: f.errors[query.table] ?? null };
+    }
     assert.equal(query.table, "enrolments", "Existing summary writes only; no driver provisioning in these fixtures");
     assert.ok(f.enrolment);
     scope("id", f.enrolment.id);
@@ -138,6 +147,7 @@ function answerQuery(f, query) {
       assert.ok(hasCall(query, "maybeSingle"));
       break;
     case "driver_cpd_participation": scope("driver_id", f.session.driverId); break;
+    case "driver_module_progress": scope("driver_id", f.session.driverId); break;
     case "bulletins":
       scope("company_id", f.driver.company_id);
       scope("status", "disseminated");
@@ -160,6 +170,7 @@ function answerQuery(f, query) {
     ],
     bulletins: [{ id: "bulletin-1" }, { id: "bulletin-2" }],
     driver_bulletin_interactions: [{ bulletin_id: "bulletin-1" }],
+    driver_module_progress: f.watched,
   };
   return { data: structuredClone(rows[query.table]), error: null };
 }
@@ -439,9 +450,9 @@ try {
       assert.equal(dashboard.body.stats.unreadBulletins, 1);
       assert.equal(dashboard.f.writes.length, 1, "Only actual available snapshot updates the existing summary");
       const write = dashboard.f.writes[0];
-      assert.equal(write.write.progress_percent, percent);
-      assert.equal(write.write.modules_completed, completed);
-      assert.equal(write.write.completed_at, null);
+      assert.equal(write.write.payload.progress_percent, percent);
+      assert.equal(write.write.payload.modules_completed, completed);
+      assert.equal(write.write.payload.completed_at, null);
       assert.equal(dashboard.f.requests.filter(({ fn }) => fn === ENROL_API).length, 1);
       for (const result of [course, dashboard]) {
         assert.equal(result.f.requests.filter(({ fn }) => fn === ACTIVITY_API).length, 1);
@@ -479,7 +490,7 @@ try {
     assert.equal(result.body.stats.certificatePendingGfa, true);
     assert.equal(result.body.stats.certificateReady, false);
     assert.equal(result.body.nextModule, null);
-    assert.equal(typeof result.f.writes[0].write.completed_at, "string");
+    assert.equal(typeof result.f.writes[0].write.payload.completed_at, "string");
   });
 
   for (const route of ["course", "dashboard"]) {
@@ -600,7 +611,9 @@ try {
     assert.equal(result.body.untracked, false);
     assert.equal(result.body.progress.completedModules, 1);
     assert.equal(result.body.progress.totalModules, 3);
-    assert.equal(result.f.writes.length, 1, "Confirmed completion persists the Moodle-verified summary only");
+    assert.equal(result.f.writes.length, 2, "Confirmed completion persists the watch record and the summary");
+    assert.equal(result.f.writes.filter((w) => w.table === "driver_module_progress").length, 1);
+    assert.equal(result.f.writes.filter((w) => w.table === "enrolments").length, 1);
   });
   await test("progress: tracked-unconfirmed stays honest and writes nothing", async () => {
     const result = await invokeProgress({ moduleId: "11" });
@@ -622,7 +635,36 @@ try {
     assert.equal(result.response.status, 200);
     assert.equal(result.body.confirmed, false);
     assert.equal(result.body.untracked, true);
-    assert.equal(result.f.writes.length, 0);
+    assert.equal(result.body.progress.completedModules, 1);
+    assert.equal(result.f.writes.length, 2, "Untracked watch persists BetterDriver's record plus the summary");
+    assert.equal(result.f.writes.filter((w) => w.table === "driver_module_progress").length, 1);
+    assert.equal(result.f.writes.filter((w) => w.table === "enrolments").length, 1);
+  });
+  await test("course: watched untracked modules count toward all-module progress", async () => {
+    const untracked = [{ id: 1, name: "Scoped fixture course", modules: [resource(10, 0), resource(11, 0), resource(12, 0)] }];
+    const untrackedStatuses = [
+      { cmid: 10, state: 0, tracking: 0 },
+      { cmid: 11, state: 0, tracking: 0 },
+      { cmid: 12, state: 0, tracking: 0 },
+    ];
+    const result = await invoke("course", {
+      sections: untracked,
+      statuses: untrackedStatuses,
+      watched: [{ driver_id: "driver-A", module_id: "10" }, { driver_id: "driver-A", module_id: "11" }],
+    });
+    assert.equal(result.response.status, 200);
+    assert.equal(result.body.programme.totalModules, 3, "All assigned activities count, not only Moodle-tracked ones");
+    assert.equal(result.body.programme.completedModules, 2);
+    assert.equal(result.body.programme.progressPercent, 67);
+    assert.deepEqual(result.body.modules.map((m) => m.status), ["completed", "completed", "available"]);
+  });
+  await test("course: watched rows never complete tracked modules without Moodle", async () => {
+    const result = await invoke("course", {
+      watched: [{ driver_id: "driver-A", module_id: "11" }, { driver_id: "driver-A", module_id: "12" }],
+    });
+    assert.equal(result.response.status, 200);
+    assert.deepEqual(result.body.modules.map((m) => m.status), ["completed", "available", "locked"]);
+    assert.equal(result.body.programme.completedModules, 1, "Tracked modules only complete via Moodle confirmation");
   });
   await test("course: safe correlated support IDs are fresh per failure", async () => {
     const first = await invoke("course", { failure: "network" });

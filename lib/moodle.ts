@@ -224,6 +224,49 @@ export function getMoodleModuleDisplayState(
   return isMoodleModuleLocked(modules, moduleIndex) ? "locked" : "available";
 }
 
+/** A module is done when Moodle confirms it (tracked) or the driver watched it (untracked). */
+export function isModuleDone(
+  module: MoodleModule,
+  watchedModuleIds: ReadonlySet<string>
+): boolean {
+  if (isMoodleModuleComplete(module)) return true;
+  // Untracked activities have no Moodle completion to confirm; the driver's
+  // recorded watch is the only honest completion evidence available.
+  return !module.completionTracked && watchedModuleIds.has(String(module.id));
+}
+
+export function getMergedModuleDisplayState(
+  module: MoodleModule,
+  modules: MoodleModule[],
+  moduleIndex: number,
+  watchedModuleIds: ReadonlySet<string>
+): MoodleModuleDisplayState {
+  if (isModuleDone(module, watchedModuleIds)) return "completed";
+  return isMoodleModuleLocked(modules, moduleIndex) ? "locked" : "available";
+}
+
+export interface MergedLearningProgress {
+  completedModules: number;
+  totalModules: number;
+  progressPercent: number;
+  allComplete: boolean;
+}
+
+/** Progress across every assigned activity: Moodle-confirmed + BetterDriver-watched. */
+export function mergeDriverProgress(
+  modules: MoodleModule[],
+  watchedModuleIds: ReadonlySet<string>
+): MergedLearningProgress {
+  const totalModules = modules.length;
+  const completedModules = modules.filter((module) => isModuleDone(module, watchedModuleIds)).length;
+  return {
+    completedModules,
+    totalModules,
+    progressPercent: totalModules > 0 ? Math.round((completedModules / totalModules) * 100) : 0,
+    allComplete: totalModules > 0 && completedModules === totalModules,
+  };
+}
+
 /**
  * Return only a self-contained, supported offline learning asset. Moodle page
  * wrappers such as index.html are excluded because they do not include the

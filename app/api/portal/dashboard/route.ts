@@ -5,8 +5,10 @@ import { ACTIVE_ENROLMENT_STATUSES } from "@/lib/constants";
 import { learningDbRead } from "@/lib/learning-db-read";
 import { learningDiagnostic, learningFailure, learningRequestId, LEARNING_READ_VERSION } from "@/lib/learning-response";
 import {
+  isModuleDone,
   isMoodleModuleComplete,
   isMoodleModuleLocked,
+  mergeDriverProgress,
   moodleCreateUser,
   moodleEnrolUser,
   moodleGetLearningSnapshot,
@@ -166,16 +168,31 @@ export async function GET(_req: NextRequest) {
     }
   })();
 
-  const [learningSnapshot, cpdResult, bulletinResult] = await Promise.all([
+  const watchedPromise = (async () => {
+    try {
+      const { data } = await learningDbRead((signal) => supabaseAdmin
+        .from("driver_module_progress")
+        .select("module_id")
+        .eq("driver_id", session.driverId).abortSignal(signal));
+      return new Set((data ?? []).map((row) => String(row.module_id)));
+    } catch (error) {
+      learningDiagnostic(error, "watched_read", requestId);
+      return new Set<string>();
+    }
+  })();
+
+  const [learningSnapshot, cpdResult, bulletinResult, watchedIds] = await Promise.all([
     learningPromise,
     cpdPromise,
     bulletinsPromise,
+    watchedPromise,
   ]);
 
-  const completedModules = learningSnapshot?.completedModules ?? 0;
-  const totalModules = learningSnapshot?.totalModules ?? 0;
-  const progressPercent = learningSnapshot?.progressPercent ?? 0;
-  const courseCompleted = learningSnapshot?.completed ?? false;
+  const merged = learningSnapshot ? mergeDriverProgress(learningSnapshot.modules, watchedIds) : null;
+  const completedModules = merged?.completedModules ?? 0;
+  const totalModules = merged?.totalModules ?? 0;
+  const progressPercent = merged?.progressPercent ?? 0;
+  const courseCompleted = merged?.allComplete ?? false;
   const justCompleted = courseCompleted && !enrolment?.completed_at;
 
   if (
@@ -200,7 +217,7 @@ export async function GET(_req: NextRequest) {
   }
 
   const nextModule = learningSnapshot?.modules.find(
-    (module, index, modules) => !isMoodleModuleComplete(module) && !isMoodleModuleLocked(modules, index)
+    (module, index, modules) => !isModuleDone(module, watchedIds) && !isMoodleModuleLocked(modules, index)
   ) ?? null;
   const programmeTitle =
     canonicalSlug === "professional-truck-driver"
