@@ -339,8 +339,9 @@ export default function ModulePageClient({ moduleId }: ModulePageClientProps) {
             </div>
           )}
 
-          {/* Manual completion for read/watch-at-own-pace modules */}
-          {!done && !saving && !isQuiz && (
+          {/* Manual completion only where there is nothing playable to finish
+              (untracked page fallback). Video modules complete on playback end. */}
+          {!done && !saving && !isQuiz && !hasBunnyVideo && !hasDirectVideo && (
             <button
               type="button"
               className="btn-primary"

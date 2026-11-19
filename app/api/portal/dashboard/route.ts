@@ -103,11 +103,24 @@ export async function GET(_req: NextRequest) {
       const fourteenDays = new Date();
       fourteenDays.setDate(fourteenDays.getDate() + 14);
       const fourteenStr = fourteenDays.toISOString();
-      const { data: cpdRows, error: cpdError } = await learningDbRead((signal) => supabaseAdmin
+      const first = await learningDbRead((signal) => supabaseAdmin
         .from("driver_cpd_participation")
         .select("completed_at, cpd_modules(due_date)")
         .eq("driver_id", session.driverId).abortSignal(signal));
 
+      let cpdRows = first.data;
+      let cpdError = first.error;
+      if (cpdError) {
+        // cpd_modules.due_date does not exist in the current schema; retry
+        // without it rather than reporting the whole CPD read as unavailable.
+        learningDiagnostic(cpdError, "cpd_due_date_read", requestId);
+        const fallback = await learningDbRead((signal) => supabaseAdmin
+          .from("driver_cpd_participation")
+          .select("completed_at, cpd_modules(id, title)")
+          .eq("driver_id", session.driverId).abortSignal(signal));
+        cpdRows = fallback.data as typeof cpdRows;
+        cpdError = fallback.error;
+      }
       if (cpdError) throw cpdError;
       for (const row of cpdRows ?? []) {
         if (row.completed_at) continue;
