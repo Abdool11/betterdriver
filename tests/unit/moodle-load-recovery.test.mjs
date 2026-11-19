@@ -369,7 +369,7 @@ try {
   statuses = [];
   htmlHandler = hangingFetch;
   assert.equal((await read()).modules.length, 6);
-  assert.equal(requests.filter(({ url }) => url.pathname !== "/lms/webservice/rest/server.php").length, 6);
+  assert.equal(requests.filter(({ url }) => url.pathname !== "/lms/webservice/rest/server.php").length, 12, "Each failed optional read retries at most once");
   assert.ok(requests.slice(2).every(({ init }) => init.signal.aborted));
   assert.equal(liveTimers.size, 0);
   checks++;

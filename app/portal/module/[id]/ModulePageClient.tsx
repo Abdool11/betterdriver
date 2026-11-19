@@ -4,7 +4,7 @@ import Link from "next/link";
 import ProgressRefreshControl from "@/components/portal/ProgressRefreshControl";
 import { usePortalRefresh } from "@/components/portal/usePortalRefresh";
 import { readPortalJson, isCourseData } from "@/lib/portal-read";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   ArrowRight,
@@ -86,6 +86,12 @@ export default function ModulePageClient({ moduleId }: ModulePageClientProps) {
   }, []);
   const { refresh, refreshing } = usePortalRefresh(loadCourse);
   const refreshControl = <ProgressRefreshControl refreshing={refreshing} onRefresh={() => void refresh()} error={error ? `${error}${course ? " Showing the last confirmed module information." : ""}` : undefined} />;
+
+  // Moving between module pages reuses this component and preserves scroll
+  // position; each module should start from the top.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [moduleId]);
 
   const module = useMemo(
     () => course?.modules.find((candidate) => candidate.id === moduleId) ?? null,
@@ -270,7 +276,6 @@ export default function ModulePageClient({ moduleId }: ModulePageClientProps) {
               moduleId={module.id}
               moduleUrl={module.url}
               moduleName={module.name}
-              onViewed={() => void markViewed()}
             />
           )}
           {!hasBunnyVideo && !hasDirectVideo && !isQuiz && !module.url && (
@@ -377,9 +382,9 @@ export default function ModulePageClient({ moduleId }: ModulePageClientProps) {
           {course.modules.map((candidate) => (
             <Link
               key={candidate.id}
-              href={candidate.locked || error ? "#" : `/portal/module/${candidate.id}`}
-              aria-disabled={candidate.locked || Boolean(error)}
-              style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.875rem 1rem", background: candidate.id === module.id ? "rgba(245,158,11,0.08)" : "#1C2333", border: `1px solid ${candidate.id === module.id ? "rgba(245,158,11,0.3)" : "#2d3a4f"}`, borderRadius: "0.75rem", color: "inherit", textDecoration: "none", opacity: candidate.locked || error ? 0.55 : 1, pointerEvents: candidate.locked || error ? "none" : "auto" }}
+              href={candidate.locked ? "#" : `/portal/module/${candidate.id}`}
+              aria-disabled={candidate.locked}
+              style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.875rem 1rem", background: candidate.id === module.id ? "rgba(245,158,11,0.08)" : "#1C2333", border: `1px solid ${candidate.id === module.id ? "rgba(245,158,11,0.3)" : "#2d3a4f"}`, borderRadius: "0.75rem", color: "inherit", textDecoration: "none", opacity: candidate.locked ? 0.55 : 1, pointerEvents: candidate.locked ? "none" : "auto" }}
             >
               {candidate.status === "completed" ? <CheckCircle2 size={16} style={{ color: "#10B981" }} /> : watchedIds.has(candidate.id) ? <CheckCircle2 size={16} style={{ color: "#10B981" }} /> : candidate.locked ? <Lock size={15} style={{ color: "#6B7280" }} /> : <PlayCircle size={16} style={{ color: "#F59E0B" }} />}
               <span style={{ flex: 1, color: "#F9FAFB", fontSize: "0.875rem" }}>{candidate.order}. {candidate.name}</span>

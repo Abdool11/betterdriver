@@ -694,6 +694,7 @@ export async function moodleGetCourseModules(params: {
   }
 
   // Fetch Bunny embed data for page modules in parallel and detect Bunny URLs in url modules
+  const needsRetry = new Set<MoodleModule>();
   await Promise.all(
     modules
       .filter((m) => m.modname === "page" || m.modname === "url")
@@ -728,10 +729,30 @@ export async function moodleGetCourseModules(params: {
           }
         } catch {
           // Media enrichment is best effort. Never log raw URLs or exceptions.
+          needsRetry.add(mod);
         }
       })
   );
 
+
+  // Second pass: retry Bunny enrichment sequentially for page modules still
+  // missing an id. The parallel burst above can drop a few reads under Moodle
+  // load, and a missing id pushes the driver onto the Moodle-chrome iframe.
+  for (const mod of needsRetry) {
+    if (mod.bunnyVideoId) continue;
+    const htmlFile = (mod.files ?? []).find((f) => f.filename === "index.html" && f.fileurl);
+    if (!htmlFile?.fileurl) continue;
+    try {
+      const html = await moodleReadOptionalText(withMoodleToken(htmlFile.fileurl));
+      const bunny = extractBunnyEmbedUrl(html);
+      if (bunny) {
+        mod.bunnyLibraryId = bunny.libraryId;
+        mod.bunnyVideoId = bunny.videoId;
+      }
+    } catch {
+      // Best effort, same silent policy as the first pass.
+    }
+  }
   return modules;
 }
 

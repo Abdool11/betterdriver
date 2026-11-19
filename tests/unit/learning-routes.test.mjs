@@ -565,7 +565,7 @@ try {
       const stats = route === "course" ? result.body.programme : result.body.stats;
       assert.equal(stats.completedModules, 1);
       assert.equal(stats.totalModules, 3);
-      assert.equal(result.f.requests.filter(({ fn }) => fn === "optional_html").length, 1);
+      assert.ok(result.f.requests.filter(({ fn }) => fn === "optional_html").length <= 2, "Optional HTML retries at most once, never unbounded");
     });
   }
 
